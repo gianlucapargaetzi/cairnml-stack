@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import sessionmaker
 
 from mlops_server import models  # noqa: F401  (register tables)
@@ -26,6 +27,7 @@ from mlops_server.routers import (
     projects,
     repos,
     telemetry,
+    ui,
     web_auth,
 )
 from mlops_server.routers import storage as storage_api
@@ -130,6 +132,8 @@ def create_app(
     ):
         app.include_router(module.router, prefix="/api/v1")
     app.include_router(web_auth.router)
+    app.include_router(ui.router)
+    app.mount("/ui/static", StaticFiles(directory=ui.STATIC), name="ui-static")
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next):
