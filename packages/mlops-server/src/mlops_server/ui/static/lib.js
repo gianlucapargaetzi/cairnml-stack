@@ -140,3 +140,20 @@ export function linkAllowed(name, value) {
   if (/^#\/[^\s"'<>]*$/.test(text)) return true;
   return safeHttpsUrl(text) !== null;
 }
+
+// Keeps at most about `max` points with an even stride; the first and last point always stay.
+export function downsample(points, max) {
+  if (points.length <= max) return points;
+  const stride = Math.ceil(points.length / max);
+  const out = points.filter((_, i) => i % stride === 0);
+  const last = points[points.length - 1];
+  if (out[out.length - 1] !== last) out.push(last);
+  return out;
+}
+
+// Interleaves log chunks from several streams by timestamp. Each line keeps its stream.
+export function mergeLogs(chunks) {
+  return chunks
+    .flatMap((chunk) => chunk.lines.map((line) => ({ stream: chunk.stream, ts: line.ts, text: line.text })))
+    .sort((a, b) => a.ts - b.ts);
+}

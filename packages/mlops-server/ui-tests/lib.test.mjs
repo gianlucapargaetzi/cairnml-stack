@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   fmtDuration, shortSha, safeHttpsUrl, commitUrl, flatten, diffRows, setDiff, parseHash, statusClass, fmtNumber, colorFor,
-  createScope, shouldRedirectToLogin, attributeAllowed, linkAllowed,
+  createScope, shouldRedirectToLogin, attributeAllowed, linkAllowed, downsample, mergeLogs,
 } from "../src/mlops_server/ui/static/lib.js";
 
 test("durations", () => {
@@ -106,4 +106,22 @@ test("dom attributes are an allowlist and links must be safe", () => {
   assert.equal(linkAllowed("src", "http://example.com/a.js"), false);
   assert.equal(linkAllowed("href", "#/x\" onclick=\"y"), false);
   assert.equal(linkAllowed("class", "anything"), true);
+});
+
+test("downsample keeps the first and last point and the order", () => {
+  const points = Array.from({ length: 1200 }, (_, i) => [i, i * 2]);
+  const small = downsample(points, 500);
+  assert.ok(small.length <= 501);
+  assert.deepEqual(small[0], [0, 0]);
+  assert.deepEqual(small.at(-1), [1199, 2398]);
+  for (let i = 1; i < small.length; i++) assert.ok(small[i][0] > small[i - 1][0]);
+  assert.deepEqual(downsample([[1, 1], [2, 2]], 500), [[1, 1], [2, 2]]);
+});
+
+test("merge logs by time and keep the stream", () => {
+  const out = mergeLogs([
+    { stream: "stdout", lines: [{ ts: 1, text: "a" }, { ts: 3, text: "c" }] },
+    { stream: "stderr", lines: [{ ts: 2, text: "b" }] },
+  ]);
+  assert.deepEqual(out.map((l) => [l.stream, l.text]), [["stdout", "a"], ["stderr", "b"], ["stdout", "c"]]);
 });

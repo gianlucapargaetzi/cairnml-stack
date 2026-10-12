@@ -53,3 +53,7 @@ input, select { font: inherit; padding: 4px 6px; border-radius: 6px; border: 1px
   main { padding: 12px; }
   .spacer { display: none; }
 }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 8px 0 12px; }
+.toolbar .control input, .toolbar .control select { margin-left: 4px; }
+.pager { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.chart-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
