@@ -8,14 +8,16 @@ from mlops_common.assertion import AssertionInvalid, unverified_issuer, verify_a
 from mlops_common.keys import load_public_key
 from mlops_common.schemas import TokenRequest, TokenResponse
 from sqlalchemy import delete
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.orm import Session
 
-from mlops_server.models import Agent, Client, UsedJti
+from mlops_server.models import Agent, Client, UsedJti, User
 from mlops_server.security.deps import get_session
 from mlops_server.services import audit
 
 router = APIRouter()
+
+JTI_MAX_LENGTH = 64  # UsedJti.jti column width
 
 
 def _deny() -> HTTPException:
@@ -39,6 +41,10 @@ def exchange(
         raise _deny()
     if row is None or row.revoked_at is not None:
         raise _deny()
+    if kind == "client":
+        owner = session.get(User, row.user_id)
+        if owner is None or owner.disabled:
+            raise _deny()
     try:
         claims = verify_assertion(
             body.assertion, load_public_key(row.public_key), audience=settings.public_url
@@ -46,14 +52,15 @@ def exchange(
     except (AssertionInvalid, ValueError):
         raise _deny() from None
 
+    jti = claims["jti"]
+    if not isinstance(jti, str) or len(jti) > JTI_MAX_LENGTH:
+        raise _deny()
     now = datetime.now(UTC)
     session.execute(delete(UsedJti).where(UsedJti.expires_at < now))
-    session.add(
-        UsedJti(jti=claims["jti"], expires_at=datetime.fromtimestamp(claims["exp"] + 60, UTC))
-    )
+    session.add(UsedJti(jti=jti, expires_at=datetime.fromtimestamp(claims["exp"] + 60, UTC)))
     try:
         session.flush()
-    except IntegrityError:
+    except (IntegrityError, DataError):
         session.rollback()
         raise _deny() from None
 

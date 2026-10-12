@@ -1,9 +1,11 @@
 import json
+import time
 
+import jwt
 from mlops_common.assertion import make_assertion
 from mlops_common.keys import generate_private_key, public_key_pem
-from mlops_server.models import AuditEvent, User
-from sqlalchemy import select
+from mlops_server.models import AuditEvent, Client, User
+from sqlalchemy import func, select
 
 
 def _enroll(server, idp, key=None, **token_kw):
@@ -93,4 +95,46 @@ def test_revoked_client_cannot_exchange(server, enroll_client, app):
         s.get(Client, enrolled.client_id).revoked_at = utcnow()
         s.commit()
     assertion = make_assertion(enrolled.key, enrolled.client_id, "http://testserver")
+    assert _exchange(server, assertion).status_code == 401
+
+
+def _set_user_disabled(app, idp_subject, disabled=True):
+    with app.state.session_factory() as s:
+        s.scalar(select(User).where(User.idp_subject == idp_subject)).disabled = disabled
+        s.commit()
+
+
+def test_disabled_user_cannot_enroll_new_client(server, idp, app):
+    first, _ = _enroll(server, idp, sub="s3", roles=[])
+    assert first.status_code == 200
+    _set_user_disabled(app, "s3")
+    response, _ = _enroll(server, idp, sub="s3", roles=["mlops-admin"])
+    assert response.status_code == 403
+    with app.state.session_factory() as s:
+        user = s.scalar(select(User).where(User.idp_subject == "s3"))
+        assert user.roles == [] and user.disabled is True
+        assert (
+            s.scalar(select(func.count()).select_from(Client).where(Client.user_id == user.id)) == 1
+        )
+
+
+def test_client_of_disabled_user_cannot_exchange(server, enroll_client, app):
+    enrolled = enroll_client("carol")
+    _set_user_disabled(app, "sub-carol")
+    assertion = make_assertion(enrolled.key, enrolled.client_id, "http://testserver")
+    assert _exchange(server, assertion).status_code == 401
+
+
+def test_overlong_jti_is_refused(server, enroll_client):
+    enrolled = enroll_client()
+    now = int(time.time())
+    claims = {
+        "iss": enrolled.client_id,
+        "sub": enrolled.client_id,
+        "aud": "http://testserver",
+        "iat": now,
+        "exp": now + 120,
+        "jti": "j" * 65,
+    }
+    assertion = jwt.encode(claims, enrolled.key, algorithm="EdDSA")
     assert _exchange(server, assertion).status_code == 401

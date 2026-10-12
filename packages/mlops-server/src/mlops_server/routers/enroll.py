@@ -37,6 +37,8 @@ def enroll_client(
         raise HTTPException(422, "public_key must be an Ed25519 PEM public key") from None
 
     user = session.scalar(select(User).where(User.idp_subject == identity.subject))
+    if user is not None and user.disabled:
+        raise HTTPException(403, "user is disabled")
     if user is None:
         user = User(
             id=new_id("usr"),
@@ -48,8 +50,6 @@ def enroll_client(
     else:
         user.username = identity.username
         user.roles = list(identity.roles)
-    if user.disabled:
-        raise HTTPException(403, "user is disabled")
     # Client has no relationship() to User, so flush the user row before the FK insert.
     session.flush()
     client = Client(id=new_id("cli"), user_id=user.id, name=body.name, public_key=body.public_key)
