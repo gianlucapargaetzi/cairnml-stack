@@ -12,7 +12,19 @@ def test_safe_names_accepted(name):
 
 @pytest.mark.parametrize(
     "name",
-    ["", "../x", "a/../b", "/abs", "a//b", "a/./b", "x" * 256, "has space", "a\\b", "a\x00b"],
+    [
+        "",
+        "../x",
+        "a/../b",
+        "/abs",
+        "a//b",
+        "a/./b",
+        "x" * 256,
+        "has space",
+        "a\\b",
+        "a\x00b",
+        "model.pt\n",
+    ],
 )
 def test_unsafe_names_rejected(name):
     with pytest.raises(ValueError):

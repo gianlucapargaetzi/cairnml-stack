@@ -9,11 +9,11 @@ import boto3
 from botocore.config import Config
 from mlops_common.schemas import StsResponse
 
-_NAME_RE = re.compile(r"^[A-Za-z0-9._/-]+$")
+_NAME_RE = re.compile(r"[A-Za-z0-9._/-]+")
 
 
 def safe_artifact_name(name: str) -> str:
-    if not name or len(name) > 255 or not _NAME_RE.match(name):
+    if not name or len(name) > 255 or not _NAME_RE.fullmatch(name):
         raise ValueError("invalid artifact name")
     if name.startswith("/") or any(part in ("", ".", "..") for part in name.split("/")):
         raise ValueError("invalid artifact name")

@@ -64,3 +64,95 @@ def test_sts_requires_membership_and_returns_credentials(
     assert (
         outsider.http.post("/api/v1/storage/sts", json={"project": "vision/seg"}).status_code == 404
     )
+
+
+def _register(dev, exp, name="m.pt"):
+    key = dev.http.post(f"/api/v1/experiments/{exp}/artifacts/presign", json={"name": name}).json()[
+        "key"
+    ]
+    r = dev.http.post(f"/api/v1/experiments/{exp}/artifacts", json={"name": name, "key": key})
+    assert r.status_code == 200, r.text
+    return r.json()["id"]
+
+
+def test_download_of_another_experiments_artifact_is_404(server, enroll_client, make_project):
+    dev, exp1 = _setup(enroll_client, make_project)
+    exp2 = dev.http.post(
+        "/api/v1/experiments", json={"project": "vision/seg", "name": "other"}
+    ).json()["id"]
+    art = _register(dev, exp1)
+    assert dev.http.get(f"/api/v1/experiments/{exp2}/artifacts/{art}/download").status_code == 404
+    assert dev.http.get(f"/api/v1/experiments/{exp1}/artifacts/{art}/download").status_code == 200
+
+
+def test_non_owner_member_cannot_presign_or_register(server, enroll_client, make_project):
+    dev = enroll_client("dev")
+    bob = enroll_client("bob")
+    make_project("vision/seg", members=["dev", "bob"])
+    exp = dev.http.post("/api/v1/experiments", json={"project": "vision/seg", "name": "n"}).json()[
+        "id"
+    ]
+    assert (
+        bob.http.post(
+            f"/api/v1/experiments/{exp}/artifacts/presign", json={"name": "x"}
+        ).status_code
+        == 404
+    )
+    key = f"vision/seg/{exp}/x"
+    assert (
+        bob.http.post(
+            f"/api/v1/experiments/{exp}/artifacts", json={"name": "x", "key": key}
+        ).status_code
+        == 404
+    )
+
+
+def test_finished_run_token_cannot_presign(server, app, enroll_client, make_project):
+    from mlops_server.ids import new_id
+    from mlops_server.models import Agent, Experiment, Job
+
+    dev, exp = _setup(enroll_client, make_project)
+    with app.state.session_factory() as s:
+        agent_id = new_id("agt")
+        s.add(Agent(id=agent_id, name="a", public_key="x", queues=["default"], capabilities={}))
+        e = s.get(Experiment, exp)
+        job = Job(
+            id=new_id("job"),
+            experiment_id=exp,
+            project_id=e.project_id,
+            created_by=e.owner_id,
+            spec={},
+            queue="default",
+            agent_id=agent_id,
+            status="running",
+        )
+        s.add(job)
+        e.job_id = job.id
+        s.commit()
+        job_id = job.id
+    token, _ = app.state.tokens.issue(
+        sub=job_id, kind="run", uid=dev.user_id, experiment_id=exp, job_id=job_id
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+    assert (
+        server.post(
+            f"/api/v1/experiments/{exp}/artifacts/presign", json={"name": "x"}, headers=headers
+        ).status_code
+        == 200
+    )
+    assert (
+        dev.http.patch(f"/api/v1/experiments/{exp}", json={"status": "finished"}).status_code == 200
+    )
+    assert (
+        server.post(
+            f"/api/v1/experiments/{exp}/artifacts/presign", json={"name": "x"}, headers=headers
+        ).status_code
+        == 404
+    )
+
+
+def test_presign_returns_503_when_storage_unconfigured(server, app, enroll_client, make_project):
+    dev, exp = _setup(enroll_client, make_project)
+    app.state.storage = None
+    r = dev.http.post(f"/api/v1/experiments/{exp}/artifacts/presign", json={"name": "x"})
+    assert r.status_code == 503
