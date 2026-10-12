@@ -1,7 +1,11 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Request
 from mlops_common.schemas import PublicConfig
+
+from mlops_server.security.deps import Principal, principal_dep
 
 router = APIRouter()
 
@@ -19,3 +23,14 @@ def public_config(request: Request) -> PublicConfig:
         oidc_issuer=settings.oidc_issuer,
         oidc_client_id=settings.oidc_client_id,
     )
+
+
+@router.get("/me")
+def me(principal: Annotated[Principal, Depends(principal_dep)]) -> dict:
+    return {
+        "id": principal.id,
+        "kind": principal.kind,
+        "user_id": principal.user_id,
+        "roles": sorted(principal.roles),
+        "is_admin": principal.is_admin,
+    }

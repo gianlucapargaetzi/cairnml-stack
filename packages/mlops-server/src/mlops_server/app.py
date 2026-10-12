@@ -39,7 +39,13 @@ def create_app(
     app.state.oidc = oidc
     app.state.storage = storage
     app.state.github = github
-    app.state.tokens = None  # set in Task 8
+    from mlops_common.keys import read_private_key
+
+    from mlops_server.security.tokens import TokenService
+
+    app.state.tokens = TokenService(
+        read_private_key(settings.signing_key_path), settings.public_url, settings.access_token_ttl
+    )
     for module in (meta,):
         app.include_router(module.router, prefix="/api/v1")
     return app
