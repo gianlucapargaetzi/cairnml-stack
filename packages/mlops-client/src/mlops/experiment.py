@@ -6,6 +6,7 @@ import atexit
 import json
 import logging
 import os
+import shutil
 import sys
 import threading
 import uuid
@@ -61,35 +62,37 @@ class Experiment:
         mode: str,
         spool: Spool,
         git: GitState | None = None,
-        script=None,
-        tee: bool = False,
     ) -> None:
         self.id, self.project, self.name, self.mode = exp_id, project, name, mode
         self._api = api if mode != "offline" else None
         self._spool = spool
         self._git = git
-        self._script = script
         self._uplink = Uplink(self._api, None if mode == "offline" else exp_id, spool)
         self._datasets: list[DatasetRef] = []
         self._overrides: dict = {}
         self._failed = False
         self._interrupted = False
         self._closed = False
-        self._tee = tee
         self._saved_streams = None
         self._saved_hook = None
         self._lock = threading.Lock()
 
     # ----- server calls that must never crash user code -----
+    def _spill(self, kind: str, payload: dict) -> None:
+        try:
+            self._spool.append(kind, payload)
+        except (OSError, TypeError, ValueError) as exc:
+            log.warning("could not spool a %s event, dropping it: %s", kind, exc)
+
     def _patch(self, **fields) -> None:
         if self._api is None:
-            self._spool.append("patch", {"fields": fields})
+            self._spill("patch", {"fields": fields})
             return
         try:
             self._api.patch_experiment(self.id, **fields)
         except Exception as exc:
             if _transient(exc):
-                self._spool.append("patch", {"fields": fields})
+                self._spill("patch", {"fields": fields})
             else:
                 log.warning("server rejected experiment update: %s", exc)
 
@@ -106,12 +109,7 @@ class Experiment:
 
     def connect(self, params):
         if self.mode == "job" and self._overrides:
-            if isinstance(params, dict):
-                for key, value in self._overrides.items():
-                    if key in params:
-                        params[key] = capargs._cast(value, params[key])
-            else:
-                capargs.apply_overrides(params, self._overrides)
+            capargs.apply_overrides(params, self._overrides)
         self.log_params(params if isinstance(params, dict) else vars(params))
         return params
 
@@ -153,17 +151,21 @@ class Experiment:
             if not _transient(exc):
                 log.warning("artifact %s was rejected: %s", name, exc)
                 return None
+            self._spill_artifact(name, source, kind, meta, size)
+            return None
+
+    def _spill_artifact(self, name: str, source, kind: str, meta: dict | None, size: int) -> None:
+        try:
             target = self._spool.file_path(name)
             if isinstance(source, bytes):
                 target.write_bytes(source)
             else:
-                import shutil
-
                 shutil.copyfile(source, target)
             self._spool.append(
                 "artifact", {"name": name, "kind": kind, "meta": meta or {}, "size": size}
             )
-            return None
+        except (OSError, TypeError, ValueError) as exc:
+            log.warning("could not spool artifact %s, dropping it: %s", name, exc)
 
     def close(self, status: str | None = None) -> None:
         global _current
@@ -173,7 +175,10 @@ class Experiment:
             self._closed = True
         self._restore()
         capargs.uninstall()
-        self._uplink.close()
+        try:
+            self._uplink.close()
+        except Exception as exc:
+            log.warning("some telemetry could not be delivered or spooled: %s", exc)
         if self.mode != "job":
             final = status or (
                 "cancelled" if self._interrupted else "failed" if self._failed else "finished"
@@ -230,6 +235,25 @@ class Experiment:
             self._saved_hook = None
 
 
+def _capture_step(what: str, fn, *args):
+    """Run one capture step. A failure is logged and the step is skipped (returns None)."""
+    try:
+        return fn(*args)
+    except Exception as exc:
+        log.warning("could not capture %s, continuing without it: %s", what, exc)
+        return None
+
+
+def _error_detail(response: httpx.Response) -> str:
+    try:
+        body = response.json()
+    except ValueError:
+        return response.text[:300]
+    if isinstance(body, dict):
+        return str(body.get("detail", response.text))[:300]
+    return response.text[:300]
+
+
 def init(
     project: str,
     name: str,
@@ -254,6 +278,19 @@ def init(
     return experiment
 
 
+def _job_overrides() -> dict:
+    raw = os.environ.get("MLOPS_PARAMS") or "{}"
+    try:
+        overrides = json.loads(raw)
+    except ValueError as exc:  # the message names the position, never the value
+        log.warning("ignoring MLOPS_PARAMS, it is not valid JSON: %s", exc)
+        return {}
+    if not isinstance(overrides, dict):
+        log.warning("ignoring MLOPS_PARAMS, it must be a JSON object")
+        return {}
+    return overrides
+
+
 def _init_job(project, name, token, exp_id, capture_args) -> Experiment:
     api = runtime.make_api(token, os.environ.get("MLOPS_SERVER_URL"))
     experiment = Experiment(
@@ -264,7 +301,7 @@ def _init_job(project, name, token, exp_id, capture_args) -> Experiment:
         mode="job",
         spool=Spool(spool_root() / exp_id, {"experiment_id": exp_id}),
     )
-    experiment._overrides = json.loads(os.environ.get("MLOPS_PARAMS") or "{}")
+    experiment._overrides = _job_overrides()
     experiment._install_hooks(capture_stdout=False, capture_args=capture_args)
     return experiment
 
@@ -272,22 +309,20 @@ def _init_job(project, name, token, exp_id, capture_args) -> Experiment:
 def _init_local(
     project, name, config, script, capture_stdout, capture_args, want_git, datasets, api
 ) -> Experiment:
+    # NotEnrolled from make_api() is deliberately not guarded: no enrollment is a setup error.
     api = api or runtime.make_api()
-    probe = find_script(script)
+    probe = _capture_step("script location", find_script, script)
     start = probe.path.parent if probe else Path.cwd()
-    git = capture_git(start) if want_git else None
-    script_info = find_script(script, git)
+    git = _capture_step("git state", capture_git, start) if want_git else None
+    script_info = _capture_step("script location", find_script, script, git)
 
     mode, exp_id = "local", None
     try:
         exp_id = api.create_experiment(project, name, config or {})["id"]
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code < 500:
-            detail = (
-                exc.response.json().get("detail", exc.response.text) if exc.response.content else ""
-            )
             raise ExperimentError(
-                f"could not create experiment in project {project!r}: {detail}"
+                f"could not create experiment in project {project!r}: {_error_detail(exc.response)}"
             ) from None
         mode = "offline"
     except _NETWORK:
@@ -311,12 +346,13 @@ def _init_local(
         mode=mode,
         spool=Spool(spool_root() / exp_id, meta),
         git=git,
-        script=script_info,
     )
 
     fields = _reproduction_fields(experiment, git, script_info)
     for dataset in datasets or []:
-        experiment._datasets.append(resolve_dataset(dataset, git))
+        ref = _capture_step("dataset", resolve_dataset, dataset, git)
+        if ref is not None:
+            experiment._datasets.append(ref)
     if experiment._datasets:
         fields["datasets"] = [d.model_dump() for d in experiment._datasets]
     experiment._patch(**fields, status="running")
@@ -325,35 +361,50 @@ def _init_local(
 
 
 def _reproduction_fields(experiment: Experiment, git: GitState | None, script) -> dict:
-    env = capture_environment()
-    fields: dict = {
-        "requirements": capture_requirements(),
-        "argv": redact_argv(list(sys.argv)),
-        "python_version": env["python_version"],
-        "platform": env["platform"],
-        "env": {"cpu_count": str(env["cpu_count"]), "gpus": ", ".join(env["gpus"])},
-    }
+    fields: dict = {}
+    requirements = _capture_step("requirements", capture_requirements)
+    if requirements is not None:
+        fields["requirements"] = requirements
+    argv = _capture_step("arguments", redact_argv, list(sys.argv))
+    if argv is not None:
+        fields["argv"] = argv
+    env = _capture_step("environment", capture_environment)
+    if env is not None:
+        fields["python_version"] = env["python_version"]
+        fields["platform"] = env["platform"]
+        fields["env"] = {"cpu_count": str(env["cpu_count"]), "gpus": ", ".join(env["gpus"])}
     if git is not None:
-        patch_key = None
-        if git.dirty:
-            patch_key = experiment.upload_artifact(
-                "uncommitted.patch", obj=build_patch(git.root), kind="patch"
-            )
+        git_fields = _capture_step("git state", _git_fields, experiment, git, script)
+        if git_fields is not None:
+            fields["git"] = git_fields
+    if script is not None:
+        script_field = _capture_step("script", _script_field, experiment, script)
+        if script_field is not None:
+            fields["script"] = script_field
+    return fields
+
+
+def _git_fields(experiment: Experiment, git: GitState, script) -> dict:
+    patch_key = None
+    if git.dirty:
+        patch = _capture_step("uncommitted changes", build_patch, git.root)
+        if patch is not None:
+            patch_key = experiment.upload_artifact("uncommitted.patch", obj=patch, kind="patch")
             if patch_key is None:
                 patch_key = f"{experiment.project}/{experiment.id}/uncommitted.patch"
-        fields["git"] = {
-            "repo": git.repo,
-            "remote_url": git.remote_url,
-            "commit": git.commit,
-            "branch": git.branch,
-            "dirty": git.dirty,
-            "cwd": relative_cwd(git, script.path.parent if script else None),
-            "patch_key": patch_key,
-        }
-    if script is not None:
-        if script.in_repo:
-            fields["script"] = script.rel
-        else:
-            experiment.upload_artifact(script.path.name, path=script.path, kind="script")
-            fields["script"] = script.path.name
-    return fields
+    return {
+        "repo": git.repo,
+        "remote_url": git.remote_url,
+        "commit": git.commit,
+        "branch": git.branch,
+        "dirty": git.dirty,
+        "cwd": relative_cwd(git, script.path.parent if script else None),
+        "patch_key": patch_key,
+    }
+
+
+def _script_field(experiment: Experiment, script) -> str:
+    if script.in_repo:
+        return script.rel
+    experiment.upload_artifact(script.path.name, path=script.path, kind="script")
+    return script.path.name

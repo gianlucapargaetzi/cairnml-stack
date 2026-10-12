@@ -151,7 +151,10 @@ class Uplink:
     def start(self) -> None:
         def loop() -> None:
             while not self._stop.wait(self._flush_s):
-                self.flush()
+                try:
+                    self.flush()
+                except Exception:  # keep the thread alive; the next tick retries
+                    log.warning("telemetry flush failed; retrying", exc_info=True)
 
         self._thread = threading.Thread(target=loop, name="mlops-uplink", daemon=True)
         self._thread.start()

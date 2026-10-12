@@ -47,12 +47,29 @@ def _cast(value, current):
         return _SKIP
 
 
-def apply_overrides(ns: argparse.Namespace, overrides: dict) -> None:
+def apply_overrides(target, overrides: dict) -> None:
+    """Apply overrides to a parsed namespace, or to a dict in place.
+
+    Only keys the target already has are considered. An override that cannot be
+    converted to the type of the current value leaves that value unchanged.
+    """
+    is_dict = isinstance(target, dict)
     for key, value in overrides.items():
-        if hasattr(ns, key):
-            cast = _cast(value, getattr(ns, key))
-            if cast is not _SKIP:
-                setattr(ns, key, cast)
+        if is_dict:
+            if key not in target:
+                continue
+            current = target[key]
+        elif hasattr(target, key):
+            current = getattr(target, key)
+        else:
+            continue
+        cast = _cast(value, current)
+        if cast is _SKIP:
+            continue
+        if is_dict:
+            target[key] = cast
+        else:
+            setattr(target, key, cast)
 
 
 def install(callback: Callable[[dict], None], overrides: dict | None = None) -> None:

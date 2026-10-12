@@ -23,7 +23,9 @@ class TeeStream:
         return written if written is not None else len(text)
 
     def _emit(self, line: str) -> None:
-        line = line.split("\r")[-1] if "\r" in line else line
+        if line.endswith("\r"):  # CRLF line endings: the \r belongs to the terminator
+            line = line[:-1]
+        line = line.split("\r")[-1]  # progress updates: keep the last segment
         try:
             self._on_line(line)
         except Exception:  # logging must never break the user's program
