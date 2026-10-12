@@ -6,7 +6,7 @@ import hashlib
 import threading
 
 from mlops_agent.executors.base import BaseExecutor, RunContext
-from mlops_agent.executors.docker_run import run_container
+from mlops_agent.executors.docker_run import container_dir, run_container
 
 _SETUP_LOCKS: dict[str, threading.Lock] = {}
 _SETUP_LOCKS_GUARD = threading.Lock()
@@ -42,11 +42,6 @@ def _requirements_text(ctx: RunContext) -> str:
     if (ctx.workdir / "requirements.txt").exists():
         return _read_in_workdir(ctx, "requirements.txt")
     return ""
-
-
-def _container_dir(ctx: RunContext) -> str:
-    relative = ctx.workdir.resolve().relative_to(ctx.root.resolve())
-    return "/work" if str(relative) == "." else f"/work/{relative}"
 
 
 class PythonExecutor(BaseExecutor):
@@ -120,6 +115,6 @@ class PythonExecutor(BaseExecutor):
             volumes=job_mounts,
             environment=environment,
             executor=self,
-            working_dir=_container_dir(ctx),
+            working_dir=container_dir(ctx),
             network=ctx.settings.job_network,
         )

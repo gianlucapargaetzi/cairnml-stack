@@ -18,6 +18,12 @@ def _pump(container, stdout: bool, sink: LogSink) -> None:
         sink(buffer)
 
 
+def container_dir(ctx: RunContext) -> str:
+    """Path inside the container for the job's workdir, under /work."""
+    relative = ctx.workdir.resolve().relative_to(ctx.root.resolve())
+    return "/work" if str(relative) == "." else f"/work/{relative}"
+
+
 def _limits(ctx: RunContext) -> dict:
     resources = ctx.spec.resources
     limits = {
