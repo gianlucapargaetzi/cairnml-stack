@@ -170,3 +170,20 @@ def make_agent(app, server, enroll_client, settings):
         return EnrolledAgent(agent_id, key, http)
 
     return _make
+
+
+@pytest.fixture
+def make_project(enroll_client):
+    admin = enroll_client("padmin", roles=("mlops-admin",), name="proj-admin")
+
+    def _make(slug: str = "vision/seg", members=()) -> str:
+        response = admin.http.post("/api/v1/projects", json={"slug": slug, "name": slug})
+        assert response.status_code in (200, 409), response.text
+        for username in members:
+            added = admin.http.post(
+                "/api/v1/project-members", json={"project": slug, "username": username}
+            )
+            assert added.status_code == 200, added.text
+        return slug
+
+    return _make

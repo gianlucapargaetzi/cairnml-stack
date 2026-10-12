@@ -67,3 +67,20 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int
+
+
+class ProjectCreate(BaseModel):
+    slug: str = Field(
+        max_length=100, pattern=r"^[a-z0-9][a-z0-9._-]*(/[a-z0-9][a-z0-9._-]*)?$"
+    )
+    name: str = Field(min_length=1, max_length=200)
+
+
+class ProjectOut(BaseModel):
+    slug: str
+    name: str
+
+
+class MemberAdd(BaseModel):
+    project: str
+    username: str
