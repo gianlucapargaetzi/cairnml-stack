@@ -1,14 +1,36 @@
 from __future__ import annotations
 
+import math
 from contextlib import asynccontextmanager
+from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import sessionmaker
 
 from mlops_server import models  # noqa: F401  (register tables)
 from mlops_server.db import Base, make_engine
 from mlops_server.routers import admin, auth, enroll, experiments, meta, projects, telemetry
 from mlops_server.settings import Settings
+
+
+def _json_safe(value: Any) -> Any:
+    """Replace non-finite floats, which strict JSON cannot encode, with their string form."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    return value
+
+
+async def _validation_error_handler(_request: Request, exc: RequestValidationError):
+    # Python's json accepts NaN/Infinity, so a bad body can carry them into the error detail.
+    content = {"detail": jsonable_encoder(_json_safe(exc.errors()))}
+    return JSONResponse(status_code=422, content=content)
 
 
 def create_app(
@@ -24,6 +46,7 @@ def create_app(
         engine.dispose()
 
     app = FastAPI(title="mlops-server", lifespan=lifespan)
+    app.add_exception_handler(RequestValidationError, _validation_error_handler)
     app.state.settings = settings
     app.state.engine = engine
     app.state.session_factory = sessionmaker(engine, expire_on_commit=False)

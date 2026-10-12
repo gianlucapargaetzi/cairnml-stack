@@ -157,9 +157,9 @@ class ExperimentOut(BaseModel):
 
 class MetricPointIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)
-    value: float
+    value: float = Field(allow_inf_nan=False)
     step: int | None = None
-    ts: float
+    ts: float = Field(allow_inf_nan=False)
 
 
 class MetricBatch(BaseModel):
@@ -167,7 +167,7 @@ class MetricBatch(BaseModel):
 
 
 class LogLine(BaseModel):
-    ts: float
+    ts: float = Field(allow_inf_nan=False)
     text: str
 
 

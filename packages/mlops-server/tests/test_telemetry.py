@@ -1,5 +1,25 @@
 import time
 
+import pytest
+from mlops_common.schemas import MetricPointIn
+from pydantic import ValidationError
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf")])
+def test_non_finite_metric_values_are_rejected(value):
+    with pytest.raises(ValidationError):
+        MetricPointIn(name="x", value=value, ts=1)
+
+
+def test_nan_body_gets_422_and_is_not_stored(server, enroll_client, make_project):
+    dev = enroll_client("dev")
+    exp = _exp(dev, make_project)
+    url = f"/api/v1/experiments/{exp}/metrics"
+    body = b'{"points":[{"name":"loss","value":NaN,"ts":1}]}'
+    posted = dev.http.post(url, content=body, headers={"content-type": "application/json"})
+    assert posted.status_code == 422
+    assert dev.http.get(url).json() == {}
+
 
 def _exp(dev, make_project):
     make_project("vision/seg", members=["dev"])
