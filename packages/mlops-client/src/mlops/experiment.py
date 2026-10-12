@@ -325,6 +325,8 @@ def _init_local(
                 f"could not create experiment in project {project!r}: {_error_detail(exc.response)}"
             ) from None
         mode = "offline"
+    except (ValueError, KeyError, TypeError) as exc:  # 2xx with a non-JSON or unexpected body
+        raise ExperimentError(f"unreadable reply creating experiment: {exc}") from None
     except _NETWORK:
         mode = "offline"
     if mode == "offline":

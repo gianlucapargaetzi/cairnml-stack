@@ -257,8 +257,7 @@ def test_job_mode_attaches_applies_overrides_and_leaves_status_alone(
 
     experiment = mlops.init("ignored", "ignored")
     assert experiment.mode == "job" and experiment.id == job["experiment_id"]
-    original_out = sys.stdout  # the agent captures stdout in jobs, so it is never teed
-    assert sys.stdout is original_out
+    assert not isinstance(sys.stdout, TeeStream)  # the agent captures stdout in jobs
     cfg = experiment.connect({"lr": 0.1, "epochs": 1, "keep": "x"})
     assert cfg == {"lr": 0.9, "epochs": 4, "keep": "x"}
     ns = experiment.connect(argparse.Namespace(lr=0.1, epochs=1))
@@ -432,3 +431,17 @@ def test_run_token_is_absent_from_the_spool(cfg_env, monkeypatch, tmp_path):
     spool_dir = cfg_env / "data" / "spool" / "exp_job"
     files = [p for p in spool_dir.rglob("*") if p.is_file()]
     assert files and not any(secret.encode() in p.read_bytes() for p in files)
+
+
+def test_non_json_2xx_create_reply_becomes_experiment_error(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    api = ApiClient(
+        httpx.Client(
+            base_url="http://x",
+            transport=httpx.MockTransport(
+                lambda r: httpx.Response(200, text="<html>captive portal</html>")
+            ),
+        )
+    )
+    with pytest.raises(ExperimentError, match="unreadable reply"):
+        mlops.init("vision/seg", "html-reply", api=api)
