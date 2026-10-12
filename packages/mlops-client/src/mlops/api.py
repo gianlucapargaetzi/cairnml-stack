@@ -139,6 +139,12 @@ class ApiClient:
     def cancel_job(self, job_id: str) -> dict:
         return self._json(self._http.post(f"/api/v1/jobs/{job_id}/cancel"))
 
+    def get_job_spec(self, job_id: str) -> dict:
+        return self._json(self._http.get(f"/api/v1/jobs/{job_id}/spec"))
+
+    def reschedule_job(self, job_id: str, overrides: dict) -> dict:
+        return self._json(self._http.post(f"/api/v1/jobs/{job_id}/reschedule", json=overrides))
+
     def sts(self, project: str, write: bool = False) -> StsResponse:
         return StsResponse.model_validate(
             self._json(

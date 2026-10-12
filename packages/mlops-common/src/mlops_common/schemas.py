@@ -397,6 +397,18 @@ class JobSpec(BaseModel):
         return self
 
 
+class JobOverrides(BaseModel):
+    """Changes applied to a copy of a job's spec. name, queue, timeout_s and resources are
+    replaced; params and env are merged over the old values, and null removes a key."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    queue: str | None = Field(default=None, min_length=1, max_length=100)
+    resources: ResourceRequest | None = None
+    params: dict[str, Any] | None = None
+    env: dict[str, str | None] | None = None
+    timeout_s: int | None = Field(default=None, ge=60)
+
+
 JobStatus = Literal["queued", "assigned", "running", "finished", "failed", "cancelled"]
 
 

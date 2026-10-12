@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import platform
 import time
 from collections.abc import Iterator
@@ -166,6 +167,47 @@ def job_cancel(job_id: str) -> None:
     with _remote(api):
         job = api.cancel_job(job_id)
     typer.echo(f"{job['id']} {job['status']}")
+
+
+def _parse_value(text: str):
+    try:
+        return json.loads(text)
+    except ValueError:
+        return text
+
+
+@job_app.command("reschedule")
+def job_reschedule(
+    job_id: str,
+    name: str = typer.Option(None, help="New name of the copy"),  # noqa: B008
+    queue: str = typer.Option(None, help="Queue for the copy"),  # noqa: B008
+    cpu: int = typer.Option(None, help="CPUs for the copy"),  # noqa: B008
+    memory_gb: float = typer.Option(None, help="Memory in GB for the copy"),  # noqa: B008
+    gpu: int = typer.Option(None, help="GPUs for the copy"),  # noqa: B008
+    timeout: int = typer.Option(None, help="Timeout in seconds (at least 60)"),  # noqa: B008
+    param: list[str] = typer.Option([], help="Set a parameter KEY=VALUE (repeatable)"),  # noqa: B008
+    unset_param: list[str] = typer.Option([], help="Remove a parameter (repeatable)"),  # noqa: B008
+) -> None:
+    """Copy a job (in any state), change its parameters or resources, and queue the copy."""
+    api = _api()
+    overrides: dict = {}
+    for key, value in (("name", name), ("queue", queue), ("timeout_s", timeout)):
+        if value is not None:
+            overrides[key] = value
+    params: dict = {}
+    for item in param:
+        key, _, value = item.partition("=")
+        params[key] = _parse_value(value)
+    params.update({key: None for key in unset_param})
+    if params:
+        overrides["params"] = params
+    with _remote(api):
+        if any(value is not None for value in (cpu, memory_gb, gpu)):
+            base = api.get_job_spec(job_id)["resources"]
+            changed = {"cpu": cpu, "memory_gb": memory_gb, "gpu": gpu}
+            overrides["resources"] = {**base, **{k: v for k, v in changed.items() if v is not None}}
+        job = api.reschedule_job(job_id, overrides)
+    typer.echo(f"queued {job['id']} (experiment {job['experiment_id']}) copied from {job_id}")
 
 
 @app.command()

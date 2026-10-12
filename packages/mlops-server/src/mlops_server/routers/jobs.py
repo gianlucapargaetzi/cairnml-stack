@@ -10,21 +10,23 @@ from mlops_common.schemas import (
     GitTokenRequest,
     GitTokenResponse,
     JobOut,
+    JobOverrides,
     JobSpec,
     JobStatusUpdate,
     StsResponse,
     TokenResponse,
 )
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from mlops_server.ids import new_id
-from mlops_server.models import Agent, Artifact, Experiment, Job, Project
+from mlops_server.models import Agent, Artifact, Experiment, Job, Project, Task
 from mlops_server.routers.experiments import apply_status
 from mlops_server.security.deps import READERS, Principal, get_session, require, require_writer
 from mlops_server.services import access, audit
 from mlops_server.services.github import GitHubError, RepoNotAccessible
-from mlops_server.services.tasks import get_or_create_task
+from mlops_server.services.tasks import DEFAULT_TASK, get_or_create_task
 
 router = APIRouter()
 agent_only = require("agent")
@@ -82,13 +84,15 @@ def _check_keys(session: Session, project_slug: str, spec: JobSpec) -> None:
             raise HTTPException(422, f"unknown artifact key {key!r}")
 
 
-@router.post("/jobs", response_model=JobOut)
-def dispatch(
-    spec: JobSpec,
+def create_job(
     request: Request,
-    principal: Annotated[Principal, Depends(require("client"))],
-    session: Annotated[Session, Depends(get_session)],
-):
+    session: Session,
+    principal: Principal,
+    spec: JobSpec,
+    parent_experiment_id: str | None = None,
+    notes: str | None = None,
+) -> Job:
+    """Check and add a job and its experiment. Callers audit and commit."""
     project = access.ensure_member(session, principal, spec.project)
     _check_commits(request, spec)
     _check_keys(session, project.slug, spec)
@@ -105,6 +109,7 @@ def dispatch(
     experiment = Experiment(
         id=new_id("exp"), project_id=project.id, owner_id=principal.user_id, name=spec.name,
         status="queued", source="job", params=spec.params, git=git, task_id=task.id,
+        parent_id=parent_experiment_id, notes=notes,
         datasets=[d.model_dump() for d in spec.data],
         requirements=list(runtime.requirements) if is_python else [],
         argv=list(runtime.command) if is_python else [],
@@ -118,9 +123,47 @@ def dispatch(
     )
     experiment.job_id = job.id
     session.add_all([experiment, job])
+    return job
+
+
+@router.post("/jobs", response_model=JobOut)
+def dispatch(
+    spec: JobSpec,
+    request: Request,
+    principal: Annotated[Principal, Depends(require("client"))],
+    session: Annotated[Session, Depends(get_session)],
+):
+    job = create_job(request, session, principal, spec)
     audit.record(session, principal.id, "job.dispatched", request, job_id=job.id, queue=spec.queue)
     session.commit()
     return job_out(job)
+
+
+def apply_overrides(spec: JobSpec, overrides: JobOverrides) -> JobSpec:
+    """Return the spec with the overrides applied, validated like a new spec (422 if not)."""
+    data = spec.model_dump(mode="json")
+    if overrides.name is not None:
+        data["name"] = overrides.name
+    if overrides.queue is not None:
+        data["queue"] = overrides.queue
+    if overrides.timeout_s is not None:
+        data["timeout_s"] = overrides.timeout_s
+    if overrides.resources is not None:
+        data["resources"] = overrides.resources.model_dump()
+    for field in ("params", "env"):
+        patch = getattr(overrides, field)
+        if patch is not None:
+            merged = {**data[field], **patch}
+            # null removes a key that the patch names; other old values stay as they are
+            data[field] = {k: v for k, v in merged.items() if not (v is None and k in patch)}
+    try:
+        return JobSpec.model_validate(data)
+    except ValidationError as exc:
+        detail = "; ".join(
+            f"{'.'.join(str(part) for part in error['loc'])}: {error['msg']}"
+            for error in exc.errors()
+        )
+        raise HTTPException(422, detail) from None
 
 
 def _agent_job(session: Session, principal: Principal, job_id: str, lock: bool = False) -> Job:
@@ -268,10 +311,11 @@ def list_jobs(
     if project:
         ids = [access.ensure_member(session, principal, project).id]
     query = (
-        select(Job, Experiment.name, Project.slug, Agent.name)
+        select(Job, Experiment.name, Project.slug, Agent.name, Task.name)
         .join(Experiment, Experiment.id == Job.experiment_id)
         .join(Project, Project.id == Job.project_id)
         .outerjoin(Agent, Agent.id == Job.agent_id)
+        .outerjoin(Task, Task.id == Experiment.task_id)
         .where(Job.project_id.in_(ids))
     )
     if status:
@@ -284,8 +328,9 @@ def list_jobs(
             "agent_name": agent_name, "cpu": j.cpu, "memory_gb": j.memory_gb, "gpu": j.gpu,
             "labels": j.labels, "exit_code": j.exit_code, "message": j.message,
             "created_at": j.created_at, "assigned_at": j.assigned_at, "finished_at": j.finished_at,
+            "task": task_name or DEFAULT_TASK, "cancel_requested": j.cancel_requested,
         }
-        for j, name, slug, agent_name in session.execute(query)
+        for j, name, slug, agent_name, task_name in session.execute(query)
     ]
 
 
@@ -318,5 +363,34 @@ def cancel_job(
         raise HTTPException(409, f"job already {job.status}")
     actor = principal.user_id or principal.id  # browser sessions name the person
     audit.record(session, actor, "job.cancel_requested", request, job_id=job.id)
+    session.commit()
+    return job_out(job)
+
+
+@router.get("/jobs/{job_id}/spec", response_model=JobSpec)
+def job_spec(
+    job_id: str,
+    principal: Annotated[Principal, Depends(require(*READERS))],
+    session: Annotated[Session, Depends(get_session)],
+):
+    return JobSpec.model_validate(_client_job(session, principal, job_id).spec)
+
+
+@router.post("/jobs/{job_id}/reschedule", response_model=JobOut)
+def reschedule(
+    job_id: str,
+    overrides: JobOverrides,
+    request: Request,
+    principal: Annotated[Principal, Depends(require_writer("client"))],
+    session: Annotated[Session, Depends(get_session)],
+):
+    old = _client_job(session, principal, job_id)
+    spec = apply_overrides(JobSpec.model_validate(old.spec), overrides)
+    job = create_job(
+        request, session, principal, spec,
+        parent_experiment_id=old.experiment_id, notes=f"copied from {old.experiment_id}",
+    )
+    actor = principal.user_id or principal.id  # browser sessions name the person
+    audit.record(session, actor, "job.rescheduled", request, from_job=old.id, job_id=job.id)
     session.commit()
     return job_out(job)
