@@ -58,6 +58,14 @@ def test_download_streams_to_file_and_enforces_limit(tmp_path):
     assert not (tmp_path / "c.bin").exists()
 
 
+def test_safe_join_rejects_sibling_prefix(tmp_path):
+    root = tmp_path / "ws"
+    root.mkdir()
+    (tmp_path / "ws2").mkdir()
+    with pytest.raises(ValueError):
+        safe_join(root, "../ws2/x")
+
+
 @pytest.mark.parametrize("bad", ["../x", "a/../../x", "/etc/passwd"])
 def test_safe_join_rejects_escapes(tmp_path, bad):
     with pytest.raises(ValueError):
@@ -78,3 +86,47 @@ def test_scrub_removes_token_in_raw_and_base64_forms():
     assert token not in scrubbed
     assert b64 not in scrubbed
     assert base64.b64encode(token.encode()).decode() not in scrubbed
+
+
+def test_clone_at_refuses_non_https_before_running_git(tmp_path, monkeypatch):
+    import mlops_agent.workspace as workspace
+
+    def no_git(*args, **kwargs):
+        raise AssertionError("git must not run for a non-https host")
+
+    monkeypatch.setattr(workspace.subprocess, "run", no_git)
+    with pytest.raises(GitError, match="non-https") as err:
+        clone_at(
+            "owner/name",
+            "a" * 40,
+            tmp_path / "ws",
+            token="secret-token",
+            web_url="http://ghe.local",
+        )
+    assert "secret-token" not in str(err.value)
+
+
+def test_clone_at_is_rerunnable_on_the_same_dest(tmp_path):
+    web, sha = make_origin(tmp_path)
+    dest = tmp_path / "ws"
+    clone_at("owner/name", sha, dest, token="t", web_url=web)
+    clone_at("owner/name", sha, dest, token="t", web_url=web)
+    assert git("rev-parse", "HEAD", cwd=dest) == sha
+
+
+def test_clone_does_not_put_token_on_argv(tmp_path, monkeypatch):
+    import mlops_agent.workspace as workspace
+
+    seen = []
+    real_run = workspace.subprocess.run
+
+    def spy(command, **kwargs):
+        seen.append((command, kwargs.get("env", {})))
+        return real_run(command, **kwargs)
+
+    monkeypatch.setattr(workspace.subprocess, "run", spy)
+    web, sha = make_origin(tmp_path)
+    clone_at("owner/name", sha, tmp_path / "ws", token="secret-token", web_url=web)
+    assert all("secret-token" not in " ".join(cmd) for cmd, _ in seen)
+    fetch_env = [env for cmd, env in seen if "fetch" in cmd]
+    assert fetch_env and fetch_env[0]["GIT_CONFIG_VALUE_0"].startswith("AUTHORIZATION: basic ")

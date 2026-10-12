@@ -34,24 +34,43 @@ def _scrub(text: str, token: str | None) -> str:
     return text
 
 
-def _git(args: list[str], cwd: Path, token: str | None = None, stdin: bytes | None = None) -> None:
-    command = ["git"]
-    if token:
-        command += ["-c", f"http.extraheader={_auth_header(token)}"]
-    command += args
+def _git(
+    args: list[str],
+    cwd: Path,
+    token: str | None = None,
+    stdin: bytes | None = None,
+    check: bool = True,
+) -> subprocess.CompletedProcess[bytes]:
+    # The auth header is passed through the environment (GIT_CONFIG_COUNT), never on argv,
+    # so it is not visible in the process table.
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_GLOBAL": os.devnull}
-    result = subprocess.run(command, cwd=cwd, input=stdin, capture_output=True, env=env)
-    if result.returncode != 0:
+    if token:
+        env.update(
+            GIT_CONFIG_COUNT="1",
+            GIT_CONFIG_KEY_0="http.extraheader",
+            GIT_CONFIG_VALUE_0=_auth_header(token),
+        )
+    result = subprocess.run(["git", *args], cwd=cwd, input=stdin, capture_output=True, env=env)
+    if check and result.returncode != 0:
         stderr = result.stderr.decode(errors="replace").strip()
         raise GitError(_scrub(f"git {args[0]} failed: {stderr}", token))
+    return result
 
 
 def clone_at(
     repo: str, commit: str, dest: Path, token: str, web_url: str = "https://github.com"
 ) -> None:
+    if not web_url.lower().startswith(("https://", "file://")):
+        # Refuse before any git command runs: the token must never travel over cleartext.
+        raise GitError(f"refusing non-https git host: {web_url}")
+    url = f"{web_url.rstrip('/')}/{repo}.git"
     dest.mkdir(parents=True, exist_ok=True)
     _git(["init", "-q"], dest)
-    _git(["remote", "add", "origin", f"{web_url.rstrip('/')}/{repo}.git"], dest)
+    has_remote = _git(["remote", "get-url", "origin"], dest, check=False).returncode == 0
+    if has_remote:
+        _git(["remote", "set-url", "origin", url], dest)
+    else:
+        _git(["remote", "add", "origin", url], dest)
     _git(["fetch", "-q", "--depth", "1", "origin", commit], dest, token)
     _git(["checkout", "-q", "--detach", "FETCH_HEAD"], dest)
 
