@@ -153,3 +153,25 @@ class ExperimentOut(BaseModel):
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
+
+
+class MetricPointIn(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    value: float
+    step: int | None = None
+    ts: float
+
+
+class MetricBatch(BaseModel):
+    points: list[MetricPointIn] = Field(min_length=1, max_length=5000)
+
+
+class LogLine(BaseModel):
+    ts: float
+    text: str
+
+
+class LogBatch(BaseModel):
+    stream: Literal["stdout", "stderr"]
+    seq: int = Field(ge=0)
+    lines: list[LogLine] = Field(min_length=1, max_length=5000)
