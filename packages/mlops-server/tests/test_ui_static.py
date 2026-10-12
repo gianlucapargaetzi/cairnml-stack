@@ -50,3 +50,9 @@ def test_pure_ui_helpers_pass_their_node_tests():
     tests = Path(__file__).resolve().parents[1] / "ui-tests" / "lib.test.mjs"
     result = subprocess.run(["node", "--test", str(tests)], capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_every_route_has_a_view_module():
+    app_js = (STATIC / "app.js").read_text()
+    for name in re.findall(r'import\("\./views/([a-z]+)\.js"\)', app_js):
+        assert (STATIC / "views" / f"{name}.js").exists(), name
