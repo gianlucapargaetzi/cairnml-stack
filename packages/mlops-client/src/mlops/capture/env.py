@@ -8,14 +8,33 @@ import os
 import platform
 import re
 import subprocess
-import sys
 
-_SECRET_KEY = re.compile(r"(token|secret|passw|api[-_]?key|credential|auth|private[-_]?key)", re.I)
-_TOKENISH = re.compile(r"^(gh[pousr]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|eyJ[A-Za-z0-9_-]{10,}\.)")
+_SECRET_KEY = re.compile(
+    r"(token|secret|passw|pwd|cookie|credential|auth|private[-_]?key|access[-_]?key|api[-_]?key|key)",
+    re.I,
+)
+_TOKENISH = re.compile(
+    r"^(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}"
+    r"|eyJ[A-Za-z0-9_-]{10,}\.)"
+)
+# scheme://user:password@host, the password part is masked (the user part is kept).
+_URL_PASSWORD = re.compile(r"^([A-Za-z][A-Za-z0-9+.-]*://[^:/@\s]*):([^@\s]*)@")
+
+
+def _mask_url_password(value: str) -> str:
+    return _URL_PASSWORD.sub(r"\1:***@", value)
 
 
 def redact_mapping(values: dict) -> dict:
-    return {k: ("***" if _SECRET_KEY.search(str(k)) else v) for k, v in values.items()}
+    out = {}
+    for key, value in values.items():
+        if _SECRET_KEY.search(str(key)):
+            out[key] = "***"
+        elif isinstance(value, str):
+            out[key] = _mask_url_password(value)
+        else:
+            out[key] = value
+    return out
 
 
 def redact_argv(argv: list[str]) -> list[str]:
@@ -26,15 +45,18 @@ def redact_argv(argv: list[str]) -> list[str]:
             out.append("***")
             hide_next = False
         elif item.startswith("--") and "=" in item:
-            flag, _, _value = item.partition("=")
-            out.append(f"{flag}=***" if _SECRET_KEY.search(flag) else item)
+            flag, _, value = item.partition("=")
+            if _SECRET_KEY.search(flag) or _TOKENISH.match(value):
+                out.append(f"{flag}=***")
+            else:
+                out.append(f"{flag}={_mask_url_password(value)}")
         elif item.startswith("-") and _SECRET_KEY.search(item):
             out.append(item)
             hide_next = True
         elif _TOKENISH.match(item):
             out.append("***")
         else:
-            out.append(item)
+            out.append(_mask_url_password(item))
     return out
 
 
@@ -66,7 +88,7 @@ def _gpus() -> list[str]:
             ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
             capture_output=True, text=True, timeout=10,
         )
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired):
         return []
     if result.returncode != 0:
         return []
@@ -79,5 +101,4 @@ def capture_environment() -> dict:
         "platform": platform.platform(),
         "cpu_count": os.cpu_count() or 1,
         "gpus": _gpus(),
-        "executable": sys.executable,
     }

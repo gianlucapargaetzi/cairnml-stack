@@ -152,3 +152,83 @@ def test_resolve_dataset_errors(tmp_path):
         resolve_dataset("data/train", None)
     with pytest.raises(ValueError, match="outside"):
         resolve_dataset(tmp_path / "elsewhere", git, base=work)
+
+
+def test_failed_or_untyped_overrides_keep_the_parsed_value(clean_argparse):
+    captured = []
+    capargs.install(captured.append, overrides={"epochs": "0.5", "bad": "abc", "nums": "[1]"})
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--epochs", type=int, default=1)
+    parser.add_argument("--name", default=None)
+    parser.add_argument("--bad", type=float, default=2.0)
+    parser.add_argument("--nums", default=None)
+    ns = parser.parse_args(["--name", "run"])
+    assert (ns.epochs, ns.name, ns.bad, ns.nums) == (1, "run", 2.0, None)
+    assert captured == [{"epochs": 1, "name": "run", "bad": 2.0, "nums": None}]
+
+
+def test_none_default_without_argument_stays_none(clean_argparse):
+    capargs.install(lambda values: None, overrides={"name": "x"})
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--name", default=None)
+    assert parser.parse_args([]).name is None
+
+
+def test_failing_callback_never_breaks_parse_args(clean_argparse):
+    def boom(values):
+        raise RuntimeError("capture broke")
+
+    capargs.install(boom, overrides={"n": "2"})
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--n", type=int, default=1)
+    ns = parser.parse_args([])
+    assert ns.n == 2
+
+
+def test_redacts_token_values_inside_flag_equals_form():
+    assert redact_argv(["--repo=ghp_" + "a" * 36]) == ["--repo=***"]
+    assert redact_argv(["--repo=owner/name"]) == ["--repo=owner/name"]
+
+
+def test_github_fine_grained_token_is_redacted():
+    assert redact_argv(["github_pat_" + "a" * 20]) == ["***"]
+
+
+def test_mapping_extended_keys_and_url_passwords():
+    out = redact_mapping({
+        "AWS_ACCESS_KEY_ID": "AKIAEXAMPLE",
+        "pwd": "hunter2",
+        "cookie": "session=abc",
+        "DATABASE_URL": "postgresql://u:p@h/db",
+        "LR": 0.1,
+    })
+    assert out == {
+        "AWS_ACCESS_KEY_ID": "***",
+        "pwd": "***",
+        "cookie": "***",
+        "DATABASE_URL": "postgresql://u:***@h/db",
+        "LR": 0.1,
+    }
+    assert redact_argv(["--db=postgresql://u:p@h/db"]) == ["--db=postgresql://u:***@h/db"]
+
+
+def test_environment_has_no_executable_path():
+    assert "executable" not in capture_environment()
+
+
+def test_resolve_dataset_from_a_subdirectory_dvc_lock(tmp_path):
+    files = {
+        "data/sub/dvc.lock": textwrap.dedent("""\
+            schema: '2.0'
+            stages:
+              prepare:
+                cmd: python prep.py
+                outs:
+                - path: train
+                  md5: 5555aaaa.dir
+        """),
+    }
+    work, _ = make_repo(tmp_path, files)
+    git = capture_git(work)
+    ref = resolve_dataset("data/sub/train", git, base=work)
+    assert (ref.path, ref.dvc_hash) == ("data/sub/train", "5555aaaa.dir")

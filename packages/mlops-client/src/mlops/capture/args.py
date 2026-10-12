@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 from collections.abc import Callable
 
+_log = logging.getLogger(__name__)
 _original = None
 _depth = 0
 _state: dict = {"callback": None, "overrides": None}
@@ -15,23 +17,42 @@ def _jsonable(values: dict) -> dict:
     return json.loads(json.dumps(values, default=str))
 
 
+_SKIP = object()
+_TRUE = ("1", "true", "yes", "on")
+_FALSE = ("0", "false", "no", "off")
+
+
 def _cast(value, current):
+    """Convert an override to the type of the parsed value, or return _SKIP.
+
+    An override that cannot be converted, or whose parsed value is None or a
+    list (no reliable type to cast to), is skipped so the parsed value stays.
+    """
+    if current is None or isinstance(current, (list, dict)):
+        return _SKIP
     if isinstance(current, bool):
         if isinstance(value, bool):
             return value
-        return str(value).lower() in ("1", "true", "yes", "on")
-    if isinstance(current, (int, float, str)) and not isinstance(value, (list, dict)):
-        try:
-            return type(current)(value)
-        except (TypeError, ValueError):
-            return value
-    return value
+        text = str(value).strip().lower()
+        if text in _TRUE:
+            return True
+        if text in _FALSE:
+            return False
+        return _SKIP
+    if isinstance(value, (list, dict)):
+        return _SKIP
+    try:
+        return type(current)(value)
+    except Exception:
+        return _SKIP
 
 
 def apply_overrides(ns: argparse.Namespace, overrides: dict) -> None:
     for key, value in overrides.items():
         if hasattr(ns, key):
-            setattr(ns, key, _cast(value, getattr(ns, key)))
+            cast = _cast(value, getattr(ns, key))
+            if cast is not _SKIP:
+                setattr(ns, key, cast)
 
 
 def install(callback: Callable[[dict], None], overrides: dict | None = None) -> None:
@@ -49,10 +70,15 @@ def install(callback: Callable[[dict], None], overrides: dict | None = None) -> 
         finally:
             _depth -= 1
         if _depth == 0:
-            if _state["overrides"]:
-                apply_overrides(ns, _state["overrides"])
-            if _state["callback"]:
-                _state["callback"](_jsonable(vars(ns)))
+            # Capture must never break the user's program: a failing override
+            # or callback is logged and the parsed namespace is returned as is.
+            try:
+                if _state["overrides"]:
+                    apply_overrides(ns, _state["overrides"])
+                if _state["callback"]:
+                    _state["callback"](_jsonable(vars(ns)))
+            except Exception:
+                _log.debug("argument capture failed", exc_info=True)
         return ns, extras
 
     argparse.ArgumentParser.parse_known_args = patched
