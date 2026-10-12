@@ -82,7 +82,7 @@ deploy/scripts/bootstrap.sh
 
 **The realm admin user.** The committed Keycloak realm contains no users. `bootstrap.sh` creates the realm user `admin` with the realm role `mlops-admin` and prints a generated password **once**. Write it down; it is not stored in any tracked file, and you need it for step 5. If the script reports that `admin` already exists, its password is unchanged and you must use the password you already have, or reset it in the Keycloak console.
 
-**Other users are created by you.** Open the Keycloak admin console at `http://mlops-idp:8080`, sign in to the `master` realm with `KC_ADMIN` and `KC_ADMIN_PASSWORD` from `deploy/.env`, and switch to the realm **mlops**. Under **Users**, create the user, set a password under **Credentials** (turn off "Temporary"), and for administrators add the realm role **mlops-admin** under **Role mapping**. A user can be added to a project only after running `mlops enroll` once (step 5), because the server creates the user record at enrollment. Until then `mlops admin project-add-member` answers `404 user not found`. The roles are read from the IdP at enrollment; after you change a user's roles, enroll that machine again with `--force`.
+**Other users are created by you.** Open the Keycloak admin console at `http://mlops-idp:8080`, sign in to the `master` realm with `KC_ADMIN` and `KC_ADMIN_PASSWORD` from `deploy/.env`, and switch to the realm **mlops**. Under **Users**, create the user, set a password under **Credentials** (turn off "Temporary"), and for administrators add the realm role **mlops-admin** under **Role mapping**. A user can be added to a project only after running `mlops enroll` once (step 5), because the server creates the user record at enrollment. Until then `mlops admin project-add-member` answers `404 user not found`. Roles are kept in step with the IdP by the directory sync (once a minute, or at once with `mlops admin sync-users`, section 14), so a role change needs no re-enrollment.
 
 The bootstrap script ends by waiting for the server health check. Check it yourself:
 
@@ -269,13 +269,75 @@ On each machine:
 3. Point DNS, or `/etc/hosts`, for `mlops-server`, `mlops-idp` and `mlops-nas` at the machines that run those roles.
 4. Start only that role's compose file.
 
+The dashboard (section 13) is served by the Server, so it moves with the server role. When the Server moves to another hostname, the `MLOPS_IDP_SYNC_*` settings and the `mlops-web` redirect URIs in the IdP must use the final server hostname: `<MLOPS_SERVER_URL>/ui/auth/callback` for the redirect, and the sync client secret from `deploy/.env` on both the IdP and the Server.
+
 **Not solved by moving roles:**
 
 - **Job network is single-host.** Job containers join the `mlops-jobs` Docker network. A Docker network exists on one host only, so the agent and the server must run on the same Docker host for jobs to reach the server. Job networking across hosts is not built.
 - **TLS is not configured.** All URLs are plain HTTP. Before you expose anything beyond one trusted LAN, put TLS in front of the server, the IdP and MinIO (a reverse proxy per stack), and change the Keycloak realm users and passwords.
 - **Keycloak runs in development mode** (`start-dev`), and its port 8080 is published on all host interfaces. The MinIO S3 API (9000) is on the LAN; the MinIO console (9001) is on loopback only.
 
-## 13. Troubleshooting
+## 13. Dashboard *(not yet verified live)*
+
+The dashboard is a read-only web view served by the server. Open it in a browser:
+
+```
+http://mlops-server:8000/ui/
+```
+
+The hosts entry from step 2 is enough. With no session, the page sends you to the Keycloak login. Log in with a realm user: the `admin` user from step 4, or any user you created there. There is no separate dashboard account. The session lasts 8 hours; **Log out** in the header ends it.
+
+What the pages show:
+
+- **Overview:** job counts by status, and projects with their run counts and last activity.
+- **Projects and jobs:** the projects you may see, and their jobs.
+- **Agents:** liveness and current load of each agent.
+- **Experiments:** the list. Open one for metric charts, parameters, code and data versions, and live logs of a running job.
+- **Comparison:** in the experiment list, tick 2 to 10 experiments and press **Compare selected**. The comparison shows their metrics, parameters and environment side by side.
+- **Admin:** read-only lists of users and agents, for admins only.
+
+The dashboard cannot start or cancel jobs. Use the CLI for that (sections 8 and 10).
+
+The end-to-end browser tests (`tests/e2e`) log in as the realm users `admin`, `dev`, `eve` and `carol`. Their passwords are not in the repository: the tests read them from `MLOPS_E2E_PASSWORD_<USER>` in the environment, for example `MLOPS_E2E_PASSWORD_DEV`. Set those variables to the passwords you gave the users.
+
+## 14. User lifecycle *(not yet verified live)*
+
+Users are managed in the IdP. The server follows the IdP through a directory sync: it checks every known user once a minute (`IDP_SYNC_INTERVAL`, default 60 seconds), and it needs `IDP_SYNC_SECRET` in `deploy/.env` (bootstrap.sh generates it).
+
+**Disable a user.**
+
+1. Open the Keycloak admin console at `http://mlops-idp:8080`. Sign in to the `master` realm as `kcadmin`, with the password `KC_ADMIN_PASSWORD` from `deploy/.env`.
+2. Switch to the realm **mlops**, open **Users**, open the user, switch **Enabled** off and save.
+3. Either wait up to one minute, or run this as an admin on an enrolled machine:
+
+   ```
+   uv run mlops admin sync-users
+   ```
+
+   It prints the counts, for example `checked 4, disabled 1, re-enabled 0, roles changed 0, errors 0`.
+
+**What gets revoked** for a disabled user:
+
+- their client keys: CLI and SDK calls with those keys fail with `401`;
+- their browser sessions: the dashboard login ends;
+- their queued jobs: cancelled, with the message `owner was disabled`;
+- their running jobs: asked to stop.
+
+Deleting a user in the IdP counts as disabling it.
+
+**Re-enable a user.** Switch **Enabled** on again. The next sync (or `sync-users`) makes the user active. The old client keys stay revoked, so the user must enroll a new key on each machine:
+
+```
+uv run mlops enroll --server http://mlops-server:8000 --force
+```
+
+**Change roles.** Change the realm roles in the IdP. The next sync applies them; no re-enrollment is needed.
+
+**If the IdP is unreachable,** nothing is revoked. A user whose lookup fails is left unchanged and counted as an error. If the IdP answers that every known user is gone or disabled in one pass (for example because the directory URL is wrong), the sync disables nobody and logs a warning. The sync messages are in the server log: `docker compose -f deploy/compose.yaml logs mlops-server | grep "user sync"`.
+
+The window between a change in the IdP and its effect is at most one interval.
+
+## 15. Troubleshooting
 
 Server errors quoted here are the exact messages.
 
@@ -291,4 +353,8 @@ Server errors quoted here are the exact messages.
 | `503 storage is not configured` | The server has no MinIO credentials. Check `MLOPS_S3_*` and that the `mlops-nas` service is up. |
 | `404 user not found` from `project-add-member` | The user has not run `mlops enroll` yet (step 5). |
 | Agent enrollment rejected, or `mlops-agent: not enrolled and MLOPS_AGENT_ENROLL_TOKEN is empty` | The token expired (900 seconds by default) or was already used. Create a new one with `mlops admin agent-token` (step 7). |
+| `sync-users` answers `503` | `IDP_SYNC_SECRET` is missing in the server environment (the server reads it as `MLOPS_IDP_SYNC_CLIENT_SECRET`). Set `IDP_SYNC_SECRET` in `deploy/.env` (bootstrap.sh generates it), then `docker compose -f deploy/compose.yaml up -d --force-recreate mlops-server`. |
+| Dashboard login loop (the login returns to the login page) | The redirect URI of the `mlops-web` client in the realm must equal `<MLOPS_SERVER_URL>/ui/auth/callback`. For the default host this is `http://mlops-server:8000/ui/auth/callback`. On another host, edit `deploy/idp/realm-mlops.json` before the first start, or change the Valid redirect URIs of `mlops-web` in the Keycloak console. |
+| Keycloak did not pick up the new realm | Keycloak imports the realm file only when its data volume is empty. Reset it: `docker compose -f deploy/compose.yaml down -v mlops-idp`, then `up -d mlops-idp`. This deletes all Keycloak users, including `admin`: run bootstrap.sh again for `admin`, and create the other users again. Users recreated in the IdP get new IDs; the server then disables the old rows at the next sync, so those people enroll again. |
+| Blank dashboard | Open the browser's developer console. The Content-Security-Policy forbids inline scripts, and the page loads its scripts only from `/ui/static/`. A Content-Security-Policy message there means the page was changed to use an inline script. An error from `/api/v1` usually means the session expired: log in again. |
 | A job's environment is stale or its packages are wrong | The job venv is cached in Docker volumes named `mlops-venv-*`. Stop running jobs, then remove them: `docker volume ls -q -f name=mlops-venv- \| xargs -r docker volume rm`. |

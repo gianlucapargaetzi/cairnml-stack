@@ -32,6 +32,8 @@ Requirements: Docker with Compose v2.20+, `uv`, `openssl`, `git`.
 
 The GitHub App, the agent and the first tracked run are covered in the runbook.
 
+A read-only web dashboard runs on the server at `http://mlops-server:8000/ui/`. It shows overview, projects, jobs, agents and experiments (with metric charts, parameters, code and data versions and live logs), and it compares two to ten experiments side by side. Log in with a realm user through the same IdP login. Users are managed in the Keycloak console, and disabling a user there revokes their access within a minute. The runbook covers the dashboard (section 13) and the user lifecycle (section 14).
+
 ## Tests
 
 ```
