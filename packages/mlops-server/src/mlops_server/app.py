@@ -27,6 +27,15 @@ def create_app(
     app.state.settings = settings
     app.state.engine = engine
     app.state.session_factory = sessionmaker(engine, expire_on_commit=False)
+    if oidc is None:
+        from mlops_server.security.oidc import OidcVerifier
+
+        oidc = OidcVerifier(
+            settings.oidc_issuer,
+            settings.oidc_client_id,
+            jwks_url=settings.oidc_jwks_url
+            or f"{settings.oidc_issuer.rstrip('/')}/protocol/openid-connect/certs",
+        )
     app.state.oidc = oidc
     app.state.storage = storage
     app.state.github = github

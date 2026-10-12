@@ -89,16 +89,9 @@ def settings(tmp_path, pg_url) -> Settings:
 
 @pytest.fixture
 def app(settings, idp):
-    application = create_app(settings, oidc=_oidc_or_none(idp))
+    application = create_app(settings, oidc=idp.verifier())
     Base.metadata.drop_all(application.state.engine)
     return application
-
-
-def _oidc_or_none(idp: FakeIdp):
-    try:
-        return idp.verifier()
-    except ModuleNotFoundError:  # Task 7 not implemented yet
-        return None
 
 
 @pytest.fixture
