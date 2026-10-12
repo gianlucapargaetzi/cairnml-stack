@@ -7,7 +7,9 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from mlops_common.schemas import DatasetRef, StsResponse
+from mlops_common.schemas import DatasetRef, StsResponse, _safe_relative
+
+_ENV_PASSTHROUGH = ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR")
 
 
 class DvcError(Exception):
@@ -16,6 +18,16 @@ class DvcError(Exception):
 
 class UnsupportedDataset(Exception):
     pass
+
+
+def _check_path(path: str) -> None:
+    # A leading "-" would be read by dvc as an option; the rest is the shared relative-path rule.
+    if path.startswith("-"):
+        raise UnsupportedDataset(f"dataset path {path!r} must not start with '-'")
+    try:
+        _safe_relative(path)
+    except ValueError as err:
+        raise UnsupportedDataset(f"dataset path {path!r} {err}") from None
 
 
 def dataset_targets(
@@ -34,6 +46,7 @@ def dataset_targets(
             raise UnsupportedDataset(
                 f"dataset {ref.path!r} is pinned to a different commit than the code"
             )
+        _check_path(ref.path)
         targets.append(ref.path)
     return targets
 
@@ -56,16 +69,23 @@ def dvc_pull(
         return
     if which("dvc") is None:
         raise DvcError("dvc is not installed on this agent")
-    # Credentials travel in the environment only, never on argv.
+    # Credentials travel in the environment only, never on argv. The rest of the
+    # environment is an allowlist so unrelated agent secrets stay out of dvc.
+    env = {key: os.environ[key] for key in _ENV_PASSTHROUGH if key in os.environ}
     env = {
-        **os.environ,
+        **env,
         "AWS_ACCESS_KEY_ID": sts.access_key,
         "AWS_SECRET_ACCESS_KEY": sts.secret_key,
         "AWS_SESSION_TOKEN": sts.session_token,
         "AWS_EC2_METADATA_DISABLED": "true",
     }
+    # "--" ends option parsing so a target can never be read as a dvc flag.
     result = run(
-        ["dvc", "pull", "--force", *targets], cwd=workdir, env=env, capture_output=True, text=True
+        ["dvc", "pull", "--force", "--", *targets],
+        cwd=workdir,
+        env=env,
+        capture_output=True,
+        text=True,
     )
     if result.returncode != 0:
         raise DvcError(_scrub(f"dvc pull failed: {(result.stderr or result.stdout).strip()}", sts))

@@ -29,6 +29,15 @@ def test_unsupported_datasets_fail_fast(ref):
         dataset_targets([DatasetRef(path="d")], None, None)
 
 
+@pytest.mark.parametrize("path", [
+    "-r", "--all-commits", "-", "/etc/x", "a/../../b", "a/./b/../c", "a//b",
+    "a\\b", "a\x00b", "", "a b",
+])
+def test_unsafe_dataset_paths_are_refused(path):
+    with pytest.raises(UnsupportedDataset):
+        dataset_targets([DatasetRef(path=path)], "org/repo", "a" * 40)
+
+
 def test_pull_passes_credentials_through_the_environment_only(tmp_path):
     seen = {}
 
@@ -37,10 +46,35 @@ def test_pull_passes_credentials_through_the_environment_only(tmp_path):
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
     dvc_pull(tmp_path, ["data/train"], STS, run=run, which=lambda name: "/usr/bin/dvc")
-    assert seen["cmd"] == ["dvc", "pull", "--force", "data/train"]
+    assert seen["cmd"] == ["dvc", "pull", "--force", "--", "data/train"]
     assert seen["env"]["AWS_ACCESS_KEY_ID"] == "AK1"
     assert seen["env"]["AWS_SESSION_TOKEN"] == "SESSION-TOKEN"
     assert "SECRET-KEY" not in " ".join(seen["cmd"])
+    assert "SESSION-TOKEN" not in " ".join(seen["cmd"]) and "AK1" not in " ".join(seen["cmd"])
+    assert seen["env"]["AWS_SECRET_ACCESS_KEY"] == "SECRET-KEY"
+    assert seen["env"]["AWS_EC2_METADATA_DISABLED"] == "true"
+    assert seen["cwd"] == tmp_path
+
+
+def test_pull_env_is_minimal(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLOPS_AGENT_ENROLL_TOKEN", "enroll-sentinel")
+    monkeypatch.setenv("AWS_ENDPOINT_URL", "http://evil.example")
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    seen = {}
+
+    def run(cmd, **kwargs):
+        seen["env"] = kwargs["env"]
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    dvc_pull(tmp_path, ["data/train"], STS, run=run, which=lambda name: "/usr/bin/dvc")
+    assert "MLOPS_AGENT_ENROLL_TOKEN" not in seen["env"]
+    assert "AWS_ENDPOINT_URL" not in seen["env"]
+    assert seen["env"]["PATH"] == "/usr/bin:/bin"
+    assert set(seen["env"]) <= {
+        "PATH", "HOME", "LANG", "LC_ALL", "TMPDIR",
+        "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
+        "AWS_EC2_METADATA_DISABLED",
+    }
 
 
 def test_failure_message_is_scrubbed(tmp_path):
