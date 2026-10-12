@@ -1,11 +1,14 @@
 import time
+from typing import Annotated
 
 import jwt
 import pytest
+from fastapi import Depends
 from mlops_common.keys import generate_private_key, public_key_pem
 from mlops_server.db import utcnow
 from mlops_server.ids import new_id
-from mlops_server.models import Agent, Client, User
+from mlops_server.models import Agent, Client, Experiment, Job, Project, User
+from mlops_server.security.deps import Principal, require
 from mlops_server.security.tokens import TokenInvalid, TokenService
 
 
@@ -100,3 +103,101 @@ def test_run_token_dies_when_job_is_not_active(server, app):
     # a run token whose job row does not exist (or is finished) must be refused
     headers = _bearer(app, "run_x", "run", experiment_id="exp_1", job_id="job_missing")
     assert server.get("/api/v1/me", headers=headers).status_code == 401
+
+
+def _make_job(app, status="assigned"):
+    with app.state.session_factory() as s:
+        user = User(id=new_id("usr"), idp_subject=new_id("sub"), username="r", roles=[])
+        s.add(user)
+        s.flush()
+        project = Project(id=new_id("prj"), slug=new_id("slug"), name="p")
+        s.add(project)
+        s.flush()
+        exp = Experiment(id=new_id("exp"), project_id=project.id, owner_id=user.id, name="e")
+        s.add(exp)
+        s.flush()
+        job = Job(
+            id=new_id("job"), experiment_id=exp.id, project_id=project.id,
+            created_by=user.id, spec={}, queue="q", status=status,
+        )
+        s.add(job)
+        s.commit()
+        return job.id, exp.id
+
+
+def test_run_token_for_assigned_job_is_accepted(server, app):
+    job_id, exp_id = _make_job(app, "assigned")
+    headers = _bearer(app, job_id, "run", experiment_id=exp_id, job_id=job_id)
+    body = server.get("/api/v1/me", headers=headers).json()
+    assert body["kind"] == "run" and body["id"] == job_id
+
+
+def test_run_token_for_running_job_is_accepted(server, app):
+    job_id, exp_id = _make_job(app, "running")
+    headers = _bearer(app, job_id, "run", experiment_id=exp_id, job_id=job_id)
+    assert server.get("/api/v1/me", headers=headers).status_code == 200
+
+
+@pytest.mark.parametrize("status", ["queued", "succeeded"])
+def test_run_token_for_inactive_job_is_refused(server, app, status):
+    job_id, exp_id = _make_job(app, status)
+    headers = _bearer(app, job_id, "run", experiment_id=exp_id, job_id=job_id)
+    assert server.get("/api/v1/me", headers=headers).status_code == 401
+
+
+def test_run_token_with_mismatched_experiment_is_refused(server, app):
+    job_id, _exp_id = _make_job(app, "assigned")
+    headers = _bearer(app, job_id, "run", experiment_id="exp_other", job_id=job_id)
+    assert server.get("/api/v1/me", headers=headers).status_code == 401
+
+
+def test_run_token_sub_must_match_job_id(server, app):
+    job_id, exp_id = _make_job(app, "assigned")
+    headers = _bearer(app, "run_someone_else", "run", experiment_id=exp_id, job_id=job_id)
+    assert server.get("/api/v1/me", headers=headers).status_code == 401
+
+
+def test_disabled_user_client_token_is_refused(server, app):
+    cid, uid = _make_client_row(app)
+    with app.state.session_factory() as s:
+        s.get(User, uid).disabled = True
+        s.commit()
+    assert server.get("/api/v1/me", headers=_bearer(app, cid, "client", uid=uid)).status_code == 401
+
+
+def _guarded_app(app):
+    @app.get("/probe/client-only")
+    def client_only(p: Annotated[Principal, Depends(require("client"))]):
+        return {"id": p.id}
+
+    @app.get("/probe/admin-only")
+    def admin_only(p: Annotated[Principal, Depends(require(admin=True))]):
+        return {"id": p.id}
+
+
+def test_require_refuses_kind_not_in_list(server, app):
+    _guarded_app(app)
+    job_id, exp_id = _make_job(app, "assigned")
+    headers = _bearer(app, job_id, "run", experiment_id=exp_id, job_id=job_id)
+    assert server.get("/probe/client-only", headers=headers).status_code == 403
+
+
+def test_require_allows_listed_kind(server, app):
+    _guarded_app(app)
+    cid, uid = _make_client_row(app)
+    headers = _bearer(app, cid, "client", uid=uid)
+    assert server.get("/probe/client-only", headers=headers).status_code == 200
+
+
+def test_require_admin_refuses_non_admin_client(server, app):
+    _guarded_app(app)
+    cid, uid = _make_client_row(app, roles=[])
+    headers = _bearer(app, cid, "client", uid=uid)
+    assert server.get("/probe/admin-only", headers=headers).status_code == 403
+
+
+def test_require_admin_allows_admin_client(server, app):
+    _guarded_app(app)
+    cid, uid = _make_client_row(app, roles=["mlops-admin"])
+    headers = _bearer(app, cid, "client", uid=uid)
+    assert server.get("/probe/admin-only", headers=headers).status_code == 200

@@ -62,12 +62,13 @@ def principal_dep(
     job = session.get(Job, claims.job_id) if claims.job_id else None
     if (
         job is None
+        or claims.sub != job.id
         or job.status not in ("assigned", "running")
         or job.experiment_id != claims.experiment_id
     ):
         raise _unauthorized()
     return Principal(
-        claims.sub, "run", job.created_by, frozenset(), False, job.experiment_id, job.id
+        job.id, "run", job.created_by, frozenset(), False, job.experiment_id, job.id
     )
 
 
