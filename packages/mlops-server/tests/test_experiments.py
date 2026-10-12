@@ -141,9 +141,11 @@ def test_agent_cannot_write_after_experiment_finished(
     agent = make_agent()
     exp = _create(dev.http).json()
     url = f"/api/v1/experiments/{exp['id']}"
-    _attach_job(app, exp["id"], dev.user_id, agent.agent_id)
+    job_id = _attach_job(app, exp["id"], dev.user_id, agent.agent_id)
     assert agent.http.patch(url, json={"params": {"lr": 0.1}}).status_code == 200
-    assert dev.http.patch(url, json={"status": "finished"}).status_code == 200
+    # a job-linked experiment finishes through its job, not by a client PATCH
+    done = agent.http.post(f"/api/v1/jobs/{job_id}/status", json={"status": "finished"})
+    assert done.status_code == 200
     assert agent.http.patch(url, json={"notes": "late"}).status_code == 404
     assert agent.http.get(url).status_code == 200
 

@@ -140,9 +140,10 @@ def test_finished_run_token_cannot_presign(server, app, enroll_client, make_proj
         ).status_code
         == 200
     )
-    assert (
-        dev.http.patch(f"/api/v1/experiments/{exp}", json={"status": "finished"}).status_code == 200
-    )
+    # a job-linked experiment cannot be finished by a client PATCH, so set it directly
+    with app.state.session_factory() as s:
+        s.get(Experiment, exp).status = "finished"
+        s.commit()
     assert (
         server.post(
             f"/api/v1/experiments/{exp}/artifacts/presign", json={"name": "x"}, headers=headers
