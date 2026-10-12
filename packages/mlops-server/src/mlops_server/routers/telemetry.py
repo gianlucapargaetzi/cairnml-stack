@@ -9,11 +9,12 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from mlops_server.models import LogChunk, MetricPoint
-from mlops_server.security.deps import Principal, get_session, require
+from mlops_server.security.deps import READ_ANY, Principal, get_session, require
 from mlops_server.services import access
 
 router = APIRouter()
 any_principal = require("client", "agent", "run")
+read_any = require(*READ_ANY)
 MAX_LINE = 16_384
 MAX_BATCH_CHARS = 2_000_000
 TRUNCATED_SUFFIX = "... [truncated]"
@@ -78,7 +79,7 @@ def post_logs(
 @router.get("/experiments/{experiment_id}/metrics")
 def get_metrics(
     experiment_id: str,
-    principal: Annotated[Principal, Depends(any_principal)],
+    principal: Annotated[Principal, Depends(read_any)],
     session: Annotated[Session, Depends(get_session)],
     name: str | None = None,
 ):
@@ -95,7 +96,7 @@ def get_metrics(
 @router.get("/experiments/{experiment_id}/logs")
 def get_logs(
     experiment_id: str,
-    principal: Annotated[Principal, Depends(any_principal)],
+    principal: Annotated[Principal, Depends(read_any)],
     session: Annotated[Session, Depends(get_session)],
     stream: str | None = None,
     after_seq: int = -1,

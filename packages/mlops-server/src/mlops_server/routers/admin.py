@@ -12,12 +12,13 @@ from sqlalchemy.orm import Session
 
 from mlops_server.ids import new_id
 from mlops_server.models import Agent, Client, EnrollmentToken
-from mlops_server.security.deps import Principal, get_session, require
+from mlops_server.security.deps import READERS, Principal, get_session, require
 from mlops_server.services import audit
 from mlops_server.services.user_sync import sync_users
 
 router = APIRouter(prefix="/admin")
 admin_only = require("client", admin=True)
+admin_reader = require(*READERS, admin=True)
 
 
 @router.post("/agent-tokens", response_model=AgentTokenResponse)
@@ -46,7 +47,8 @@ def create_agent_token(
 
 @router.get("/clients")
 def list_clients(
-    _: Annotated[Principal, Depends(admin_only)], session: Annotated[Session, Depends(get_session)]
+    _: Annotated[Principal, Depends(admin_reader)],
+    session: Annotated[Session, Depends(get_session)],
 ) -> list[dict]:
     rows = session.scalars(select(Client).order_by(Client.created_at)).all()
     return [
@@ -57,7 +59,8 @@ def list_clients(
 
 @router.get("/agents")
 def list_agents(
-    _: Annotated[Principal, Depends(admin_only)], session: Annotated[Session, Depends(get_session)]
+    _: Annotated[Principal, Depends(admin_reader)],
+    session: Annotated[Session, Depends(get_session)],
 ) -> list[dict]:
     rows = session.scalars(select(Agent).order_by(Agent.created_at)).all()
     return [

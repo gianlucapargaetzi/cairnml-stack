@@ -9,12 +9,13 @@ from sqlalchemy.orm import Session
 
 from mlops_server.ids import new_id
 from mlops_server.models import Artifact, Project
-from mlops_server.security.deps import Principal, get_session, require
+from mlops_server.security.deps import READ_ANY, Principal, get_session, require
 from mlops_server.services import access
 from mlops_server.services.storage import safe_artifact_name
 
 router = APIRouter()
 any_principal = require("client", "agent", "run")
+read_any = require(*READ_ANY)
 PRESIGN_EXPIRES = 3600
 
 
@@ -87,7 +88,7 @@ def register(
 @router.get("/experiments/{experiment_id}/artifacts", response_model=list[ArtifactOut])
 def list_artifacts(
     experiment_id: str,
-    principal: Annotated[Principal, Depends(any_principal)],
+    principal: Annotated[Principal, Depends(read_any)],
     session: Annotated[Session, Depends(get_session)],
 ):
     access.load_experiment(session, principal, experiment_id, False)
@@ -107,7 +108,7 @@ def download(
     experiment_id: str,
     artifact_id: str,
     request: Request,
-    principal: Annotated[Principal, Depends(any_principal)],
+    principal: Annotated[Principal, Depends(read_any)],
     session: Annotated[Session, Depends(get_session)],
 ):
     access.load_experiment(session, principal, experiment_id, False)

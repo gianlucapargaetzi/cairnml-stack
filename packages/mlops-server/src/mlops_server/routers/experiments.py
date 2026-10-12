@@ -15,11 +15,12 @@ from sqlalchemy.orm import Session, object_session
 
 from mlops_server.ids import new_id
 from mlops_server.models import Experiment, Project, ProjectMember, User
-from mlops_server.security.deps import Principal, get_session, require
+from mlops_server.security.deps import READERS, Principal, get_session, require
 from mlops_server.services import access
 
 router = APIRouter()
 any_principal = require("client", "agent", "run")
+read_principal = require("client", "agent", "run", "web")
 # Fields that may be explicitly cleared with null; every other null in a PATCH body is ignored.
 NULLABLE_FIELDS = {"git", "python_version", "platform", "script", "notes"}
 
@@ -72,7 +73,7 @@ def create_experiment(
 
 @router.get("/experiments", response_model=list[ExperimentOut])
 def list_experiments(
-    principal: Annotated[Principal, Depends(require("client"))],
+    principal: Annotated[Principal, Depends(require(*READERS))],
     session: Annotated[Session, Depends(get_session)],
     project: str | None = None,
     status: str | None = None,
@@ -96,7 +97,7 @@ def list_experiments(
 @router.get("/experiments/{experiment_id}", response_model=ExperimentOut)
 def get_experiment(
     experiment_id: str,
-    principal: Annotated[Principal, Depends(any_principal)],
+    principal: Annotated[Principal, Depends(read_principal)],
     session: Annotated[Session, Depends(get_session)],
 ):
     return experiment_out(session, access.load_experiment(session, principal, experiment_id, False))

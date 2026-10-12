@@ -19,7 +19,7 @@ def get_project(session: Session, slug: str) -> Project:
 
 
 def is_member(session: Session, principal: Principal, project: Project) -> bool:
-    if principal.kind != "client" or principal.user_id is None:
+    if principal.kind not in ("client", "web") or principal.user_id is None:
         return False
     if principal.is_admin:
         return True
@@ -57,7 +57,9 @@ def load_experiment(
         project = session.get(Project, exp.project_id)
         allowed = is_member(session, principal, project)
         if allowed and write:
-            allowed = exp.owner_id == principal.user_id or principal.is_admin
+            allowed = principal.kind == "client" and (
+                exp.owner_id == principal.user_id or principal.is_admin
+            )
     if not allowed:
         raise HTTPException(404, "experiment not found")
     return exp

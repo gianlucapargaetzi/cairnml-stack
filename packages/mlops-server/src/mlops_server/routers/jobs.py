@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 from mlops_server.ids import new_id
 from mlops_server.models import Artifact, Experiment, Job, Project
 from mlops_server.routers.experiments import apply_status
-from mlops_server.security.deps import Principal, get_session, require
+from mlops_server.security.deps import READERS, Principal, get_session, require
 from mlops_server.services import access, audit
 from mlops_server.services.github import GitHubError, RepoNotAccessible
 
@@ -256,7 +256,7 @@ def artifact_url(
 @router.get("/jobs/{job_id}", response_model=JobOut)
 def get_job(
     job_id: str,
-    principal: Annotated[Principal, Depends(client_only)],
+    principal: Annotated[Principal, Depends(require(*READERS))],
     session: Annotated[Session, Depends(get_session)],
 ):
     return job_out(_client_job(session, principal, job_id))

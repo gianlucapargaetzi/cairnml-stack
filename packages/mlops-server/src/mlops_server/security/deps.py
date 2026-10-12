@@ -102,6 +102,10 @@ def check_csrf(principal: Principal, presented: str) -> None:
         raise HTTPException(403, "missing or wrong CSRF token")
 
 
+READERS = ("client", "web")
+READ_ANY = ("client", "agent", "run", "web")
+
+
 def require(*kinds: str, admin: bool = False) -> Callable[..., Principal]:
     def dependency(principal: Annotated[Principal, Depends(principal_dep)]) -> Principal:
         if kinds and principal.kind not in kinds:

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from mlops_server.ids import new_id
 from mlops_server.models import Project, ProjectMember, User
-from mlops_server.security.deps import Principal, get_session, require
+from mlops_server.security.deps import READERS, Principal, get_session, require
 from mlops_server.services import access, audit
 
 router = APIRouter()
@@ -35,7 +35,7 @@ def create_project(
 
 @router.get("/projects", response_model=list[ProjectOut])
 def list_projects(
-    principal: Annotated[Principal, Depends(require("client"))],
+    principal: Annotated[Principal, Depends(require(*READERS))],
     session: Annotated[Session, Depends(get_session)],
 ) -> list[ProjectOut]:
     projects = session.scalars(select(Project).order_by(Project.slug)).all()
