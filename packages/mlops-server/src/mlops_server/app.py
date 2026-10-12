@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 
 from mlops_server import models  # noqa: F401  (register tables)
 from mlops_server.db import Base, make_engine
-from mlops_server.routers import meta
+from mlops_server.routers import auth, enroll, meta
 from mlops_server.settings import Settings
 
 
@@ -46,6 +46,6 @@ def create_app(
     app.state.tokens = TokenService(
         read_private_key(settings.signing_key_path), settings.public_url, settings.access_token_ttl
     )
-    for module in (meta,):
+    for module in (meta, enroll, auth):
         app.include_router(module.router, prefix="/api/v1")
     return app
