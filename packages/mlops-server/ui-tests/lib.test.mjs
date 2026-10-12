@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   fmtDuration, shortSha, safeHttpsUrl, commitUrl, flatten, diffRows, setDiff, parseHash, statusClass, fmtNumber, colorFor,
+  createScope, shouldRedirectToLogin, attributeAllowed, linkAllowed,
 } from "../src/mlops_server/ui/static/lib.js";
 
 test("durations", () => {
@@ -56,4 +57,53 @@ test("status classes are safe css class names", () => {
   assert.equal(statusClass("running"), "status status-running");
   assert.equal(statusClass('x" onmouseover="'), "status status-xonmouseover");
   assert.equal(colorFor(0), colorFor(10));
+});
+
+test("commit links encode the commit and never carry credentials", () => {
+  assert.equal(
+    commitUrl({ remote_url: "https://github.com/o/r.git", commit: "a/b?c" }),
+    "https://github.com/o/r/commit/a%2Fb%3Fc",
+  );
+  const withCredentials = commitUrl({ remote_url: "https://user:tok3n@github.com/o/r.git", commit: "abc" });
+  assert.equal(withCredentials, "https://github.com/o/r/commit/abc");
+  assert.ok(!withCredentials.includes("user") && !withCredentials.includes("tok3n"));
+  assert.equal(commitUrl({ remote_url: "http://user:pw@github.com/o/r", commit: "abc" }), null);
+});
+
+test("a scope runs cleanups once on dispose and refuses later work", () => {
+  const scope = createScope();
+  const seen = [];
+  scope.onCleanup(() => seen.push("a"));
+  scope.onCleanup(() => { throw new Error("boom"); });
+  scope.onCleanup(() => seen.push("c"));
+  assert.equal(scope.canRun(), true);
+  scope.dispose();
+  scope.dispose();
+  assert.deepEqual(seen, ["a", "c"]);
+  assert.equal(scope.canRun(), false);
+  assert.equal(scope.disposed, true);
+  scope.onCleanup(() => seen.push("late"));
+  assert.deepEqual(seen, ["a", "c", "late"]);
+});
+
+test("login redirect happens once and never on the login page", () => {
+  assert.equal(shouldRedirectToLogin("/ui/", false), true);
+  assert.equal(shouldRedirectToLogin("/ui/", true), false);
+  assert.equal(shouldRedirectToLogin("/ui/auth/login", false), false);
+});
+
+test("dom attributes are an allowlist and links must be safe", () => {
+  for (const name of ["class", "id", "title", "type", "name", "value", "checked", "aria-label", "data-run"]) {
+    assert.equal(attributeAllowed(name), true, name);
+  }
+  for (const name of ["style", "srcdoc", "formaction", "onclick", "innerhtml", "xlink:href"]) {
+    assert.equal(attributeAllowed(name), false, name);
+  }
+  assert.equal(linkAllowed("href", "#/experiments/exp_1"), true);
+  assert.equal(linkAllowed("href", "https://github.com/o/r"), true);
+  assert.equal(linkAllowed("href", "javascript:alert(1)"), false);
+  assert.equal(linkAllowed("href", "data:text/html,x"), false);
+  assert.equal(linkAllowed("src", "http://example.com/a.js"), false);
+  assert.equal(linkAllowed("href", "#/x\" onclick=\"y"), false);
+  assert.equal(linkAllowed("class", "anything"), true);
 });

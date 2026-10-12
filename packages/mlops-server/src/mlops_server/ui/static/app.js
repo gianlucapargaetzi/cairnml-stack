@@ -1,6 +1,6 @@
 import { api, logout } from "./api.js";
 import { h } from "./dom.js";
-import { parseHash } from "./lib.js";
+import { createScope, parseHash } from "./lib.js";
 
 const ROUTES = [
   ["", () => import("./views/overview.js"), "Overview"],
@@ -13,20 +13,24 @@ const ROUTES = [
 ];
 
 const main = document.getElementById("main");
-let cleanups = [];
+let current = null;
 let renderToken = 0;
 
-function newContext() {
-  const timers = [];
-  const ctx = {
+// The context a view receives. Everything it starts is tied to the page scope, which is
+// disposed when the route changes, so a stale view cannot poll or write after that.
+function newContext(scope) {
+  return {
     poll(fn, ms) {
-      const tick = () => { if (!document.hidden) Promise.resolve().then(fn).catch(showError); };
-      timers.push(setInterval(tick, ms));
+      if (!scope.canRun()) return;
+      const id = setInterval(() => {
+        if (document.hidden || !scope.canRun()) return;
+        Promise.resolve().then(fn).catch((error) => { if (scope.canRun()) showError(error); });
+      }, ms);
+      scope.onCleanup(() => clearInterval(id));
     },
-    onCleanup(fn) { cleanups.push(fn); },
+    onCleanup(fn) { scope.onCleanup(fn); },
+    active: () => scope.canRun(),
   };
-  cleanups.push(() => timers.forEach(clearInterval));
-  return ctx;
 }
 
 function showError(error) {
@@ -36,8 +40,9 @@ function showError(error) {
 
 async function render() {
   const mine = ++renderToken;
-  cleanups.forEach((fn) => { try { fn(); } catch { /* ignore */ } });
-  cleanups = [];
+  if (current) current.dispose();
+  const scope = createScope();
+  current = scope;
   const { parts, params } = parseHash(window.location.hash);
   const route = parts[0] || "";
   const entry = ROUTES.find(([name]) => name === route);
@@ -45,11 +50,11 @@ async function render() {
   if (!entry) { main.replaceChildren(h("p", {}, "Page not found.")); return; }
   try {
     const module = await entry[1]();
-    if (mine !== renderToken) return;
+    if (mine !== renderToken || !scope.canRun()) return;
     main.replaceChildren();
-    await module.default(main, { parts, params }, newContext());
+    await module.default(main, { parts, params }, newContext(scope));
   } catch (error) {
-    if (mine === renderToken) showError(error);
+    if (mine === renderToken && scope.canRun()) showError(error);
   }
 }
 
@@ -61,9 +66,19 @@ async function start() {
     nav.append(h("a", { href: `#/${name}`, dataset: { route: name } }, title));
   }
   document.getElementById("user").textContent = me.username || "";
+  const header = document.querySelector("header.top");
+  const notice = h("span", { class: "error", role: "alert" });
+  header.append(notice);
   const button = document.getElementById("logout");
   button.hidden = false;
-  button.addEventListener("click", async () => { window.location.href = await logout(me.csrf); });
+  button.addEventListener("click", async () => {
+    notice.replaceChildren();
+    try {
+      window.location.href = await logout(me.csrf);
+    } catch (error) {
+      notice.replaceChildren(`Log out failed (${error.message}). Try again.`);
+    }
+  });
   window.addEventListener("hashchange", render);
   await render();
 }

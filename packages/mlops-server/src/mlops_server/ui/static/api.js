@@ -1,3 +1,8 @@
+import { shouldRedirectToLogin } from "./lib.js";
+
+// Once per page load: a session the login page cannot establish must not loop forever.
+let redirectedToLogin = false;
+
 async function request(path, params = {}, init = {}) {
   const url = new URL("/api/v1" + path, window.location.origin);
   for (const [key, value] of Object.entries(params)) {
@@ -5,7 +10,10 @@ async function request(path, params = {}, init = {}) {
   }
   const response = await fetch(url, { credentials: "same-origin", headers: { Accept: "application/json" }, ...init });
   if (response.status === 401) {
-    window.location.href = "/ui/auth/login";
+    if (shouldRedirectToLogin(window.location.pathname, redirectedToLogin)) {
+      redirectedToLogin = true;
+      window.location.href = "/ui/auth/login";
+    }
     throw new Error("login required");
   }
   if (!response.ok) {

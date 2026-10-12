@@ -46,8 +46,18 @@ export function safeHttpsUrl(url) {
 
 export function commitUrl(git) {
   if (!git || !git.remote_url || !git.commit) return null;
-  const base = safeHttpsUrl(String(git.remote_url).replace(/\.git$/, ""));
-  return base ? `${base}/commit/${git.commit}` : null;
+  let remote;
+  try {
+    remote = new URL(String(git.remote_url).replace(/\.git$/, ""));
+  } catch {
+    return null;
+  }
+  remote.username = "";
+  remote.password = "";
+  remote.search = "";
+  remote.hash = "";
+  const base = safeHttpsUrl(remote.href);
+  return base ? `${base}/commit/${encodeURIComponent(git.commit)}` : null;
 }
 
 export function flatten(obj, prefix = "", out = {}) {
@@ -83,4 +93,50 @@ export function parseHash(hash) {
 
 export function statusClass(status) {
   return `status status-${String(status).replace(/[^a-z]/g, "")}`;
+}
+
+// A page-scoped lifetime: cleanups run once on dispose, and nothing may start after that.
+export function createScope() {
+  let disposed = false;
+  const cleanups = [];
+  return {
+    get disposed() {
+      return disposed;
+    },
+    canRun() {
+      return !disposed;
+    },
+    onCleanup(fn) {
+      if (disposed) fn();
+      else cleanups.push(fn);
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      for (const fn of cleanups.splice(0)) {
+        try { fn(); } catch { /* one failing cleanup must not block the others */ }
+      }
+    },
+  };
+}
+
+export function shouldRedirectToLogin(pathname, alreadyRedirected) {
+  return !alreadyRedirected && pathname !== "/ui/auth/login";
+}
+
+const ATTRIBUTES = new Set(["class", "id", "title", "type", "name", "value", "role", "checked", "disabled", "hidden", "placeholder"]);
+const LINK_ATTRIBUTES = new Set(["href", "src"]);
+
+// Whether dom.h() may set this attribute. Event handlers are functions and are checked separately.
+export function attributeAllowed(name) {
+  if (LINK_ATTRIBUTES.has(name)) return true;
+  return ATTRIBUTES.has(name) || name.startsWith("aria-") || name.startsWith("data-");
+}
+
+// href and src only take a validated https URL or an in-app hash route such as "#/experiments/a".
+export function linkAllowed(name, value) {
+  if (!LINK_ATTRIBUTES.has(name)) return true;
+  const text = String(value);
+  if (/^#\/[^\s"'<>]*$/.test(text)) return true;
+  return safeHttpsUrl(text) !== null;
 }
