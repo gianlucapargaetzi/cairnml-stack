@@ -32,6 +32,24 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(_TS, default=utcnow)
 
 
+class WebLogin(Base):
+    __tablename__ = "web_logins"
+    state: Mapped[str] = mapped_column(String(64), primary_key=True)
+    verifier: Mapped[str] = mapped_column(String(128))
+    nonce: Mapped[str] = mapped_column(String(64))
+    expires_at: Mapped[datetime] = mapped_column(_TS, index=True)
+
+
+class WebSession(Base):
+    __tablename__ = "web_sessions"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    csrf: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(_TS, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(_TS, index=True)
+
+
 class Client(Base):
     __tablename__ = "clients"
     id: Mapped[str] = mapped_column(String(32), primary_key=True)

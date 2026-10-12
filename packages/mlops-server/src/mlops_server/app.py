@@ -4,6 +4,7 @@ import math
 from contextlib import asynccontextmanager
 from typing import Any
 
+import httpx
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
@@ -24,6 +25,7 @@ from mlops_server.routers import (
     projects,
     repos,
     telemetry,
+    web_auth,
 )
 from mlops_server.routers import storage as storage_api
 from mlops_server.settings import Settings
@@ -93,11 +95,12 @@ def create_app(
 
         oidc = OidcVerifier(
             settings.oidc_issuer,
-            settings.oidc_client_id,
+            [settings.oidc_client_id, settings.web_client_id],
             jwks_url=settings.oidc_jwks_url
             or f"{settings.oidc_issuer.rstrip('/')}/protocol/openid-connect/certs",
         )
     app.state.oidc = oidc
+    app.state.idp_http = httpx.Client(timeout=10.0)
     if storage is None:
         from mlops_server.services.storage import build_storage
 
@@ -125,4 +128,5 @@ def create_app(
         jobs, agents,
     ):
         app.include_router(module.router, prefix="/api/v1")
+    app.include_router(web_auth.router)
     return app

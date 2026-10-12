@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from mlops_server.models import Client, Experiment, Job, User
+from mlops_server.models import Client, Experiment, Job, User, WebSession
 from mlops_server.services.audit import record
 from mlops_server.services.directory import Directory, DirectoryError
 
@@ -33,10 +33,6 @@ class SyncReport:
 
 
 def _delete_sessions(session: Session, user_id: str) -> int:
-    try:
-        from mlops_server.models import WebSession  # added in Task 44
-    except ImportError:
-        return 0
     return session.query(WebSession).filter(WebSession.user_id == user_id).delete()
 
 

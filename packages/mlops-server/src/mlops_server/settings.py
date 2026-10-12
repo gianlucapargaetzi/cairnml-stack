@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     oidc_client_id: str = "mlops-cli"
     oidc_jwks_url: str | None = None
     oidc_admin_role: str = "mlops-admin"
+    web_client_id: str = "mlops-web"
+    web_session_ttl: int = 28800
+    oidc_authorization_endpoint: str | None = None
+    oidc_token_endpoint: str | None = None
+    oidc_logout_endpoint: str | None = None
 
     github_app_id: str | None = None
     github_app_private_key_path: Path | None = None

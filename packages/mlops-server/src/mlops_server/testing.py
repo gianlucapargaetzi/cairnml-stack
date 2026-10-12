@@ -7,7 +7,9 @@ import os
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from urllib.parse import parse_qs, urlparse
 
+import httpx
 import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -45,6 +47,7 @@ class FakeIdp:
         iss: str | None = None,
         exp_in: int = 300,
         key=None,
+        extra: dict | None = None,
     ) -> str:
         now = int(time.time())
         claims = {
@@ -55,13 +58,14 @@ class FakeIdp:
             "iat": now,
             "exp": now + exp_in,
             "realm_access": {"roles": list(roles)},
+            **(extra or {}),
         }
         return jwt.encode(claims, key or self._key, algorithm="RS256", headers={"kid": self.kid})
 
     def verifier(self):
         from mlops_server.security.oidc import OidcVerifier
 
-        return OidcVerifier(self.ISSUER, "mlops-cli", jwks=self.jwks())
+        return OidcVerifier(self.ISSUER, ["mlops-cli", "mlops-web"], jwks=self.jwks())
 
 
 @pytest.fixture(scope="session")
@@ -318,3 +322,45 @@ def new_job(stub_github):
         return response.json()
 
     return _new
+
+
+@pytest.fixture
+def browser(app, server, idp):
+    """A TestClient that keeps cookies and does not follow redirects, with a fake IdP token
+    endpoint.
+
+    `browser.idp` is a dict the test edits: username, roles, azp, status, nonce_override."""
+    client = TestClient(app, follow_redirects=False)
+    state = {"azp": "mlops-web", "username": "alice", "roles": [], "status": 200, "calls": []}
+
+    def token_endpoint(request: httpx.Request) -> httpx.Response:
+        # The form is urlencoded, so decode it: parse_qs unquotes values such as the redirect_uri.
+        form = {key: values[0] for key, values in parse_qs(request.content.decode()).items()}
+        state["calls"].append(form)
+        if state["status"] != 200:
+            return httpx.Response(state["status"], json={"error": "invalid_grant"})
+        return httpx.Response(200, json={
+            "access_token": idp.token(sub=f"sub-{state['username']}", username=state["username"],
+                                      roles=state["roles"], azp=state["azp"]),
+            "id_token": idp.token(sub=f"sub-{state['username']}", azp=state["azp"],
+                                  extra={"nonce": state.get("nonce_override") or state["nonce"]}),
+        })
+
+    app.state.idp_http = httpx.Client(transport=httpx.MockTransport(token_endpoint))
+    client.idp = state
+    return client
+
+
+def start_login(browser):
+    response = browser.get("/ui/auth/login")
+    assert response.status_code == 302
+    query = parse_qs(urlparse(response.headers["location"]).query)
+    browser.idp["nonce"] = query["nonce"][0]
+    return response, query
+
+
+def login_browser(browser) -> dict:
+    """Run the whole login and return `/api/v1/me` for the new session."""
+    _, query = start_login(browser)
+    browser.get("/ui/auth/callback", params={"code": "c", "state": query["state"][0]})
+    return browser.get("/api/v1/me").json()

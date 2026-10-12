@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import jwt
@@ -22,14 +23,14 @@ class OidcVerifier:
     def __init__(
         self,
         issuer: str,
-        client_id: str,
+        client_id: str | Sequence[str],
         jwks_url: str | None = None,
         jwks: dict | None = None,
     ) -> None:
         if not jwks_url and not jwks:
             raise ValueError("need jwks_url or jwks")
         self._issuer = issuer
-        self._client_id = client_id
+        self._client_ids = [client_id] if isinstance(client_id, str) else list(client_id)
         self._static = jwt.PyJWKSet.from_dict(jwks) if jwks else None
         self._client = jwt.PyJWKClient(jwks_url, cache_keys=True) if jwks_url else None
 
@@ -42,7 +43,7 @@ class OidcVerifier:
             raise OidcError("unknown signing key")
         return self._client.get_signing_key_from_jwt(token).key
 
-    def verify(self, token: str) -> IdpIdentity:
+    def _decode(self, token: str, clients: Sequence[str] | None) -> dict:
         try:
             claims = jwt.decode(
                 token,
@@ -55,11 +56,20 @@ class OidcVerifier:
             raise
         except Exception as exc:  # PyJWTError, network errors fetching the JWKS
             raise OidcError("invalid token") from exc
-        if claims.get("azp") != self._client_id:
-            raise OidcError("token was not issued for this client")
-        roles = tuple(claims.get("realm_access", {}).get("roles", []))
+        accepted = list(clients) if clients is not None else self._client_ids
+        if claims.get("azp") not in accepted:
+            raise OidcError("token was not issued for an accepted client")
+        return claims
+
+    def verify(self, token: str, clients: Sequence[str] | None = None) -> IdpIdentity:
+        claims = self._decode(token, clients)
         return IdpIdentity(
             subject=claims["sub"],
             username=claims.get("preferred_username", claims["sub"]),
-            roles=roles,
+            roles=tuple(claims.get("realm_access", {}).get("roles", [])),
         )
+
+    def verify_nonce(self, id_token: str, nonce: str, clients: Sequence[str] | None = None) -> None:
+        claims = self._decode(id_token, clients)
+        if not nonce or claims.get("nonce") != nonce:
+            raise OidcError("nonce mismatch")

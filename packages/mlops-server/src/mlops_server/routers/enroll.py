@@ -17,10 +17,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from mlops_server.ids import new_id
-from mlops_server.models import Agent, Client, EnrollmentToken, User
+from mlops_server.models import Agent, Client, EnrollmentToken
 from mlops_server.security.deps import get_session
 from mlops_server.security.oidc import OidcError
 from mlops_server.services import audit
+from mlops_server.services.users import upsert_user
 
 router = APIRouter(prefix="/enroll")
 
@@ -35,7 +36,9 @@ def enroll_client(
     if not authorization.lower().startswith("bearer "):
         raise HTTPException(401, "IdP login required")
     try:
-        identity = request.app.state.oidc.verify(authorization[7:].strip())
+        identity = request.app.state.oidc.verify(
+            authorization[7:].strip(), clients=[request.app.state.settings.oidc_client_id]
+        )
     except OidcError:
         raise HTTPException(401, "invalid IdP token") from None
     try:
@@ -43,20 +46,9 @@ def enroll_client(
     except ValueError:
         raise HTTPException(422, "public_key must be an Ed25519 PEM public key") from None
 
-    user = session.scalar(select(User).where(User.idp_subject == identity.subject))
-    if user is not None and user.disabled:
+    user = upsert_user(session, identity)
+    if user.disabled:
         raise HTTPException(403, "user is disabled")
-    if user is None:
-        user = User(
-            id=new_id("usr"),
-            idp_subject=identity.subject,
-            username=identity.username,
-            roles=list(identity.roles),
-        )
-        session.add(user)
-    else:
-        user.username = identity.username
-        user.roles = list(identity.roles)
     # Client has no relationship() to User, so flush the user row before the FK insert.
     session.flush()
     client = Client(id=new_id("cli"), user_id=user.id, name=body.name, public_key=body.public_key)

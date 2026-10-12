@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from mlops_server.models import Agent, Client, Job, User
+from mlops_server.models import Agent, Client, Job, User, WebSession
 from mlops_server.security.tokens import TokenInvalid
 
 
@@ -27,6 +31,7 @@ class Principal:
     is_admin: bool
     experiment_id: str | None = None
     job_id: str | None = None
+    csrf: str | None = None  # set for web sessions only
 
 
 def _unauthorized(detail: str = "invalid credentials") -> HTTPException:
@@ -38,7 +43,10 @@ def principal_dep(
 ) -> Principal:
     header = request.headers.get("authorization", "")
     if not header.lower().startswith("bearer "):
-        raise _unauthorized("missing bearer token")
+        cookie = request.cookies.get("mlops_session")
+        if header or not cookie:
+            raise _unauthorized("missing bearer token")
+        return _web_principal(request, session, cookie)
     try:
         claims = request.app.state.tokens.verify(header[7:].strip())
     except TokenInvalid:
@@ -73,6 +81,25 @@ def principal_dep(
     return Principal(
         job.id, "run", job.created_by, frozenset(), False, job.experiment_id, job.id
     )
+
+
+def _web_principal(request: Request, session: Session, cookie: str) -> Principal:
+    token_hash = hashlib.sha256(cookie.encode()).hexdigest()
+    row = session.scalar(select(WebSession).where(WebSession.token_hash == token_hash))
+    user = session.get(User, row.user_id) if row else None
+    if row is None or row.expires_at < datetime.now(UTC) or user is None or user.disabled:
+        raise _unauthorized()
+    roles = frozenset(user.roles or [])
+    admin_role = request.app.state.settings.oidc_admin_role
+    return Principal(row.id, "web", user.id, roles, admin_role in roles, csrf=row.csrf)
+
+
+def check_csrf(principal: Principal, presented: str) -> None:
+    """State-changing requests made with a session cookie must echo its CSRF token."""
+    if principal.kind != "web":
+        return
+    if not principal.csrf or not hmac.compare_digest(principal.csrf, presented or ""):
+        raise HTTPException(403, "missing or wrong CSRF token")
 
 
 def require(*kinds: str, admin: bool = False) -> Callable[..., Principal]:
