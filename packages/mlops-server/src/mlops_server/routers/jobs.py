@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from mlops_common.schemas import (
     ArtifactUrlRequest,
     GitInfo,
@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from mlops_server.ids import new_id
-from mlops_server.models import Artifact, Experiment, Job, Project
+from mlops_server.models import Agent, Artifact, Experiment, Job, Project
 from mlops_server.routers.experiments import apply_status
 from mlops_server.security.deps import READERS, Principal, get_session, require
 from mlops_server.services import access, audit
@@ -251,6 +251,40 @@ def artifact_url(
     if storage is None:
         raise HTTPException(503, "storage is not configured")
     return {"url": storage.presign_get(body.key)}
+
+
+@router.get("/jobs")
+def list_jobs(
+    principal: Annotated[Principal, Depends(require(*READERS))],
+    session: Annotated[Session, Depends(get_session)],
+    status: str | None = None,
+    project: str | None = None,
+    limit: int = Query(50, ge=1, le=200),
+) -> list[dict]:
+    projects = session.scalars(select(Project))
+    ids = [p.id for p in projects if access.is_member(session, principal, p)]
+    if project:
+        ids = [access.ensure_member(session, principal, project).id]
+    query = (
+        select(Job, Experiment.name, Project.slug, Agent.name)
+        .join(Experiment, Experiment.id == Job.experiment_id)
+        .join(Project, Project.id == Job.project_id)
+        .outerjoin(Agent, Agent.id == Job.agent_id)
+        .where(Job.project_id.in_(ids))
+    )
+    if status:
+        query = query.where(Job.status == status)
+    query = query.order_by(Job.created_at.desc(), Job.id.desc()).limit(limit)
+    return [
+        {
+            "id": j.id, "experiment_id": j.experiment_id, "experiment_name": name,
+            "project": slug, "status": j.status, "queue": j.queue, "agent_id": j.agent_id,
+            "agent_name": agent_name, "cpu": j.cpu, "memory_gb": j.memory_gb, "gpu": j.gpu,
+            "labels": j.labels, "exit_code": j.exit_code, "message": j.message,
+            "created_at": j.created_at, "assigned_at": j.assigned_at, "finished_at": j.finished_at,
+        }
+        for j, name, slug, agent_name in session.execute(query)
+    ]
 
 
 @router.get("/jobs/{job_id}", response_model=JobOut)

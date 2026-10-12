@@ -3,18 +3,19 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from mlops_common.schemas import (
     TERMINAL_STATUSES,
     ExperimentCreate,
     ExperimentOut,
     ExperimentPatch,
 )
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.orm import Session, object_session
 
 from mlops_server.ids import new_id
-from mlops_server.models import Experiment, Project, ProjectMember, User
+from mlops_server.models import Experiment, MetricPoint, Project, User
 from mlops_server.security.deps import READERS, Principal, get_session, require
 from mlops_server.services import access
 
@@ -71,27 +72,111 @@ def create_experiment(
     return experiment_out(session, exp)
 
 
+SORTS = {"created_at": Experiment.created_at, "name": Experiment.name, "status": Experiment.status}
+MAX_COMPARE, MAX_POINTS = 10, 500
+
+
+def _accessible_project_ids(session: Session, principal: Principal) -> list[str]:
+    projects = session.scalars(select(Project))
+    return [p.id for p in projects if access.is_member(session, principal, p)]
+
+
 @router.get("/experiments", response_model=list[ExperimentOut])
 def list_experiments(
+    response: Response,
     principal: Annotated[Principal, Depends(require(*READERS))],
     session: Annotated[Session, Depends(get_session)],
     project: str | None = None,
     status: str | None = None,
+    q: str | None = None,
+    sort: str = Query("created_at", pattern="^(created_at|name|status)$"),
+    order: str = Query("desc", pattern="^(asc|desc)$"),
     limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
 ):
-    query = select(Experiment).order_by(Experiment.created_at.desc()).limit(limit)
-    if not principal.is_admin:
-        member_projects = select(ProjectMember.project_id).where(
-            ProjectMember.user_id == principal.user_id
-        )
-        query = query.where(Experiment.project_id.in_(member_projects))
+    ids = _accessible_project_ids(session, principal)
+    if project:
+        ids = [access.ensure_member(session, principal, project).id]
+    query = select(Experiment).where(Experiment.project_id.in_(ids))
     if status:
         query = query.where(Experiment.status == status)
-    if project:
-        query = query.where(
-            Experiment.project_id == access.ensure_member(session, principal, project).id
-        )
-    return [experiment_out(session, exp) for exp in session.scalars(query)]
+    if q:
+        query = query.where(Experiment.name.icontains(q, autoescape=True))
+    total = session.scalar(select(func.count()).select_from(query.subquery()))
+    column = SORTS[sort]
+    query = query.order_by(column.desc() if order == "desc" else column.asc(), Experiment.id)
+    response.headers["X-Total-Count"] = str(total)
+    return [
+        experiment_out(session, e) for e in session.scalars(query.limit(limit).offset(offset))
+    ]
+
+
+def _sample_ranks(count: int) -> list[int]:
+    """1-based ranks of at most MAX_POINTS evenly spaced points, first and last included."""
+    if count <= MAX_POINTS:
+        return list(range(1, count + 1))
+    span = count - 1
+    return sorted({round(i * span / (MAX_POINTS - 1)) + 1 for i in range(MAX_POINTS)})
+
+
+def _series(session: Session, experiment_id: str, name: str, count: int) -> list[list]:
+    rank = func.row_number().over(
+        order_by=(MetricPoint.step, MetricPoint.ts, MetricPoint.id)
+    ).label("rn")
+    inner = (
+        select(MetricPoint.step, MetricPoint.value, rank)
+        .where(MetricPoint.experiment_id == experiment_id, MetricPoint.name == name)
+        .subquery()
+    )
+    query = select(inner.c.step, inner.c.value, inner.c.rn).where(
+        inner.c.rn.in_(_sample_ranks(count))
+    )
+    return [
+        [step if step is not None else rn, value]
+        for step, value, rn in session.execute(query.order_by(inner.c.rn))
+    ]
+
+
+@router.get("/experiments/compare")
+def compare(
+    ids: str,
+    principal: Annotated[Principal, Depends(require(*READERS))],
+    session: Annotated[Session, Depends(get_session)],
+):
+    wanted = list(dict.fromkeys(i for i in ids.split(",") if i))
+    if not 2 <= len(wanted) <= MAX_COMPARE:
+        raise HTTPException(422, f"compare between 2 and {MAX_COMPARE} experiments")
+    experiments = [access.load_experiment(session, principal, i, False) for i in wanted]
+    out = []
+    for exp in experiments:
+        stats = session.execute(
+            select(
+                MetricPoint.name, func.count(), func.min(MetricPoint.value),
+                func.max(MetricPoint.value),
+            )
+            .where(MetricPoint.experiment_id == exp.id)
+            .group_by(MetricPoint.name)
+        ).all()
+        last = {
+            row.name: row.value
+            for row in session.execute(
+                select(MetricPoint.name, MetricPoint.value)
+                .where(MetricPoint.experiment_id == exp.id)
+                .ext(distinct_on(MetricPoint.name))
+                .order_by(
+                    MetricPoint.name, MetricPoint.step.desc().nulls_last(), MetricPoint.ts.desc()
+                )
+            )
+        }
+        metrics = {
+            name: {
+                "count": count, "min": low, "max": high, "last": last[name],
+                "series": _series(session, exp.id, name, count),
+            }
+            for name, count, low, high in stats
+        }
+        out.append({**experiment_out(session, exp).model_dump(mode="json"), "metrics": metrics})
+    return {"experiments": out}
 
 
 @router.get("/experiments/{experiment_id}", response_model=ExperimentOut)

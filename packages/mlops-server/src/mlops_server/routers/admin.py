@@ -7,11 +7,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from mlops_common.schemas import AgentTokenRequest, AgentTokenResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from mlops_server.ids import new_id
-from mlops_server.models import Agent, Client, EnrollmentToken
+from mlops_server.models import Agent, Client, EnrollmentToken, User
 from mlops_server.security.deps import READERS, Principal, get_session, require
 from mlops_server.services import audit
 from mlops_server.services.user_sync import sync_users
@@ -120,3 +120,28 @@ def trigger_user_sync(
                  disabled=len(report.disabled))
     session.commit()
     return report.as_dict()
+
+
+@router.get("/users")
+def list_users(
+    _: Annotated[Principal, Depends(admin_reader)],
+    session: Annotated[Session, Depends(get_session)],
+) -> list[dict]:
+    active = dict(
+        session.execute(
+            select(Client.user_id, func.count())
+            .where(Client.revoked_at.is_(None))
+            .group_by(Client.user_id)
+        ).all()
+    )
+    users = session.scalars(select(User).order_by(User.username)).all()
+    return [
+        {
+            "id": u.id,
+            "username": u.username,
+            "roles": u.roles,
+            "disabled": u.disabled,
+            "clients_active": active.get(u.id, 0),
+        }
+        for u in users
+    ]
