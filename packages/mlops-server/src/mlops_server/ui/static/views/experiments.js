@@ -1,5 +1,5 @@
 import { api } from "../api.js";
-import { experimentColumns, table } from "../components.js";
+import { experimentColumns, refreshError, table } from "../components.js";
 import { h } from "../dom.js";
 
 const PAGE = 50;
@@ -25,6 +25,7 @@ export default async function experiments(root, route, ctx) {
   const selected = new Set();
   const body = h("div");
   let renderSeq = 0;
+  const notice = refreshError();
 
   const compareButton = h("button", {
     type: "button", disabled: true,
@@ -40,7 +41,7 @@ export default async function experiments(root, route, ctx) {
   async function render() {
     const mine = ++renderSeq;
     const { json: rows, total } = await api.experiments({ ...state, limit: PAGE });
-    if (mine !== renderSeq || !ctx.active()) return;
+    if (mine !== renderSeq) return;
     const columns = experimentColumns({
       selected,
       onToggle: (id, on) => {
@@ -53,34 +54,37 @@ export default async function experiments(root, route, ctx) {
     const pager = h("div", { class: "pager" },
       h("button", {
         type: "button", disabled: state.offset === 0,
-        onclick: () => { state.offset = Math.max(0, state.offset - PAGE); render(); },
+        onclick: () => { state.offset = Math.max(0, state.offset - PAGE); refresh(); },
       }, "Previous"),
       h("span", { class: "muted" }, ` ${first}-${last} of ${total} `),
       h("button", {
         type: "button", disabled: state.offset + PAGE >= total,
-        onclick: () => { state.offset += PAGE; render(); },
+        onclick: () => { state.offset += PAGE; refresh(); },
       }, "Next"));
-    body.replaceChildren(table(columns, rows, "No experiments match."), pager);
+    ctx.render(() => body.replaceChildren(table(columns, rows, "No experiments match."), pager));
+    notice.clear();
   }
+  const failed = (error) => notice.show(error);
+  const refresh = () => render().catch(failed);
 
   // h() allowlists attributes, so the selected option is set on the property instead.
   const projectOptions = (await api.projects()).map((p) => p.slug);
   if (state.project && !projectOptions.includes(state.project)) projectOptions.push(state.project);
   const projectSelect = h("select", {
     "aria-label": "project filter",
-    onchange: (e) => { state.project = e.target.value; state.offset = 0; render(); },
+    onchange: (e) => { state.project = e.target.value; state.offset = 0; refresh(); },
   }, ["", ...projectOptions].map((p) => h("option", { value: p }, p || "all projects")));
   projectSelect.value = state.project;
 
   const statusSelect = h("select", {
     "aria-label": "status filter",
-    onchange: (e) => { state.status = e.target.value; state.offset = 0; render(); },
+    onchange: (e) => { state.status = e.target.value; state.offset = 0; refresh(); },
   }, STATUSES.map((s) => h("option", { value: s }, s || "any status")));
   statusSelect.value = state.status;
 
   const search = h("input", {
     type: "search", placeholder: "name contains...", "aria-label": "name search", value: state.q,
-    oninput: (e) => { state.q = e.target.value; state.offset = 0; render(); },
+    oninput: (e) => { state.q = e.target.value; state.offset = 0; refresh(); },
   });
 
   const sortSelect = h("select", {
@@ -88,21 +92,22 @@ export default async function experiments(root, route, ctx) {
     onchange: (e) => {
       const [sort, order] = e.target.value.split(":");
       Object.assign(state, { sort, order, offset: 0 });
-      render();
+      refresh();
     },
   }, SORTS.map(([value, label]) => h("option", { value }, label)));
 
   const control = (label, el) => h("label", { class: "control" }, label, " ", el);
-  root.replaceChildren(
+  ctx.render(() => root.replaceChildren(
     h("h1", {}, "Experiments"),
+    notice.el,
     h("div", { class: "toolbar" },
       control("Project", projectSelect),
       control("Status", statusSelect),
       control("Search", search),
       control("Sort", sortSelect),
       compareButton),
-    body);
+    body));
   updateCompare();
   await render();
-  ctx.poll(render, 5000);
+  ctx.poll(render, 5000, failed);
 }

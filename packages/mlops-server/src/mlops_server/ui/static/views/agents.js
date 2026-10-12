@@ -1,13 +1,14 @@
 import { api } from "../api.js";
-import { table } from "../components.js";
+import { refreshError, table } from "../components.js";
 import { h } from "../dom.js";
 import { fmtTime } from "../lib.js";
 
 export default async function agents(root, route, ctx) {
+  const status = refreshError();
+  const body = h("div");
   async function render() {
     const rows = await api.agentsStatus();
-    root.replaceChildren(
-      h("h1", {}, "Agents"),
+    ctx.render(() => body.replaceChildren(
       table([
         { title: "Agent", render: (a) => a.name },
         { title: "State", render: (a) => h("span", { class: `status status-${a.online ? "running" : "failed"}` }, a.online ? "online" : "offline") },
@@ -17,8 +18,10 @@ export default async function agents(root, route, ctx) {
         { title: "Runtimes", render: (a) => (a.capabilities.runtimes || []).join(", ") },
         { title: "Running", render: (a) => a.running_jobs.map((j) => `${j.experiment_name} (${j.project})`).join(", ") || "–" },
         { title: "Last seen", render: (a) => fmtTime(a.last_seen) },
-      ], rows, "No agents are enrolled."));
+      ], rows, "No agents are enrolled.")));
+    status.clear();
   }
+  ctx.render(() => root.replaceChildren(h("h1", {}, "Agents"), status.el, body));
   await render();
-  ctx.poll(render, 5000);
+  ctx.poll(render, 5000, status.show);
 }

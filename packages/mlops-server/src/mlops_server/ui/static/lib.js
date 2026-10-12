@@ -120,6 +120,21 @@ export function createScope() {
   };
 }
 
+// The lifetime a view receives: writes made after a route change are dropped by run(), so a
+// slow response can never paint into a page the user has already left.
+export function createPageScope() {
+  const scope = createScope();
+  return Object.assign(scope, {
+    active: () => scope.canRun(),
+    run(fn) {
+      return scope.canRun() ? fn() : undefined;
+    },
+  });
+}
+
+// Statuses after which a run no longer changes, so its detail page can stop polling.
+export const TERMINAL_STATUSES = new Set(["finished", "failed", "cancelled"]);
+
 export function shouldRedirectToLogin(pathname, alreadyRedirected) {
   return !alreadyRedirected && pathname !== "/ui/auth/login";
 }

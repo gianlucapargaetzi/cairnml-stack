@@ -1,14 +1,15 @@
 import { api } from "../api.js";
-import { card, experimentColumns, table } from "../components.js";
+import { card, experimentColumns, refreshError, table } from "../components.js";
 import { h } from "../dom.js";
 import { fmtTime } from "../lib.js";
 
 export default async function overview(root, route, ctx) {
+  const status = refreshError();
+  const body = h("div");
   async function render() {
     const o = await api.overview();
     const jobs = o.jobs || {};
-    root.replaceChildren(
-      h("h1", {}, "Overview"),
+    ctx.render(() => body.replaceChildren(
       h("div", { class: "cards" },
         card("Running jobs", jobs.running || 0, "#/jobs?status=running"),
         card("Queued jobs", jobs.queued || 0, "#/jobs?status=queued"),
@@ -22,8 +23,10 @@ export default async function overview(root, route, ctx) {
         { title: "Last activity", render: (p) => fmtTime(p.last_activity) },
       ], o.projects, "You are not a member of any project yet. Ask an administrator."),
       h("h2", {}, "Recent experiments"),
-      table(experimentColumns(), o.recent, "No experiments yet."));
+      table(experimentColumns(), o.recent, "No experiments yet.")));
+    status.clear();
   }
+  ctx.render(() => root.replaceChildren(h("h1", {}, "Overview"), status.el, body));
   await render();
-  ctx.poll(render, 5000);
+  ctx.poll(render, 5000, status.show);
 }

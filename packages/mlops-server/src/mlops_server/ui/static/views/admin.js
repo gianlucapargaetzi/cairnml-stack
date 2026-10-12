@@ -3,15 +3,15 @@ import { table } from "../components.js";
 import { h } from "../dom.js";
 import { fmtTime } from "../lib.js";
 
-export default async function admin(root) {
+export default async function admin(root, route, ctx) {
   let users, agents, clients;
   try {
     [users, agents, clients] = await Promise.all([api.adminUsers(), api.adminAgents(), api.adminClients()]);
   } catch (error) {
-    if (error.status === 403) { root.replaceChildren(h("p", {}, "Administrators only.")); return; }
+    if (error.status === 403) { ctx.render(() => root.replaceChildren(h("p", {}, "Administrators only."))); return; }
     throw error;
   }
-  root.replaceChildren(
+  ctx.render(() => root.replaceChildren(
     h("h1", {}, "Administration"),
     h("p", { class: "muted" }, "Read-only view. Use the mlops CLI to revoke clients or agents and to create agent tokens."),
     h("h2", {}, "Users"),
@@ -35,5 +35,5 @@ export default async function admin(root) {
       { title: "Machine", render: (c) => c.name },
       { title: "User", class: "mono", render: (c) => c.user_id },
       { title: "State", render: (c) => (c.revoked ? "revoked" : "active") },
-    ], clients));
+    ], clients)));
 }

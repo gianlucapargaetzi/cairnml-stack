@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from mlops_common.schemas import LogBatch, MetricBatch
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
@@ -82,14 +82,23 @@ def get_metrics(
     principal: Annotated[Principal, Depends(read_any)],
     session: Annotated[Session, Depends(get_session)],
     name: str | None = None,
+    since_id: int | None = Query(None, ge=0),
 ):
+    """Every point, ordered by step. With since_id, only points stored after that id, in
+    insertion order, so a live page can fetch just what is new (ids grow with each insert)."""
     access.load_experiment(session, principal, experiment_id, False)
     query = select(MetricPoint).where(MetricPoint.experiment_id == experiment_id)
     if name:
         query = query.where(MetricPoint.name == name)
+    if since_id is None:
+        ordered = query.order_by(MetricPoint.step, MetricPoint.ts, MetricPoint.id)
+    else:
+        ordered = query.where(MetricPoint.id > since_id).order_by(MetricPoint.id)
     series: dict[str, list[dict]] = {}
-    for p in session.scalars(query.order_by(MetricPoint.step, MetricPoint.ts)):
-        series.setdefault(p.name, []).append({"step": p.step, "value": p.value, "ts": p.ts})
+    for p in session.scalars(ordered):
+        series.setdefault(p.name, []).append(
+            {"id": p.id, "step": p.step, "value": p.value, "ts": p.ts}
+        )
     return series
 
 

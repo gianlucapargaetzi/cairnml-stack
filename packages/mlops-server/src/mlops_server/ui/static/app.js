@@ -1,6 +1,6 @@
 import { api, logout } from "./api.js";
 import { h } from "./dom.js";
-import { createScope, parseHash } from "./lib.js";
+import { createPageScope, parseHash } from "./lib.js";
 
 const ROUTES = [
   ["", () => import("./views/overview.js"), "Overview"],
@@ -20,28 +20,45 @@ let renderToken = 0;
 // disposed when the route changes, so a stale view cannot poll or write after that.
 function newContext(scope) {
   return {
-    poll(fn, ms) {
+    // Runs fn every ms while the page is open and visible. A tick is skipped while the previous
+    // one is still in flight, so responses cannot pile up or land out of order. A failed tick
+    // goes to onError (the view keeps its last good content); without one, the error page shows.
+    poll(fn, ms, onError) {
       if (!scope.canRun()) return;
+      let busy = false;
       const id = setInterval(() => {
-        if (document.hidden || !scope.canRun()) return;
-        Promise.resolve().then(fn).catch((error) => { if (scope.canRun()) showError(error); });
+        if (document.hidden || !scope.canRun() || busy) return;
+        busy = true;
+        Promise.resolve().then(fn).then(
+          () => { busy = false; },
+          (error) => {
+            busy = false;
+            if (!scope.canRun() || isLoginError(error)) return;
+            if (onError) onError(error); else showError(error);
+          });
       }, ms);
       scope.onCleanup(() => clearInterval(id));
     },
+    // Every write a view makes after an await goes through here, so a stale page never paints.
+    render: (fn) => scope.run(fn),
     onCleanup(fn) { scope.onCleanup(fn); },
     active: () => scope.canRun(),
   };
 }
 
+function isLoginError(error) {
+  return Boolean(error && error.message === "login required");
+}
+
 function showError(error) {
-  if (error && error.message === "login required") return;
+  if (isLoginError(error)) return;
   main.replaceChildren(h("p", { class: "error" }, `Something went wrong: ${error && error.message}`));
 }
 
 async function render() {
   const mine = ++renderToken;
   if (current) current.dispose();
-  const scope = createScope();
+  const scope = createPageScope();
   current = scope;
   const { parts, params } = parseHash(window.location.hash);
   const route = parts[0] || "";

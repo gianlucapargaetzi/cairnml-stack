@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   fmtDuration, shortSha, safeHttpsUrl, commitUrl, flatten, diffRows, setDiff, parseHash, statusClass, fmtNumber, colorFor,
-  createScope, shouldRedirectToLogin, attributeAllowed, linkAllowed, downsample, mergeLogs,
+  createScope, createPageScope, shouldRedirectToLogin, attributeAllowed, linkAllowed, downsample, mergeLogs,
 } from "../src/mlops_server/ui/static/lib.js";
 
 test("durations", () => {
@@ -124,4 +124,22 @@ test("merge logs by time and keep the stream", () => {
     { stream: "stderr", lines: [{ ts: 2, text: "b" }] },
   ]);
   assert.deepEqual(out.map((l) => [l.stream, l.text]), [["stdout", "a"], ["stderr", "b"], ["stdout", "c"]]);
+});
+
+test("page scope guards every write made after the route changed", () => {
+  const scope = createPageScope();
+  const writes = [];
+  assert.equal(scope.active(), true);
+  assert.equal(scope.run(() => writes.push("first")), 1);
+  let cleaned = 0;
+  scope.onCleanup(() => { cleaned += 1; });
+  scope.dispose();
+  scope.dispose();
+  assert.equal(scope.active(), false);
+  assert.equal(cleaned, 1);
+  assert.equal(scope.run(() => writes.push("late")), undefined);
+  assert.deepEqual(writes, ["first"]);
+  // A cleanup registered after disposal runs at once, so nothing can outlive the page.
+  scope.onCleanup(() => { cleaned += 1; });
+  assert.equal(cleaned, 2);
 });

@@ -4,10 +4,17 @@ import { h } from "../dom.js";
 import { statusBadge } from "../components.js";
 import { colorFor, diffRows, fmtNumber, setDiff, shortSha } from "../lib.js";
 
+const MAX_COMPARE = 10;
+
 const cell = (value) => (value === undefined || value === null ? "–" : typeof value === "object" ? JSON.stringify(value) : String(value));
 
 export default async function compare(root, route, ctx) {
-  const ids = (route.params.ids || "").split(",").filter(Boolean);
+  // The server takes 2 to 10 distinct ids: duplicates are dropped and the rest is capped.
+  const requested = [...new Set((route.params.ids || "").split(",").filter(Boolean))];
+  const ids = requested.slice(0, MAX_COMPARE);
+  const capHint = requested.length > MAX_COMPARE
+    ? h("p", { class: "muted" }, `Only the first ${MAX_COMPARE} of ${requested.length} selected experiments are compared.`)
+    : null;
   if (ids.length < 2) {
     root.replaceChildren(
       h("h1", {}, "Compare experiments"),
@@ -108,7 +115,7 @@ export default async function compare(root, route, ctx) {
   });
 
   root.replaceChildren(
-    h("h1", {}, "Compare experiments"), chips,
+    h("h1", {}, "Compare experiments"), capHint, chips,
     h("h2", {}, "Metrics"), charts, metricsTable,
     h("h2", {}, "Parameters"), toggle, paramsBox,
     h("h2", {}, "Code and data"), codeTable, packages);

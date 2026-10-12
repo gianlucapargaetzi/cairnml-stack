@@ -76,3 +76,23 @@ def test_other_users_cannot_write_telemetry(server, enroll_client, make_project)
     eve = enroll_client("eve")
     body = {"points": [{"name": "x", "value": 1.0, "ts": 1.0}]}
     assert eve.http.post(f"/api/v1/experiments/{exp}/metrics", json=body).status_code == 404
+
+
+def test_metrics_since_id_returns_only_new_points(server, enroll_client, make_project):
+    dev = enroll_client("dev")
+    exp = _exp(dev, make_project)
+    url = f"/api/v1/experiments/{exp}/metrics"
+    first = [{"name": "loss", "value": 0.9, "step": 1, "ts": 1.0}]
+    dev.http.post(url, json={"points": first})
+    full = dev.http.get(url).json()
+    assert [p["step"] for p in full["loss"]] == [1] and "id" in full["loss"][0]
+    cursor = full["loss"][-1]["id"]
+    second = [
+        {"name": "loss", "value": 0.5, "step": 2, "ts": 2.0},
+        {"name": "acc", "value": 0.7, "step": 2, "ts": 2.0},
+    ]
+    dev.http.post(url, json={"points": second})
+    newer = dev.http.get(url, params={"since_id": cursor}).json()
+    assert [p["value"] for p in newer["loss"]] == [0.5]
+    assert [p["value"] for p in newer["acc"]] == [0.7]
+    assert dev.http.get(url, params={"since_id": newer["acc"][-1]["id"]}).json() == {}

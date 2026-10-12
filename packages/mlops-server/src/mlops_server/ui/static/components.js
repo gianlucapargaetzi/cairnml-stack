@@ -58,3 +58,14 @@ export function keyValues(obj) {
   if (!entries.length) return h("p", { class: "muted" }, "None");
   return h("dl", { class: "kv" }, entries.flatMap(([k, v]) => [h("dt", {}, k), h("dd", {}, typeof v === "object" ? JSON.stringify(v) : String(v))]));
 }
+
+// A line that reports a failed refresh. It sits outside the part a poll redraws, so the last
+// good content stays on screen under it.
+export function refreshError() {
+  const el = h("p", { class: "error", role: "alert" });
+  return {
+    el,
+    show(error) { el.replaceChildren(`Could not refresh, showing the last data: ${error.message}`); },
+    clear() { el.replaceChildren(); },
+  };
+}
