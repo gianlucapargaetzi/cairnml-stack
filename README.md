@@ -1,20 +1,47 @@
 # mlops
 
-Self-hosted MLOps framework: experiment tracking with autologging, remote job dispatch to agents, Git + DVC datasets, one identity provider.
+Self-hosted MLOps framework: experiment tracking with autologging, remote job dispatch to agents, Git + DVC datasets, and one identity provider for people. Every machine has its own identity: each client and agent holds an Ed25519 key, and the server issues short-lived tokens for it.
 
-Vocabulary: an **agent** executes jobs; a **project** is a list of **tasks**; an **experiment** is one instance of a task with one set of parameters; a **job** is the request to run an experiment on an agent.
+The design assumes five physical machines (client, server, NAS, agents, and the external services GitHub Enterprise and the identity provider). The same stack also runs on one machine for development. The architecture, the security model and the machine roles are described in ARCHITECTURE.md, which is kept with the design documents outside this repository.
 
-## Layout
+## Quick start
+
+Requirements: Docker with Compose v2.20+, `uv`, `openssl`, `git`.
+
+1. Add the role hostnames to `/etc/hosts` (once, needs sudo):
+
+   ```
+   127.0.0.1 mlops-server mlops-idp mlops-nas
+   ```
+
+2. Install the Python packages and start the stacks:
+
+   ```
+   uv sync --all-packages
+   deploy/scripts/bootstrap.sh
+   ```
+
+   The script prints the generated password of the Keycloak user `admin`. It is shown once.
+
+3. Enroll this machine (a browser opens for the login):
+
+   ```
+   uv run mlops enroll --server http://mlops-server:8000
+   uv run mlops whoami
+   ```
+
+The GitHub App, the agent and the first tracked run are covered in the runbook.
+
+## Tests
 
 ```
-packages/
-  mlops-common/   shared schemas, keys, signed-assertion auth
-  mlops-server/   FastAPI control plane, scheduler, dashboard (ui/)
-  mlops-agent/    worker daemon that runs jobs in containers
-  mlops-client/   SDK (import mlops) and CLI
-deploy/           one compose stack per machine role, bootstrap scripts
-tests/            cross-package integration and end-to-end tests
-docs/             glossary, runbook
+uv run pytest                        # unit and integration tests, no Docker needed
+uv run pytest -m docker              # tests that need a local Docker daemon
+MLOPS_E2E=1 uv run pytest tests/e2e  # end-to-end tests against the running compose stack
 ```
 
-Design: see ARCHITECTURE.md and ROADMAP.md (kept next to the implementation plans).
+The end-to-end suite needs the stack from the quick start and the settings described in [docs/e2e-test-repo.md](docs/e2e-test-repo.md).
+
+## Documentation
+
+- [docs/runbook.md](docs/runbook.md): from an empty machine to a reproduced experiment, moving roles to their own machines, and troubleshooting.
