@@ -123,12 +123,50 @@ class DatasetRef(BaseModel):
         return None if value is None else _valid_repo(value)
 
 
+TASK_NAME = r"^[a-z0-9][a-z0-9._-]{0,63}$"
+TaskKind = Literal[
+    "training", "data-preparation", "augmentation", "evaluation", "testing", "compilation",
+    "inference", "other",
+]
+Direction = Literal["min", "max"]
+
+
+class TaskCreate(BaseModel):
+    project: str
+    name: str = Field(pattern=TASK_NAME)
+    kind: TaskKind = "other"
+    description: str | None = Field(default=None, max_length=2000)
+    primary_metric: str | None = Field(default=None, max_length=200)
+    direction: Direction | None = None
+
+
+class TaskPatch(BaseModel):
+    kind: TaskKind | None = None
+    description: str | None = Field(default=None, max_length=2000)
+    primary_metric: str | None = Field(default=None, max_length=200)
+    direction: Direction | None = None
+
+
+class TaskOut(BaseModel):
+    id: str
+    project: str
+    name: str
+    kind: TaskKind
+    description: str | None
+    primary_metric: str | None
+    direction: Direction | None
+    created_at: datetime
+
+
 class ExperimentCreate(BaseModel):
     project: str
     name: str = Field(min_length=1, max_length=200)
     config: dict[str, Any] = {}
     source: Literal["local", "job"] = "local"
     parent_id: str | None = None
+    task: str = Field(default="general", pattern=TASK_NAME)
+    primary_metric: str | None = Field(default=None, max_length=200)
+    direction: Direction | None = None
 
 
 class ExperimentPatch(BaseModel):
@@ -153,6 +191,7 @@ class ExperimentOut(BaseModel):
     status: ExperimentStatus
     source: str
     owner: str
+    task: str = "general"
     parent_id: str | None
     job_id: str | None
     config: dict[str, Any]
@@ -342,6 +381,7 @@ class JobSpec(BaseModel):
     runtime: JobRuntime
     resources: ResourceRequest = ResourceRequest()
     queue: str = Field(default="default", min_length=1, max_length=100)
+    task: str = Field(default="general", pattern=TASK_NAME)
     params: dict[str, Any] = {}
     env: dict[str, str] = {}
     timeout_s: int | None = Field(default=None, ge=60, le=7 * 86400)

@@ -208,3 +208,21 @@ def test_cli_reports_not_enrolled_in_one_line(cfg_env):
     out = CliRunner().invoke(cli, ["job", "show", "job_x"])
     assert out.exit_code == 1 and "not enrolled: run mlops enroll" in out.output
     assert "Traceback" not in out.output
+
+
+def test_job_spec_keeps_the_task_of_the_experiment():
+    spec = build_job_spec(_exp(task="evaluation"), [])
+    assert spec["task"] == "evaluation"
+    assert build_job_spec(_exp(task=None), [])["task"] == "general"
+
+
+def test_cli_task_commands(sdk):
+    runner = CliRunner()
+    sdk.api.create_experiment("vision/seg", "e", task="training")
+    assert "training" in runner.invoke(cli, ["task", "ls", "--project", "vision/seg"]).output
+    result = runner.invoke(
+        cli, ["task", "set", "vision/seg", "training", "--metric", "val_loss", "--direction", "min"]
+    )
+    assert result.exit_code == 0
+    tasks = {t["name"]: t for t in sdk.api.list_tasks("vision/seg")}
+    assert tasks["training"]["primary_metric"] == "val_loss"

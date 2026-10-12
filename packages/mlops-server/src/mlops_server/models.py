@@ -102,11 +102,25 @@ class ProjectMember(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), primary_key=True)
 
 
+class Task(Base):
+    __tablename__ = "tasks"
+    __table_args__ = (UniqueConstraint("project_id", "name"),)
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    name: Mapped[str] = mapped_column(String(64))
+    kind: Mapped[str] = mapped_column(String(32), default="other")
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    primary_metric: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    direction: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(_TS, default=utcnow)
+
+
 class Experiment(Base):
     __tablename__ = "experiments"
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
     owner_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    task_id: Mapped[str | None] = mapped_column(ForeignKey("tasks.id"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(200))
     status: Mapped[str] = mapped_column(String(20), default="created")
     source: Mapped[str] = mapped_column(String(10), default="local")

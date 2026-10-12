@@ -291,14 +291,19 @@ def init(
     capture_git: bool = True,
     datasets: list[str] | None = None,
     api=None,
+    task: str = "general",
+    primary_metric: str | None = None,
+    direction: str | None = None,
 ) -> Experiment:
+    """Start recording. In a job run the task comes from the experiment record instead."""
     global _current
     token, exp_id = os.environ.get("MLOPS_RUN_TOKEN"), os.environ.get("MLOPS_EXPERIMENT_ID")
     if token and exp_id:
         experiment = _init_job(project, name, token, exp_id, capture_args)
     else:
         experiment = _init_local(
-            project, name, config, script, capture_stdout, capture_args, capture_git, datasets, api
+            project, name, config, script, capture_stdout, capture_args, capture_git, datasets, api,
+            task, primary_metric, direction,
         )
     _current = experiment
     return experiment
@@ -333,7 +338,8 @@ def _init_job(project, name, token, exp_id, capture_args) -> Experiment:
 
 
 def _init_local(
-    project, name, config, script, capture_stdout, capture_args, want_git, datasets, api
+    project, name, config, script, capture_stdout, capture_args, want_git, datasets, api,
+    task="general", primary_metric=None, direction=None,
 ) -> Experiment:
     # NotEnrolled from make_api() is deliberately not guarded: no enrollment is a setup error.
     api = api or runtime.make_api()
@@ -344,7 +350,10 @@ def _init_local(
 
     mode, exp_id = "local", None
     try:
-        exp_id = api.create_experiment(project, name, config or {})["id"]
+        exp_id = api.create_experiment(
+            project, name, config or {}, task=task, primary_metric=primary_metric,
+            direction=direction,
+        )["id"]
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code < 500:
             raise ExperimentError(
@@ -364,6 +373,9 @@ def _init_local(
         "project": project,
         "name": name,
         "config": config or {},
+        "task": task,
+        "primary_metric": primary_metric,
+        "direction": direction,
         "created_at": datetime.now(UTC).isoformat(),
     }
     experiment = Experiment(

@@ -25,9 +25,13 @@ app = typer.Typer(help="mlops client", no_args_is_help=True)
 job_app = typer.Typer(help="inspect and cancel jobs", no_args_is_help=True)
 repo_app = typer.Typer(help="project repository setup", no_args_is_help=True)
 data_app = typer.Typer(help="DVC data helpers using temporary credentials", no_args_is_help=True)
+task_app = typer.Typer(
+    help="tasks of a project (training, augmentation, ...)", no_args_is_help=True
+)
 app.add_typer(job_app, name="job")
 app.add_typer(repo_app, name="repo")
 app.add_typer(data_app, name="data")
+app.add_typer(task_app, name="task")
 
 
 def _fail(message: str) -> None:
@@ -236,6 +240,44 @@ def sync() -> None:
     typer.echo(f"synced {len(synced)} experiment(s)")
     if failed:
         _fail(f"{len(failed)} run(s) not synced; their spool is kept, run `mlops sync` again")
+
+
+@task_app.command("ls")
+def task_ls(project: str = typer.Option(None, help="Only this project")) -> None:  # noqa: B008
+    """List tasks and their primary metric."""
+    api = _api()
+    with _remote(api):
+        tasks = api.list_tasks(project)
+    for task in tasks:
+        metric = (
+            f"{task['primary_metric']} ({task['direction']})" if task["primary_metric"] else "-"
+        )
+        typer.echo(f"{task['project']:<24} {task['name']:<20} {task['kind']:<16} metric={metric}")
+
+
+@task_app.command("set")
+def task_set(
+    project: str = typer.Argument(..., help="Project slug"),
+    name: str = typer.Argument(..., help="Task name"),
+    metric: str = typer.Option(None, help="Primary metric"),  # noqa: B008
+    direction: str = typer.Option(None, help="min or max"),  # noqa: B008
+    kind: str = typer.Option(None, help="Task kind"),  # noqa: B008
+    description: str = typer.Option(None, help="Description"),  # noqa: B008
+) -> None:
+    """Change a task's metric, direction, kind or description."""
+    api = _api()
+    fields = {
+        k: v for k, v in {
+            "primary_metric": metric, "direction": direction, "kind": kind,
+            "description": description,
+        }.items() if v is not None
+    }
+    with _remote(api):
+        matches = [t for t in api.list_tasks(project) if t["name"] == name]
+        if not matches:
+            _fail(f"no task {name!r} in project {project}")
+        api.patch_task(matches[0]["id"], **fields)
+    typer.echo(f"updated {project}/{name}")
 
 
 admin_app = typer.Typer(help="administration (requires the admin role)", no_args_is_help=True)

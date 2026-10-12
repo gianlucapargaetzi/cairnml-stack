@@ -22,7 +22,7 @@ Items marked *(planned)* are not built yet. Everything else exists today.
 |---|---|---|---|---|---|
 | Agent | | `mlops admin agents`, `mlops admin revoke-agent`, `mlops-agent` (the agent program) | `/api/v1/agents/*`, `/api/v1/admin/agents` | Agents tab; Resources tab *(planned)* | `agents` |
 | Project | `mlops.init(project=...)` | `mlops admin project-create`, `mlops admin project-add-member`, `mlops repo init --project` | `/api/v1/projects`; `/api/v1/projects/{id}` *(planned)* | Projects tab | `projects`, `project_members` |
-| Task | `mlops.init(task=...)` *(planned)* | `mlops task ls\|set` *(planned)* | `/api/v1/tasks/*` *(planned)* | project page, task page *(planned)* | `tasks` *(planned)* |
+| Task | `mlops.init(task=...)` | `mlops task ls\|set` | `/api/v1/tasks/*` | project page, task page *(planned)* | `tasks` |
 | Experiment | `mlops.Experiment`, `mlops.current_experiment()` | `mlops ls`, `mlops logs` | `/api/v1/experiments/*` | Experiments tab, experiment page, compare page | `experiments` |
 | Job | | `mlops dispatch`, `mlops job show\|cancel`, `mlops job reschedule` *(planned)* | `/api/v1/jobs/*` | Jobs tab | `jobs` |
 | Dataset | `experiment.use_dataset()`, `mlops.init(datasets=...)` | `mlops data pull\|push`; `mlops dataset ...` *(planned)* | `/api/v1/datasets/*` *(planned)* | Datasets tab *(planned)* | none (Git + DVC) |

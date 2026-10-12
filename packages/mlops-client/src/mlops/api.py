@@ -42,14 +42,22 @@ class ApiClient:
         return self._json(self._http.get("/api/v1/me"))
 
     def create_experiment(
-        self, project: str, name: str, config: dict | None = None, source: str = "local"
+        self,
+        project: str,
+        name: str,
+        config: dict | None = None,
+        source: str = "local",
+        task: str = "general",
+        primary_metric: str | None = None,
+        direction: str | None = None,
     ) -> dict:
-        return self._json(
-            self._http.post(
-                "/api/v1/experiments",
-                json={"project": project, "name": name, "config": config or {}, "source": source},
-            )
-        )
+        body = {
+            "project": project, "name": name, "config": config or {}, "source": source,
+            "task": task,
+        }
+        if primary_metric:
+            body.update(primary_metric=primary_metric, direction=direction)
+        return self._json(self._http.post("/api/v1/experiments", json=body))
 
     def get_experiment(self, exp_id: str) -> dict:
         return self._json(self._http.get(f"/api/v1/experiments/{exp_id}"))
@@ -66,6 +74,19 @@ class ApiClient:
         if status:
             params["status"] = status
         return self._json(self._http.get("/api/v1/experiments", params=params))
+
+    def list_tasks(self, project: str | None = None) -> list[dict]:
+        return self._json(
+            self._http.get("/api/v1/tasks", params={"project": project} if project else {})
+        )
+
+    def create_task(self, project: str, name: str, **fields) -> dict:
+        return self._json(
+            self._http.post("/api/v1/tasks", json={"project": project, "name": name, **fields})
+        )
+
+    def patch_task(self, task_id: str, **fields) -> dict:
+        return self._json(self._http.patch(f"/api/v1/tasks/{task_id}", json=fields))
 
     def post_metrics(self, exp_id: str, points: list[dict]) -> None:
         self._json(

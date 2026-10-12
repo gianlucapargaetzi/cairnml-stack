@@ -24,6 +24,7 @@ from mlops_server.routers.experiments import apply_status
 from mlops_server.security.deps import READERS, Principal, get_session, require
 from mlops_server.services import access, audit
 from mlops_server.services.github import GitHubError, RepoNotAccessible
+from mlops_server.services.tasks import get_or_create_task
 
 router = APIRouter()
 agent_only = require("agent")
@@ -100,9 +101,10 @@ def dispatch(
             repo=spec.code.repo, commit=spec.code.commit, cwd=spec.code.workdir,
             dirty=bool(spec.code.patch_key), patch_key=spec.code.patch_key,
         ).model_dump()
+    task = get_or_create_task(session, project.id, spec.task)
     experiment = Experiment(
         id=new_id("exp"), project_id=project.id, owner_id=principal.user_id, name=spec.name,
-        status="queued", source="job", params=spec.params, git=git,
+        status="queued", source="job", params=spec.params, git=git, task_id=task.id,
         datasets=[d.model_dump() for d in spec.data],
         requirements=list(runtime.requirements) if is_python else [],
         argv=list(runtime.command) if is_python else [],

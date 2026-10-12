@@ -100,7 +100,7 @@ def test_dvc_failure_is_scrubbed(sdk, tmp_path):
     )
 
 
-def _offline_task(tmp_path, monkeypatch):
+def _offline_task(tmp_path, monkeypatch, **init_options):
     def down(request):
         raise httpx.ConnectError("refused")
 
@@ -113,7 +113,9 @@ def _offline_task(tmp_path, monkeypatch):
     try:
         # capture_git=False: the script lives in this (possibly dirty) checkout, and a dirty
         # state would add an uncommitted.patch artifact that the assertions do not expect.
-        experiment = mlops.init("vision/seg", "offline-run", {"lr": 0.1}, capture_git=False)
+        experiment = mlops.init(
+            "vision/seg", "offline-run", {"lr": 0.1}, capture_git=False, **init_options
+        )
         experiment.log_metric("loss", 0.25, 3)
         print("offline line")
         experiment.upload_artifact("out.txt", obj="saved while offline")
@@ -238,3 +240,12 @@ def test_a_spool_that_cannot_be_removed_is_reported_not_silently_kept(sdk, tmp_p
     assert any("could not remove the spool" in item for item in failed)
     monkeypatch.undo()
     assert shutil  # the real rmtree is back for the next sync
+
+
+def test_sync_keeps_the_task_of_an_offline_run(sdk, tmp_path, monkeypatch):
+    _offline_task(tmp_path, monkeypatch, task="training", primary_metric="loss", direction="min")
+    synced = sync_all(sdk.api, put=lambda url, source, http=None: None)
+    assert len(synced) == 1
+    assert sdk.api.get_experiment(synced[0])["task"] == "training"
+    tasks = {t["name"]: t for t in sdk.api.list_tasks("vision/seg")}
+    assert tasks["training"]["primary_metric"] == "loss"

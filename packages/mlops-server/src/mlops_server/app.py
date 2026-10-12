@@ -26,6 +26,7 @@ from mlops_server.routers import (
     meta,
     projects,
     repos,
+    tasks,
     telemetry,
     ui,
     web_auth,
@@ -127,8 +128,8 @@ def create_app(
         read_private_key(settings.signing_key_path), settings.public_url, settings.access_token_ttl
     )
     for module in (
-        meta, enroll, auth, admin, projects, experiments, telemetry, artifacts, storage_api, repos,
-        jobs, agents, dashboard,
+        meta, enroll, auth, admin, projects, experiments, tasks, telemetry, artifacts, storage_api,
+        repos, jobs, agents, dashboard,
     ):
         app.include_router(module.router, prefix="/api/v1")
     app.include_router(web_auth.router)

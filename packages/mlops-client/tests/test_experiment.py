@@ -445,3 +445,21 @@ def test_non_json_2xx_create_reply_becomes_experiment_error(tmp_path, monkeypatc
     )
     with pytest.raises(ExperimentError, match="unreadable reply"):
         mlops.init("vision/seg", "html-reply", api=api)
+
+
+def test_init_records_the_task_and_its_primary_metric(sdk, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    experiment = mlops.init(
+        "vision/seg", "t1", task="training", primary_metric="val_loss", direction="min"
+    )
+    assert sdk.api.get_experiment(experiment.id)["task"] == "training"
+    tasks = {t["name"]: t for t in sdk.api.list_tasks("vision/seg")}
+    assert tasks["training"]["primary_metric"] == "val_loss"
+    experiment.close()
+
+
+def test_the_default_task_is_general(sdk, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    experiment = mlops.init("vision/seg", "t2")
+    assert sdk.api.get_experiment(experiment.id)["task"] == "general"
+    experiment.close()

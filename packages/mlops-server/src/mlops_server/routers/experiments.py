@@ -15,9 +15,10 @@ from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.orm import Session, object_session
 
 from mlops_server.ids import new_id
-from mlops_server.models import Experiment, MetricPoint, Project, User
+from mlops_server.models import Experiment, MetricPoint, Project, Task, User
 from mlops_server.security.deps import READERS, Principal, get_session, require
 from mlops_server.services import access
+from mlops_server.services.tasks import DEFAULT_TASK, get_or_create_task
 
 router = APIRouter()
 any_principal = require("client", "agent", "run")
@@ -29,9 +30,11 @@ NULLABLE_FIELDS = {"git", "python_version", "platform", "script", "notes"}
 def experiment_out(session: Session, exp: Experiment) -> ExperimentOut:
     project = session.get(Project, exp.project_id)
     owner = session.get(User, exp.owner_id)
+    task = session.get(Task, exp.task_id) if exp.task_id else None
     return ExperimentOut(
         id=exp.id, project=project.slug, name=exp.name, status=exp.status, source=exp.source,
-        owner=owner.username, parent_id=exp.parent_id, job_id=exp.job_id, config=exp.config,
+        owner=owner.username, task=task.name if task else DEFAULT_TASK,
+        parent_id=exp.parent_id, job_id=exp.job_id, config=exp.config,
         params=exp.params, git=exp.git, datasets=exp.datasets, requirements=exp.requirements,
         argv=exp.argv, env=exp.env, python_version=exp.python_version, platform=exp.platform,
         script=exp.script, notes=exp.notes, created_at=exp.created_at,
@@ -63,9 +66,12 @@ def create_experiment(
     session: Annotated[Session, Depends(get_session)],
 ):
     project = access.ensure_member(session, principal, body.project)
+    task = get_or_create_task(
+        session, project.id, body.task, body.primary_metric, body.direction
+    )
     exp = Experiment(
         id=new_id("exp"), project_id=project.id, owner_id=principal.user_id, name=body.name,
-        source=body.source, parent_id=body.parent_id, config=body.config,
+        source=body.source, parent_id=body.parent_id, config=body.config, task_id=task.id,
     )
     session.add(exp)
     session.commit()

@@ -86,7 +86,12 @@ def _sync_one(api, directory: Path, put) -> str:
     meta = spool.meta()
     experiment_id = meta.get("experiment_id")
     if experiment_id is None:
-        created = api.create_experiment(meta["project"], meta["name"], meta.get("config") or {})
+        created = api.create_experiment(
+            meta["project"], meta["name"], meta.get("config") or {},
+            task=meta.get("task") or "general",
+            primary_metric=meta.get("primary_metric"),
+            direction=meta.get("direction"),
+        )
         experiment_id = created["id"]
         meta = {**meta, "experiment_id": experiment_id}
         _write_meta(directory, meta)  # before any replay, so a retry reuses this experiment

@@ -67,6 +67,7 @@ def build_job_spec(
         "project": exp["project"],
         "queue": queue,
         "resources": resources or {},
+        "task": exp.get("task") or "general",
     }
     if env:
         spec["env"] = env
