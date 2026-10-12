@@ -110,6 +110,8 @@ def test_dot_segment_subjects_are_rejected_before_any_request(subject):
     ({"content": b"<html>"}, None, None),                              # token body not JSON
     ({"json": {"access_token": "t", "expires_in": "soon"}}, None, None),  # bad lifetime
     (None, {"json": ["enabled"]}, None),                               # user body not an object
+    (None, {"json": {"id": "u-m"}}, None),                             # 200 without "enabled"
+    (None, {"json": {"enabled": "false"}}, None),                      # "enabled" not a boolean
     (None, {"json": {"enabled": True}}, {"json": {"name": "mlops-admin"}}),  # roles not a list
     (None, {"json": {"enabled": True}}, {"json": [{"role": "mlops-admin"}]}),  # item without name
     (None, {"json": {"enabled": True}}, {"json": ["mlops-admin"]}),    # item not an object

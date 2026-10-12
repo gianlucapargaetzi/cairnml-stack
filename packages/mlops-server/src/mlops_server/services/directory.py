@@ -106,7 +106,10 @@ class KeycloakDirectory:
         body = _json(response, "user")
         if not isinstance(body, dict):
             raise DirectoryError("malformed user response")
-        enabled = bool(body.get("enabled"))
+        enabled = body.get("enabled")
+        if not isinstance(enabled, bool):
+            # A reply without a boolean must never read as "disabled" (that would revoke the user).
+            raise DirectoryError("malformed user response")
         roles_response = self._get(f"/users/{quoted}/role-mappings/realm/composite")
         if roles_response.status_code != 200:
             raise DirectoryError(f"role lookup failed: {roles_response.status_code}")

@@ -1,6 +1,6 @@
 import httpx
 import pytest
-from mlops_server.models import Client, Experiment, Job
+from mlops_server.models import Client, Experiment, Job, User
 from mlops_server.services.user_sync import sync_users
 
 
@@ -127,3 +127,54 @@ def test_only_admins_can_trigger_a_sync_and_missing_directory_is_503(server, enr
         assert admin.http.post("/api/v1/admin/sync-users").status_code == 503
     finally:
         app.state.directory = saved
+
+
+class _GoneDirectory:
+    """Every user is missing from the IdP, as if the directory URL were wrong."""
+
+    def get_user(self, subject):
+        return None
+
+
+def test_a_directory_that_reports_every_user_gone_disables_nobody(world, app):
+    with app.state.session_factory() as s:
+        report = sync_users(s, _GoneDirectory())
+        assert report.disabled == [] and report.checked >= 3
+        assert report.errors == report.checked  # every would-be disable is held back
+    with app.state.session_factory() as s:
+        assert not any(u.disabled for u in s.query(User).all())
+    assert world["carol"].http.get("/api/v1/me").status_code == 200
+
+
+def test_a_200_reply_without_enabled_is_an_error_and_disables_nobody(world, app):
+    import httpx
+    from mlops_server.services.directory import KeycloakDirectory
+
+    issuer = "http://idp.test/realms/mlops"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith("/protocol/openid-connect/token"):
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 300})
+        if path.endswith("/composite"):
+            return httpx.Response(200, json=[])
+        if path.endswith("/users/sub-carol"):
+            return httpx.Response(200, json={"id": "sub-carol"})  # proxy-style reply: no "enabled"
+        return httpx.Response(200, json={"enabled": True})
+
+    directory = KeycloakDirectory(issuer, "mlops-server", "secret",
+                                  http=httpx.Client(transport=httpx.MockTransport(handler)))
+    with app.state.session_factory() as s:
+        report = sync_users(s, directory)
+        assert report.errors == 1 and report.disabled == []
+    with app.state.session_factory() as s:
+        assert s.get(User, world["carol"].user_id).disabled is False
+    assert world["carol"].http.get("/api/v1/me").status_code == 200
+
+
+def test_one_missing_user_among_several_is_disabled(world, stub_directory):
+    stub_directory.remove("sub-bob")
+    report = _sync(world["admin"])
+    assert report["disabled"] == [world["bob"].user_id]
+    assert report["errors"] == 0
+    assert world["carol"].http.get("/api/v1/me").status_code == 200

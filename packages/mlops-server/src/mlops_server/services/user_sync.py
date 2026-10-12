@@ -53,6 +53,7 @@ def disable_user(session: Session, user: User, now: datetime) -> dict:
     jobs = session.scalars(
         select(Job)
         .where(Job.created_by == user.id, Job.status.in_(("queued", "assigned", "running")))
+        .order_by(Job.id)  # every pass locks in the same order, so two passes cannot deadlock
         .with_for_update(of=Job)
     ).all()
     for job in jobs:
@@ -73,31 +74,55 @@ def disable_user(session: Session, user: User, now: datetime) -> dict:
     return detail
 
 
+_ANSWER_FAILED = object()
+
+
 def sync_users(session: Session, directory: Directory, now: datetime | None = None) -> SyncReport:
     now = now or datetime.now(UTC)
     report = SyncReport()
-    for user in session.scalars(select(User).order_by(User.created_at)).all():
+    users = session.scalars(select(User).order_by(User.created_at)).all()
+    # Ask the IdP about every user before any row is locked: no lock is held across IdP calls.
+    answers = []
+    for user in users:
         report.checked += 1
         try:
-            info = directory.get_user(user.idp_subject)
+            answers.append((user, directory.get_user(user.idp_subject)))
         except DirectoryError:
             report.errors += 1
-            continue
-        if info is None or not info.enabled:
+            answers.append((user, _ANSWER_FAILED))
+    # If every user comes back gone or disabled, the directory is more likely wrong (a bad URL,
+    # a gateway 404) than the whole company was offboarded: disable nobody in this pass.
+    mass_anomaly = report.checked > 1 and all(
+        answer is None or (answer is not _ANSWER_FAILED and not answer.enabled)
+        for _, answer in answers
+    )
+    held = 0
+    for user, answer in answers:
+        if answer is _ANSWER_FAILED:
+            continue  # counted above; changes nothing for this user
+        if answer is None or not answer.enabled:
             if not user.disabled:
+                if mass_anomaly:
+                    report.errors += 1
+                    held += 1
+                    continue
                 disable_user(session, user, now)
                 report.disabled.append(user.id)
-            continue
-        if user.disabled:
-            # Only the flag comes back: revoked client keys stay revoked; enrolling again is needed.
-            user.disabled = False
-            report.reenabled.append(user.id)
-            record(session, "user-sync", "user.reenabled", None, user=user.id)
-        if sorted(user.roles or []) != list(info.roles):
-            user.roles = list(info.roles)
-            report.roles_changed.append(user.id)
-            record(session, "user-sync", "user.roles_changed", None, user=user.id,
-                   roles=list(info.roles))
+        else:
+            if user.disabled:
+                # Only the flag comes back: revoked client keys stay revoked; enrol again instead.
+                user.disabled = False
+                report.reenabled.append(user.id)
+                record(session, "user-sync", "user.reenabled", None, user=user.id)
+            if sorted(user.roles or []) != list(answer.roles):
+                user.roles = list(answer.roles)
+                report.roles_changed.append(user.id)
+                record(session, "user-sync", "user.roles_changed", None, user=user.id,
+                       roles=list(answer.roles))
+        session.commit()  # per user, so job locks are never held for long
+    if held:
+        log.warning("user sync refused to disable %d users: the directory reported all users "
+                    "as gone or disabled", held)
     return report
 
 
