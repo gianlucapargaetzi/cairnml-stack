@@ -29,6 +29,10 @@ class ApiClient:
         )
         return cls(http)
 
+    @property
+    def server_url(self) -> str:
+        return str(self._http.base_url).rstrip("/")
+
     @staticmethod
     def _json(response: httpx.Response):
         response.raise_for_status()

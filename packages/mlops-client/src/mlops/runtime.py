@@ -18,5 +18,8 @@ def make_api(run_token: str | None = None, server_url: str | None = None) -> Api
     if _override is not None:
         return _override(run_token, server_url)
     if run_token:
-        return ApiClient.from_run_token(server_url or os.environ["MLOPS_SERVER_URL"], run_token)
+        url = server_url or os.environ.get("MLOPS_SERVER_URL")
+        if not url:
+            raise RuntimeError("MLOPS_SERVER_URL is not set; the run environment must provide it")
+        return ApiClient.from_run_token(url, run_token)
     return ApiClient.from_config()

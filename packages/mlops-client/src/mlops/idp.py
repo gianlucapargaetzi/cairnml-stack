@@ -28,7 +28,10 @@ def device_login(
     device = started.json()
     url = device.get("verification_uri_complete") or device["verification_uri"]
     out(f"Open {url} and confirm the code {device['user_code']}")
-    open_browser(url)
+    try:
+        open_browser(url)
+    except Exception:  # best effort: the URL is already printed
+        pass
     interval = device.get("interval", 5)
     deadline = time.monotonic() + device["expires_in"]
     while time.monotonic() < deadline:

@@ -112,3 +112,75 @@ def test_cli_whoami_without_enrollment(cfg_env):
 
     result = CliRunner().invoke(cli_app, ["whoami"])
     assert result.exit_code == 1 and "mlops enroll" in result.output
+
+
+@respx.mock
+def test_browser_failure_does_not_abort_login():
+    _mock_idp(respx.mock, [httpx.Response(200, json={"access_token": "idp-token"})])
+
+    def broken_browser(url):
+        raise RuntimeError("no browser here")
+
+    printed = []
+    token = device_login(
+        ISSUER, "mlops-cli", sleep=lambda s: None, out=printed.append, open_browser=broken_browser
+    )
+    assert token == "idp-token"
+    assert any(f"{ISSUER}/device?user_code=ABCD" in line for line in printed)
+
+
+def test_force_write_failure_keeps_the_old_key(cfg_env, server, idp, monkeypatch):
+    enroll(server, "a", idp_token=idp.token())
+    old_key = key_path().read_bytes()
+    old_cfg = load_config()
+
+    def failing_write(path, key):
+        raise OSError("disk full")
+
+    monkeypatch.setattr("mlops.enroll.write_private_key", failing_write)
+    with pytest.raises(OSError, match="disk full"):
+        enroll(server, "b", idp_token=idp.token(), force=True)
+    assert key_path().read_bytes() == old_key and load_config() == old_cfg
+
+
+def test_save_config_failure_leaves_no_key_without_earlier_enrollment(
+    cfg_env, server, idp, monkeypatch
+):
+    def failing_save(cfg):
+        raise OSError("read-only config dir")
+
+    monkeypatch.setattr("mlops.enroll.save_config", failing_save)
+    with pytest.raises(OSError, match="read-only"):
+        enroll(server, "a", idp_token=idp.token())
+    assert not key_path().exists() and load_config() is None
+
+
+def test_save_config_failure_restores_the_previous_key(cfg_env, server, idp, monkeypatch):
+    enroll(server, "a", idp_token=idp.token())
+    old_key = key_path().read_bytes()
+    old_cfg = load_config()
+
+    def failing_save(cfg):
+        raise OSError("read-only config dir")
+
+    monkeypatch.setattr("mlops.enroll.save_config", failing_save)
+    with pytest.raises(OSError):
+        enroll(server, "b", idp_token=idp.token(), force=True)
+    assert key_path().read_bytes() == old_key and load_config() == old_cfg
+
+
+def test_cli_whoami_reports_an_unreachable_server(cfg_env, monkeypatch):
+    from mlops.api import ApiClient as Api
+    from typer.testing import CliRunner
+
+    def refuse(request):
+        raise httpx.ConnectError("connection refused", request=request)
+
+    api = Api(
+        httpx.Client(base_url="http://mlops.example:8000", transport=httpx.MockTransport(refuse))
+    )
+    monkeypatch.setattr("mlops.runtime.make_api", lambda *args, **kwargs: api)
+    result = CliRunner().invoke(cli_app, ["whoami"])
+    assert result.exit_code == 1
+    assert "cannot reach http://mlops.example:8000" in result.output
+    assert "Traceback" not in result.output

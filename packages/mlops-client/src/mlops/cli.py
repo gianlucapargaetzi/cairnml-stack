@@ -37,6 +37,9 @@ def enroll(
         # Report the status only: the response body may echo the token.
         typer.echo(f"error: server rejected enrollment (HTTP {exc.response.status_code})", err=True)
         raise typer.Exit(1) from None
+    except httpx.TransportError:
+        typer.echo(f"error: cannot reach {server}", err=True)
+        raise typer.Exit(1) from None
     typer.echo(f"enrolled as {cfg.client_id} on {cfg.server_url}")
 
 
@@ -44,8 +47,12 @@ def enroll(
 def whoami() -> None:
     """Show who this machine is enrolled as (uses the key, no login)."""
     try:
-        me = do_whoami(runtime.make_api())
+        api = runtime.make_api()
+        me = do_whoami(api)
     except NotEnrolled as exc:
         typer.echo(f"{exc}", err=True)
+        raise typer.Exit(1) from None
+    except httpx.TransportError:
+        typer.echo(f"error: cannot reach {api.server_url}", err=True)
         raise typer.Exit(1) from None
     typer.echo(f"{me['kind']} {me['id']} (admin={me['is_admin']})")
