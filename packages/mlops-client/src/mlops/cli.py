@@ -232,6 +232,22 @@ def logs(
             time.sleep(2)
 
 
+@repo_app.command("link")
+def repo_link(
+    project: str = typer.Option(..., help="Project slug, e.g. vision/seg"),
+    repo: str = typer.Option(..., help="GitHub repository as owner/name"),
+    role: str = typer.Option("code", help="code or data"),
+) -> None:
+    """Link a GitHub repository (code or data) to a project for history and datasets."""
+    api = _api()
+    with _remote(api):
+        try:
+            api.link_repo(project, repo, role)
+        except httpx.HTTPStatusError as exc:
+            _fail(server_detail(exc))
+    typer.echo(f"linked {repo} ({role}) to {project}")
+
+
 @repo_app.command("init")
 def repo_init(
     project: str = typer.Option(..., help="Project slug, e.g. vision/seg"),

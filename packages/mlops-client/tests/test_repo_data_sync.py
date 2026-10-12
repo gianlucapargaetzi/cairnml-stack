@@ -46,6 +46,27 @@ def test_init_repo_writes_project_file_and_configures_the_remote(sdk, stub_githu
     assert find_project(work / "sub" if (work / "sub").exists() else work) == "vision/seg"
 
 
+def test_repo_init_links_the_repository(sdk, stub_github, tmp_path):
+    work, _ = make_repo(tmp_path)
+    stub_github.add_repo("owner/name")
+    stub_github.heads[("owner/name", "HEAD")] = "a" * 40
+    init_repo(work, "vision/seg", sdk.api, run=Recorder(), which=lambda name: "/usr/bin/dvc")
+    assert sdk.api.list_repos("vision/seg") == [
+        {"project": "vision/seg", "repo": "owner/name", "role": "code"}
+    ]
+
+
+def test_link_repo_command_records_the_role(sdk, stub_github, cfg_env):
+    stub_github.add_repo("org/data")
+    result = CliRunner().invoke(
+        cli, ["repo", "link", "--project", "vision/seg", "--repo", "org/data", "--role", "data"]
+    )
+    assert result.exit_code == 0, result.output
+    assert sdk.api.list_repos("vision/seg") == [
+        {"project": "vision/seg", "repo": "org/data", "role": "data"}
+    ]
+
+
 def test_init_repo_reports_missing_github_app_and_non_repos(sdk, stub_github, tmp_path):
     work, _ = make_repo(tmp_path)
     stub_github.inaccessible.add("owner/name")

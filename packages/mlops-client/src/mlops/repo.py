@@ -56,6 +56,10 @@ def init_repo(path: Path, project: str, api, run=subprocess.run, which=None) -> 
             app_state = "installed"
         except httpx.HTTPStatusError as exc:
             app_state = "not installed" if exc.response.status_code == 404 else "unknown"
+        try:
+            api.link_repo(project, git.repo, "code")
+        except httpx.HTTPStatusError:
+            pass  # not fatal: the GitHub App may not be installed yet; the summary shows its state
     return {
         "project": project,
         "remote_url": remote_url,

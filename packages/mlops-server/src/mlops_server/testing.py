@@ -22,7 +22,12 @@ from mlops_server.app import create_app
 from mlops_server.db import Base
 from mlops_server.models import User
 from mlops_server.services.directory import DirectoryError, DirectoryUser
-from mlops_server.services.github import InstallationToken, RepoNotAccessible
+from mlops_server.services.github import (
+    BranchInfo,
+    CommitInfo,
+    InstallationToken,
+    RepoNotAccessible,
+)
 from mlops_server.settings import Settings
 
 
@@ -235,10 +240,37 @@ class StubGitHub:
         self.heads: dict[tuple[str, str], str] = {}
         self.inaccessible: set[str] = set()
         self.token_calls: list[str] = []
+        self._repos: dict[str, dict] = {}
 
     def _check(self, repo: str) -> None:
         if repo in self.inaccessible:
             raise RepoNotAccessible(repo)
+
+    def add_repo(self, repo: str, default: str = "main") -> None:
+        self._repos[repo] = {
+            "default": default, "branches": {}, "commits": {}, "files": {}, "history": {},
+        }
+
+    def add_commit(
+        self, repo, sha, parents=(), message="", author="a", date="2026-01-01T00:00:00Z"
+    ) -> None:
+        self._repos[repo]["commits"][sha] = CommitInfo(sha, tuple(parents), message, author, date)
+        self.commits.add((repo, sha))
+
+    def add_branch(self, repo, name, sha) -> None:
+        self._repos[repo]["branches"][name] = sha
+
+    def set_file(self, repo, path, text) -> None:
+        self._repos[repo]["files"][path] = text
+
+    def set_file_history(self, repo, path, shas) -> None:
+        self._repos[repo]["history"][path] = list(shas)
+
+    def _repo(self, repo: str) -> dict:
+        self._check(repo)
+        if repo not in self._repos:
+            raise RepoNotAccessible(repo)
+        return self._repos[repo]
 
     def installation_token(self, repo: str) -> InstallationToken:
         self._check(repo)
@@ -252,6 +284,38 @@ class StubGitHub:
     def head_commit(self, repo: str, ref: str) -> str | None:
         self._check(repo)
         return self.heads.get((repo, ref))
+
+    def get_default_branch(self, repo: str) -> str:
+        return self._repo(repo)["default"]
+
+    def list_branches(self, repo: str, limit: int = 20) -> list[BranchInfo]:
+        branches = list(self._repo(repo)["branches"].items())[:limit]
+        return [BranchInfo(name, sha) for name, sha in branches]
+
+    def list_commits(self, repo: str, ref: str, limit: int = 50) -> list[CommitInfo]:
+        data = self._repo(repo)
+        queue, seen, out = [data["branches"].get(ref, ref)], set(), []
+        while queue and len(out) < limit:
+            sha = queue.pop(0)
+            if sha in seen or sha not in data["commits"]:
+                continue
+            seen.add(sha)
+            out.append(data["commits"][sha])
+            queue.extend(data["commits"][sha].parents)
+        return out
+
+    def list_tree(self, repo: str, ref: str) -> tuple[list[str], bool]:
+        return sorted(self._repo(repo)["files"]), False
+
+    def read_file(self, repo: str, path: str, ref: str, max_bytes: int = 200_000) -> str | None:
+        files = self._repo(repo)["files"]
+        return files.get(f"{path}@{ref}", files.get(path))
+
+    def list_path_commits(
+        self, repo: str, path: str, ref: str, limit: int = 10
+    ) -> list[CommitInfo]:
+        data = self._repo(repo)
+        return [data["commits"][sha] for sha in data["history"].get(path, [])[:limit]]
 
 
 @pytest.fixture

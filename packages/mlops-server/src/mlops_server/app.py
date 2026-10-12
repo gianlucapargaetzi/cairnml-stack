@@ -32,6 +32,7 @@ from mlops_server.routers import (
     web_auth,
 )
 from mlops_server.routers import storage as storage_api
+from mlops_server.services.cache import TtlCache
 from mlops_server.settings import Settings
 
 
@@ -115,6 +116,7 @@ def create_app(
 
         github = build_github(settings)
     app.state.github = github
+    app.state.cache = TtlCache(60)
     if directory is None:
         from mlops_server.services.directory import build_directory
 

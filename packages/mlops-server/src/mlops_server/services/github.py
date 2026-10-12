@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import re
 import time
 from dataclasses import dataclass
@@ -37,6 +38,33 @@ class RepoNotAccessible(GitHubError):
 class InstallationToken:
     token: str
     expires_at: datetime
+
+
+@dataclass(frozen=True)
+class BranchInfo:
+    name: str
+    sha: str
+
+
+@dataclass(frozen=True)
+class CommitInfo:
+    sha: str
+    parents: tuple[str, ...]
+    message: str
+    author: str
+    date: str
+
+
+def _commit_info(item: dict) -> CommitInfo:
+    detail = item.get("commit") or {}
+    author = detail.get("author") or {}
+    return CommitInfo(
+        sha=item["sha"],
+        parents=tuple(parent["sha"] for parent in item.get("parents", [])),
+        message=(detail.get("message") or "").split("\n", 1)[0],
+        author=author.get("name", ""),
+        date=author.get("date", ""),
+    )
 
 
 class GitHubApp:
@@ -124,18 +152,32 @@ class GitHubApp:
         self._tokens[repo] = token
         return token
 
-    def _commit(self, repo: str, ref: str) -> dict | None:
+    def _get(self, repo: str, path: str, params: dict | None = None) -> httpx.Response | None:
+        """GET under /repos/{repo}: None for a missing path or ref, else GitHubError on failure."""
         token = self.installation_token(repo).token
         response = self._send(
-            "GET",
-            f"{self._api}/repos/{repo}/commits/{_segment(ref)}",
-            headers=self._headers(token),
+            "GET", f"{self._api}/repos/{repo}{path}", headers=self._headers(token), params=params
         )
         if response.status_code in (404, 422):
             return None
         if response.status_code != 200:
-            raise GitHubError(f"commit lookup failed: {response.status_code}")
-        return self._json(response)
+            raise GitHubError(f"GitHub request failed: {response.status_code}")
+        return response
+
+    def _list(self, response: httpx.Response | None) -> list:
+        if response is None:
+            return []
+        try:
+            body = response.json()
+        except ValueError:
+            raise GitHubError("GitHub returned a non-JSON body") from None
+        if not isinstance(body, list):
+            raise GitHubError("GitHub returned an unexpected body")
+        return body
+
+    def _commit(self, repo: str, ref: str) -> dict | None:
+        response = self._get(repo, f"/commits/{_segment(ref)}")
+        return None if response is None else self._json(response)
 
     def commit_exists(self, repo: str, sha: str) -> bool:
         return self._commit(repo, sha) is not None
@@ -148,6 +190,50 @@ class GitHubApp:
         if not isinstance(sha, str):
             raise GitHubError("commit response has no sha")
         return sha
+
+    def get_default_branch(self, repo: str) -> str:
+        response = self._get(repo, "")
+        if response is None:
+            raise RepoNotAccessible(repo)
+        branch = self._json(response).get("default_branch")
+        if not isinstance(branch, str):
+            raise GitHubError("repository response has no default branch")
+        return branch
+
+    def list_branches(self, repo: str, limit: int = 20) -> list[BranchInfo]:
+        items = self._list(self._get(repo, "/branches", {"per_page": limit}))
+        return [BranchInfo(item["name"], item["commit"]["sha"]) for item in items]
+
+    def list_commits(self, repo: str, ref: str, limit: int = 50) -> list[CommitInfo]:
+        items = self._list(self._get(repo, "/commits", {"sha": ref, "per_page": limit}))
+        return [_commit_info(item) for item in items]
+
+    def list_path_commits(
+        self, repo: str, path: str, ref: str, limit: int = 10
+    ) -> list[CommitInfo]:
+        params = {"sha": ref, "path": path, "per_page": limit}
+        return [_commit_info(item) for item in self._list(self._get(repo, "/commits", params))]
+
+    def list_tree(self, repo: str, ref: str) -> tuple[list[str], bool]:
+        response = self._get(repo, f"/git/trees/{_segment(ref)}", {"recursive": 1})
+        if response is None:
+            return [], False
+        body = self._json(response)
+        blobs = [item["path"] for item in body.get("tree", []) if item.get("type") == "blob"]
+        return blobs, bool(body.get("truncated"))
+
+    def read_file(self, repo: str, path: str, ref: str, max_bytes: int = 200_000) -> str | None:
+        encoded = "/".join(_segment(part) for part in path.split("/"))
+        response = self._get(repo, f"/contents/{encoded}", {"ref": ref})
+        if response is None:
+            return None
+        body = self._json(response)
+        if body.get("encoding") != "base64" or body.get("size", 0) > max_bytes:
+            return None
+        try:
+            return base64.b64decode(body["content"]).decode("utf-8", errors="replace")
+        except (KeyError, TypeError, ValueError):
+            raise GitHubError("file response is malformed") from None
 
 
 def build_github(settings) -> GitHubApp | None:

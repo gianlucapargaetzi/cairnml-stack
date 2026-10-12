@@ -7,7 +7,7 @@ from mlops_common.schemas import TERMINAL_STATUSES
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from mlops_server.models import Experiment, Job, Project, ProjectMember
+from mlops_server.models import Experiment, Job, Project, ProjectMember, ProjectRepo
 from mlops_server.security.deps import Principal
 
 
@@ -31,6 +31,13 @@ def ensure_member(session: Session, principal: Principal, slug: str) -> Project:
     if not is_member(session, principal, project):
         raise HTTPException(404, "project not found")
     return project
+
+
+def ensure_linked(session: Session, project: Project, repo: str) -> ProjectRepo:
+    link = session.get(ProjectRepo, (project.id, repo))
+    if link is None:
+        raise HTTPException(404, "repository is not linked to this project")
+    return link
 
 
 def load_experiment(

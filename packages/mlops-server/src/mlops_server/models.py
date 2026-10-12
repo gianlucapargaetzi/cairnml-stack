@@ -102,6 +102,14 @@ class ProjectMember(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), primary_key=True)
 
 
+class ProjectRepo(Base):
+    __tablename__ = "project_repos"
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), primary_key=True)
+    repo: Mapped[str] = mapped_column(String(200), primary_key=True)
+    role: Mapped[str] = mapped_column(String(10), default="code")
+    created_at: Mapped[datetime] = mapped_column(_TS, default=utcnow)
+
+
 class Task(Base):
     __tablename__ = "tasks"
     __table_args__ = (UniqueConstraint("project_id", "name"),)

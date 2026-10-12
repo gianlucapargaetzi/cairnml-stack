@@ -155,6 +155,16 @@ class ApiClient:
     def repo_status(self, repo: str, ref: str) -> dict:
         return self._json(self._http.get("/api/v1/repos/status", params={"repo": repo, "ref": ref}))
 
+    def link_repo(self, project: str, repo: str, role: str = "code") -> dict:
+        return self._json(
+            self._http.post(
+                "/api/v1/projects/repos", json={"project": project, "repo": repo, "role": role}
+            )
+        )
+
+    def list_repos(self, project: str) -> list[dict]:
+        return self._json(self._http.get("/api/v1/projects/repos", params={"project": project}))
+
     def create_agent_token(self, queues: list[str], ttl: int = 900) -> dict:
         return self._json(
             self._http.post("/api/v1/admin/agent-tokens", json={"queues": queues, "ttl": ttl})
