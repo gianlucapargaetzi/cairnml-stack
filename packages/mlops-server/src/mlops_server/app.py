@@ -68,7 +68,17 @@ def create_app(
                 app.state.session_factory, settings.agent_timeout, settings.reaper_interval
             )
             reaper.start()
+        user_sync = None
+        if app.state.directory is not None and settings.idp_sync_interval > 0:
+            from mlops_server.services.user_sync import UserSyncThread
+
+            user_sync = UserSyncThread(
+                app.state.session_factory, app.state.directory, settings.idp_sync_interval
+            )
+            user_sync.start()
         yield
+        if user_sync is not None:
+            user_sync.stop()
         if reaper is not None:
             reaper.stop()
         engine.dispose()

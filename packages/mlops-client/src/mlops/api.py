@@ -154,3 +154,6 @@ class ApiClient:
 
     def revoke_client(self, client_id: str) -> dict:
         return self._json(self._http.post(f"/api/v1/admin/clients/{client_id}/revoke"))
+
+    def sync_users(self) -> dict:
+        return self._json(self._http.post("/api/v1/admin/sync-users"))

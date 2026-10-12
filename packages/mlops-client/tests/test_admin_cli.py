@@ -50,3 +50,14 @@ def test_non_admins_get_a_clear_error(cfg_env, server, enroll_client):
         assert result.exit_code == 1 and "admin role required" in result.output
     finally:
         runtime.set_api_override(None)
+
+
+def test_sync_users_command(cfg_env, server, enroll_client, stub_directory):
+    admin = enroll_client("root", roles=["mlops-admin"])
+    runtime.set_api_override(lambda token, url: ApiClient(admin.http))
+    try:
+        result = CliRunner().invoke(cli, ["admin", "sync-users"])
+        assert result.exit_code == 0
+        assert "checked" in result.output and "disabled 0" in result.output
+    finally:
+        runtime.set_api_override(None)

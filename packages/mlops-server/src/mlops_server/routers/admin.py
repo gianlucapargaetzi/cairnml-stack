@@ -14,6 +14,7 @@ from mlops_server.ids import new_id
 from mlops_server.models import Agent, Client, EnrollmentToken
 from mlops_server.security.deps import Principal, get_session, require
 from mlops_server.services import audit
+from mlops_server.services.user_sync import sync_users
 
 router = APIRouter(prefix="/admin")
 admin_only = require("client", admin=True)
@@ -100,3 +101,19 @@ def revoke_agent(
     session: Annotated[Session, Depends(get_session)],
 ) -> dict:
     return _revoke(Agent, agent_id, principal, request, session)
+
+
+@router.post("/sync-users")
+def trigger_user_sync(
+    request: Request,
+    principal: Annotated[Principal, Depends(admin_only)],
+    session: Annotated[Session, Depends(get_session)],
+) -> dict:
+    directory = request.app.state.directory
+    if directory is None:
+        raise HTTPException(503, "no IdP directory configured (set MLOPS_IDP_SYNC_CLIENT_SECRET)")
+    report = sync_users(session, directory)
+    audit.record(session, principal.id, "user_sync.triggered", request,
+                 disabled=len(report.disabled))
+    session.commit()
+    return report.as_dict()

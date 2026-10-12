@@ -60,9 +60,12 @@ def principal_dep(
         return Principal(agent.id, "agent", None, frozenset(), False)
 
     job = session.get(Job, claims.job_id) if claims.job_id else None
+    owner = session.get(User, job.created_by) if job else None
     if (
         job is None
         or claims.sub != job.id
+        or owner is None
+        or owner.disabled
         or job.status not in ("assigned", "running")
         or job.experiment_id != claims.experiment_id
     ):

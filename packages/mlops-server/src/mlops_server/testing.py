@@ -92,6 +92,7 @@ def settings(tmp_path, pg_url) -> Settings:
         oidc_issuer=FakeIdp.ISSUER,
         oidc_client_id="mlops-cli",
         reaper_interval=0,
+        idp_sync_interval=0,
         auto_migrate=False,
     )
 

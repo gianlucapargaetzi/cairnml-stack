@@ -306,3 +306,14 @@ def admin_revoke_client(client_id: str) -> None:
     """Revoke a client so it can no longer authenticate."""
     _admin(lambda api: api.revoke_client(client_id))
     typer.echo(f"revoked {client_id}")
+
+
+@admin_app.command("sync-users")
+def admin_sync_users() -> None:
+    """Check every user against the IdP now (otherwise this runs every minute)."""
+    report = _admin(lambda api: api.sync_users())
+    typer.echo(
+        f"checked {report['checked']}, disabled {len(report['disabled'])}, "
+        f"re-enabled {len(report['reenabled'])}, roles changed {len(report['roles_changed'])}, "
+        f"errors {report['errors']}"
+    )
