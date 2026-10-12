@@ -149,8 +149,6 @@ class Experiment:
             transfer.put_file(presigned["upload_url"], source)
             self._api.register_artifact(self.id, name, presigned["key"], size, kind, meta)
             return presigned["key"]
-        except ValueError:
-            raise
         except Exception as exc:
             if not _transient(exc):
                 log.warning("artifact %s was rejected: %s", name, exc)
