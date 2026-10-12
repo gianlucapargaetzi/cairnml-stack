@@ -25,13 +25,20 @@ def reap_lost_agents(session: Session, now: datetime, timeout_s: int) -> list[st
             Job.status.in_(("assigned", "running")),
             or_(Agent.last_seen.is_(None), Agent.last_seen < cutoff),
         )
+        .with_for_update(of=Job, skip_locked=True)
     ).all()
     reaped = []
     for job in jobs:
+        # Same lock order as set_status: job first, then experiment. A job whose agent
+        # holds the row is skipped and picked up on the next pass.
+        if job.status not in ("assigned", "running"):
+            continue
+        experiment = session.get(
+            Experiment, job.experiment_id, with_for_update=True, populate_existing=True
+        )
         job.status = "failed"
         job.message = "agent lost contact"
         job.finished_at = now
-        experiment = session.get(Experiment, job.experiment_id)
         if experiment.status not in ("finished", "failed", "cancelled"):
             experiment.status = "failed"
             experiment.finished_at = now

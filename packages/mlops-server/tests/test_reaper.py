@@ -57,3 +57,19 @@ def test_never_seen_agent_with_assigned_job_is_reaped(
         s.get(Agent, agent.agent_id).last_seen = None
         s.commit()
         assert reap_lost_agents(s, utcnow(), 90) == [job["id"]]
+
+
+def test_job_finished_by_its_agent_is_not_reaped(
+    server, app, enroll_client, make_project, make_agent, new_job
+):
+    dev = _dev(enroll_client, make_project)
+    agent, job = _running_job(dev, make_agent, new_job)
+    with app.state.session_factory() as s:
+        s.get(Agent, agent.agent_id).last_seen = utcnow() - timedelta(seconds=300)
+        s.get(Job, job["id"]).status = "finished"
+        s.commit()
+    with app.state.session_factory() as s:
+        assert reap_lost_agents(s, utcnow(), 90) == []
+        s.commit()
+    with app.state.session_factory() as s:
+        assert s.get(Job, job["id"]).status == "finished"
