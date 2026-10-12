@@ -32,21 +32,28 @@ def _send_event(api, experiment_id: str, kind: str, payload: dict) -> None:
 
 
 def replay(spool: Spool, api, experiment_id: str) -> int:
+    """Send spooled events in order. Returns the number the server accepted.
+
+    Stops at the first transient failure and keeps the unsent tail. Artifact events
+    are kept for `mlops sync`, in their original position.
+    """
     pending = spool.events()
     sent = 0
+    kept: list[dict] = []
     for index, event in enumerate(pending):
         if event["kind"] == "artifact":
-            continue  # handled by `mlops sync`
+            kept.append(event)  # handled by `mlops sync`
+            continue
         try:
             _send_event(api, experiment_id, event["kind"], event["payload"])
         except Exception as exc:
             if _is_transient(exc):
-                spool.rewrite(pending[index:])
+                spool.rewrite(kept + pending[index:])
                 return sent
             log.warning("dropping %s event that the server rejected: %s", event["kind"], exc)
+            continue
         sent += 1
-    remaining = [e for e in pending if e["kind"] == "artifact"]
-    spool.rewrite(remaining)
+    spool.rewrite(kept)
     return sent
 
 
@@ -86,8 +93,8 @@ class Uplink:
         with self._lock:
             self._lines[stream].append({"ts": time.time(), "text": text})
 
-    def _deliver(self, kind: str, payload: dict) -> None:
-        if self._api is None or self._exp is None:
+    def _deliver(self, kind: str, payload: dict, *, direct: bool) -> None:
+        if not direct or self._api is None or self._exp is None:
             self._spool.append(kind, payload)
             return
         try:
@@ -99,27 +106,47 @@ class Uplink:
             else:
                 log.warning("server rejected %s batch: %s", kind, exc)
 
+    def _drain(self) -> bool:
+        """Replay spooled events before any new ones. Returns True when nothing is left to send."""
+        if self._api is None or self._exp is None or not self._spool.exists():
+            return True
+        if not self._spool.events():
+            return True
+        replay(self._spool, self._api, self._exp)
+        drained = not any(e["kind"] != "artifact" for e in self._spool.events())
+        if not drained:
+            self.degraded = True
+        return drained
+
     def flush(self) -> None:
         with self._flush_lock:
-            with self._lock:
-                metrics, self._metrics = self._metrics, []
-                lines = {s: v for s, v in self._lines.items() if v}
-                for stream in lines:
-                    self._lines[stream] = []
-            for start in range(0, len(metrics), self._max_batch):
-                self._deliver("metrics", {"points": metrics[start : start + self._max_batch]})
-            for stream, items in lines.items():
-                for start in range(0, len(items), self._max_batch):
-                    seq = self._seq[stream]
-                    self._seq[stream] += 1
-                    self._deliver(
-                        "logs",
-                        {
-                            "stream": stream,
-                            "seq": seq,
-                            "lines": items[start : start + self._max_batch],
-                        },
-                    )
+            self._flush_locked()
+
+    def _flush_locked(self) -> None:
+        # Must hold _flush_lock. Spooled events go first so they are never overtaken.
+        direct = self._drain()
+        with self._lock:
+            metrics, self._metrics = self._metrics, []
+            lines = {s: v for s, v in self._lines.items() if v}
+            for stream in lines:
+                self._lines[stream] = []
+        for start in range(0, len(metrics), self._max_batch):
+            self._deliver(
+                "metrics", {"points": metrics[start : start + self._max_batch]}, direct=direct
+            )
+        for stream, items in lines.items():
+            for start in range(0, len(items), self._max_batch):
+                seq = self._seq[stream]
+                self._seq[stream] += 1
+                self._deliver(
+                    "logs",
+                    {
+                        "stream": stream,
+                        "seq": seq,
+                        "lines": items[start : start + self._max_batch],
+                    },
+                    direct=direct,
+                )
 
     def start(self) -> None:
         def loop() -> None:
@@ -133,6 +160,7 @@ class Uplink:
         self._stop.set()
         if self._thread is not None:
             self._thread.join(timeout=5)
-        self.flush()
-        if self._api is not None and self._exp is not None and self._spool.events():
-            replay(self._spool, self._api, self._exp)
+        with self._flush_lock:
+            self._flush_locked()
+            if self._api is not None and self._exp is not None and self._spool.events():
+                replay(self._spool, self._api, self._exp)

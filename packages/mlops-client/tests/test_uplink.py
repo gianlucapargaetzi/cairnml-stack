@@ -65,8 +65,8 @@ def test_transient_failure_spools_and_later_replays_in_order(tmp_path):
     up.flush()  # fails, spooled
     assert up.degraded and up._spool.events()[0]["kind"] == "metrics"
     up.metric("loss", 0.5, 1)
-    up.close()  # sends the new point, then replays the spooled batch
-    assert [p[0]["step"] for _, p in api.metrics] == [1, 0]
+    up.close()  # replays the spooled batch first, then sends the new point
+    assert [p[0]["step"] for _, p in api.metrics] == [0, 1]
     assert not up._spool.exists()
 
 
@@ -123,12 +123,75 @@ def test_background_thread_flushes(tmp_path):
         if api.metrics:
             break
         threading_wait()
+    assert api.metrics  # sent by the background thread, before close() runs
     up.close()
-    assert api.metrics
 
 
 def threading_wait():
     threading.Event().wait(0.02)
+
+
+def test_replay_keeps_artifact_events_when_a_later_send_fails(tmp_path):
+    spool = Spool(tmp_path / "s", {"experiment_id": "exp_1"})
+    spool.append("artifact", {"name": "model.bin", "sha256": "abc"})
+    spool.append("metrics", {"points": [{"name": "a", "value": 1, "step": 0, "ts": 1}]})
+
+    assert replay(spool, FakeApi(fail=1), "exp_1") == 0
+    assert [e["kind"] for e in spool.events()] == ["artifact", "metrics"]
+
+    assert replay(spool, FakeApi(), "exp_1") == 1
+    assert [e["kind"] for e in spool.events()] == ["artifact"]
+
+
+def test_replay_counts_server_rejected_events_as_dropped(tmp_path):
+    spool = Spool(tmp_path / "s", {"experiment_id": "exp_1"})
+    spool.append("metrics", {"points": [{"name": "bad", "value": 1, "step": 0, "ts": 1}]})
+    spool.append("metrics", {"points": [{"name": "ok", "value": 2, "step": 1, "ts": 2}]})
+
+    class Rejects(FakeApi):
+        def post_metrics(self, exp, points):
+            if points[0]["name"] == "bad":
+                raise httpx.HTTPStatusError(
+                    "x",
+                    request=httpx.Request("POST", "http://x"),
+                    response=httpx.Response(422),
+                )
+            super().post_metrics(exp, points)
+
+    api = Rejects()
+    assert replay(spool, api, "exp_1") == 1
+    assert [p[0]["name"] for _, p in api.metrics] == ["ok"]
+    assert not spool.exists()
+
+
+def test_spooled_events_are_sent_before_a_new_flush(tmp_path):
+    api = FakeApi()
+    up = _uplink(tmp_path, api)
+    up._spool.append("metrics", {"points": [{"name": "old", "value": 0, "step": 0, "ts": 1}]})
+    up.metric("new", 1.0, 1)
+    up.flush()
+    assert [p[0]["name"] for _, p in api.metrics] == ["old", "new"]
+    assert not up._spool.exists()
+
+
+def test_flush_keeps_order_when_the_drain_fails(tmp_path):
+    api = FakeApi()
+    up = _uplink(tmp_path, api)
+    up._spool.append("metrics", {"points": [{"name": "old", "value": 0, "step": 0, "ts": 1}]})
+    up.metric("new", 1.0, 1)
+    api.fail = 1  # the drain fails, so the new batch must queue behind the old one
+    up.flush()
+    assert up.degraded and api.metrics == []
+    assert [e["payload"]["points"][0]["name"] for e in up._spool.events()] == ["old", "new"]
+
+
+def test_truncated_last_line_keeps_complete_events(tmp_path):
+    spool = Spool(tmp_path / "s", {"experiment_id": "exp_1"})
+    spool.append("metrics", {"points": [{"name": "a", "value": 1, "step": 0, "ts": 1}]})
+    spool.append("logs", {"stream": "stdout", "seq": 0, "lines": [{"ts": 1, "text": "x"}]})
+    path = tmp_path / "s" / "events.jsonl"
+    path.write_bytes(path.read_bytes() + b'{"kind": "metr')
+    assert [e["kind"] for e in spool.events()] == ["metrics", "logs"]
 
 
 def test_spool_file_path_rejects_traversal(tmp_path):

@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
 import shutil
 from pathlib import Path
+
+log = logging.getLogger("mlops")
 
 
 class Spool:
@@ -37,13 +41,27 @@ class Spool:
     def events(self) -> list[dict]:
         if not self._events_file.exists():
             return []
-        return [json.loads(line) for line in self._events_file.read_text().splitlines() if line]
+        out: list[dict] = []
+        for number, line in enumerate(self._events_file.read_text().splitlines(), start=1):
+            if not line:
+                continue
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                # A crash mid-append leaves a partial line. Skip it rather than lose the queue.
+                log.warning("skipping undecodable spool line %d in %s", number, self._events_file)
+        return out
 
     def rewrite(self, events: list[dict]) -> None:
         if not events:
             shutil.rmtree(self.dir, ignore_errors=True)
             return
-        self._events_file.write_text("".join(json.dumps(e) + "\n" for e in events))
+        tmp = self._events_file.with_name("events.jsonl.tmp")
+        with tmp.open("w") as handle:
+            handle.write("".join(json.dumps(e) + "\n" for e in events))
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, self._events_file)
 
     def file_path(self, name: str) -> Path:
         self._ensure()
