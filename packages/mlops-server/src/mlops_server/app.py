@@ -47,7 +47,7 @@ async def _validation_error_handler(_request: Request, exc: RequestValidationErr
 
 
 def create_app(
-    settings: Settings | None = None, *, oidc=None, storage=None, github=None
+    settings: Settings | None = None, *, oidc=None, storage=None, github=None, directory=None
 ) -> FastAPI:
     settings = settings or Settings()
     engine = make_engine(settings.database_url)
@@ -98,6 +98,11 @@ def create_app(
 
         github = build_github(settings)
     app.state.github = github
+    if directory is None:
+        from mlops_server.services.directory import build_directory
+
+        directory = build_directory(settings)
+    app.state.directory = directory
     from mlops_common.keys import read_private_key
 
     from mlops_server.security.tokens import TokenService

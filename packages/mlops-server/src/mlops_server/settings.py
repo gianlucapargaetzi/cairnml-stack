@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     github_app_private_key_path: Path | None = None
     github_api_url: str = "https://api.github.com"
 
+    idp_sync_client_id: str = "mlops-server"
+    idp_sync_client_secret: str | None = None
+    idp_sync_interval: int = 60
+
     s3_endpoint: str = "http://mlops-nas:9000"
     s3_access_key: str | None = None
     s3_secret_key: str | None = None

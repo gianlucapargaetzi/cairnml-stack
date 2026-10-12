@@ -18,6 +18,8 @@ from mlops_common.schemas import StsResponse
 
 from mlops_server.app import create_app
 from mlops_server.db import Base
+from mlops_server.models import User
+from mlops_server.services.directory import DirectoryError, DirectoryUser
 from mlops_server.services.github import InstallationToken, RepoNotAccessible
 from mlops_server.settings import Settings
 
@@ -119,10 +121,12 @@ def stub_storage() -> StubStorage:
 
 
 @pytest.fixture
-def app(settings, idp, stub_storage, stub_github):
+def app(settings, idp, stub_storage, stub_github, stub_directory):
     application = create_app(
-        settings, oidc=idp.verifier(), storage=stub_storage, github=stub_github
+        settings, oidc=idp.verifier(), storage=stub_storage, github=stub_github,
+        directory=stub_directory,
     )
+    stub_directory.bind(application.state.session_factory)
     Base.metadata.drop_all(application.state.engine)
     return application
 
@@ -248,6 +252,52 @@ class StubGitHub:
 @pytest.fixture
 def stub_github() -> StubGitHub:
     return StubGitHub()
+
+
+class StubDirectory:
+    """Answers like the IdP: unknown subjects mirror the database (enabled, current roles)."""
+
+    def __init__(self) -> None:
+        self._factory = None
+        self._disabled: set[str] = set()
+        self._removed: set[str] = set()
+        self._roles: dict[str, tuple[str, ...]] = {}
+        self._failing: set[str] = set()
+
+    def bind(self, session_factory) -> None:
+        self._factory = session_factory
+
+    def disable(self, subject: str) -> None:
+        self._disabled.add(subject)
+
+    def enable(self, subject: str) -> None:
+        self._disabled.discard(subject)
+
+    def remove(self, subject: str) -> None:
+        self._removed.add(subject)
+
+    def set_roles(self, subject: str, roles) -> None:
+        self._roles[subject] = tuple(sorted(roles))
+
+    def fail_for(self, subject: str) -> None:
+        self._failing.add(subject)
+
+    def get_user(self, subject: str) -> DirectoryUser | None:
+        if subject in self._failing:
+            raise DirectoryError("simulated outage")
+        if subject in self._removed:
+            return None
+        with self._factory() as session:
+            row = session.query(User).filter(User.idp_subject == subject).one_or_none()
+            current = tuple(sorted(row.roles)) if row else ()
+        return DirectoryUser(
+            enabled=subject not in self._disabled, roles=self._roles.get(subject, current)
+        )
+
+
+@pytest.fixture
+def stub_directory() -> StubDirectory:
+    return StubDirectory()
 
 
 @pytest.fixture
