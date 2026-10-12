@@ -121,8 +121,10 @@ def dispatch(
     return job_out(job)
 
 
-def _agent_job(session: Session, principal: Principal, job_id: str) -> Job:
-    job = session.get(Job, job_id)
+def _agent_job(session: Session, principal: Principal, job_id: str, lock: bool = False) -> Job:
+    # lock serialises concurrent writers on the job row (the status check must see the
+    # committed status of any other in-flight transition).
+    job = session.get(Job, job_id, with_for_update=True) if lock else session.get(Job, job_id)
     if job is None or job.agent_id != principal.id:
         raise HTTPException(404, "job not found")
     return job
@@ -151,7 +153,7 @@ def set_status(
     principal: Annotated[Principal, Depends(agent_only)],
     session: Annotated[Session, Depends(get_session)],
 ):
-    job = _agent_job(session, principal, job_id)
+    job = _agent_job(session, principal, job_id, lock=True)
     if body.status not in ALLOWED.get(job.status, set()):
         raise HTTPException(409, f"cannot go from {job.status} to {body.status}")
     # apply_status locks and refreshes the experiment; it must run before any write to it.

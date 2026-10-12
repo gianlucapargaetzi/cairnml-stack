@@ -132,3 +132,31 @@ def test_non_members_cannot_see_or_cancel_jobs(server, make_agent, dev, new_job,
     eve = enroll_client("eve")
     assert eve.http.get(f"/api/v1/jobs/{job['id']}").status_code == 404
     assert eve.http.post(f"/api/v1/jobs/{job['id']}/cancel").status_code == 404
+
+
+def test_client_cannot_set_status_of_a_job_experiment(server, make_agent, dev, new_job):
+    agent, job = _assigned(dev, make_agent, new_job)
+    _status(agent, job, "running")
+    exp_id = job["experiment_id"]
+    for status in ("finished", "cancelled"):
+        r = dev.http.patch(f"/api/v1/experiments/{exp_id}", json={"status": status})
+        assert r.status_code == 403
+        assert r.json()["detail"] == "status of a job experiment is controlled by its job"
+    assert dev.http.get(f"/api/v1/jobs/{job['id']}").json()["status"] == "running"
+    assert _status(agent, job, "finished", exit_code=0).status_code == 200
+
+
+def test_run_token_is_refused_on_agent_routes(server, make_agent, dev, new_job):
+    agent, job = _assigned(dev, make_agent, new_job)
+    _status(agent, job, "running")
+    token = agent.http.post(f"/api/v1/jobs/{job['id']}/run-token").json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    r = server.post("/api/v1/agents/heartbeat", headers=headers, json={"running_job_ids": []})
+    assert r.status_code == 403
+
+
+def test_sts_is_503_when_storage_is_not_configured(server, make_agent, dev, new_job, app):
+    agent, job = _assigned(dev, make_agent, new_job)
+    app.state.storage = None  # per-test app: no S3 credentials configured
+    r = agent.http.post(f"/api/v1/jobs/{job['id']}/sts")
+    assert r.status_code == 503

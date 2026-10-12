@@ -118,6 +118,10 @@ def patch_experiment(
     if "status" in fields:
         if principal.kind != "client":
             raise HTTPException(403, "only clients may set the status directly")
+        if exp.job_id is not None:
+            # The job is authoritative: a client status write here could block its agent's
+            # terminal report (apply_status 409s on terminal experiments).
+            raise HTTPException(403, "status of a job experiment is controlled by its job")
         apply_status(exp, fields.pop("status"))
     if "params" in fields:
         exp.params = {**exp.params, **fields.pop("params")}
