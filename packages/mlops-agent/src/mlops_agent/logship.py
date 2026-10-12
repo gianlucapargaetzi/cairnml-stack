@@ -30,6 +30,10 @@ class LogShipper:
         self._buffer: deque[dict] = deque()
         self._dropped = 0  # lines dropped from the buffer and not yet reported
         self._seq = 0
+        # A batch whose post has been attempted but not confirmed. It is resent
+        # unchanged, with the same seq, until it succeeds; new lines never join it.
+        self._inflight: tuple[int, list[dict]] | None = None
+        self._inflight_reported = 0
         self._lock = threading.Lock()
         self._flush_lock = threading.Lock()
         self._stop = threading.Event()
@@ -57,12 +61,12 @@ class LogShipper:
             return [note] + items[: self._max_lines - 1], reported
         return items[: self._max_lines], 0
 
-    def _send(self, batch: list[dict]) -> bool:
+    def _send(self, seq: int, batch: list[dict]) -> bool:
         for delay in (0.0, 0.5, 1.0, 2.0):
             if delay:
                 self._sleep(delay)
             try:
-                self._post(self._stream, self._seq, batch)
+                self._post(self._stream, seq, batch)
             except Exception:
                 continue
             return True
@@ -81,13 +85,18 @@ class LogShipper:
     def flush(self) -> None:
         with self._flush_lock:
             while True:
-                batch, reported = self._take()
-                if not batch:
+                if self._inflight is None:
+                    batch, reported = self._take()
+                    if not batch:
+                        return
+                    self._inflight = (self._seq, batch)
+                    self._inflight_reported = reported
+                seq, batch = self._inflight
+                if not self._send(seq, batch):
                     return
-                if not self._send(batch):
-                    return
-                self._commit(batch, reported)
-                self._seq += 1
+                self._commit(batch, self._inflight_reported)
+                self._inflight = None
+                self._seq = seq + 1
 
     def start(self) -> None:
         def loop() -> None:

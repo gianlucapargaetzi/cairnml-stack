@@ -45,7 +45,27 @@ def test_persistent_failure_keeps_lines_for_next_flush():
     assert rec.calls == []
     ship.write("b")
     ship.flush()
-    assert rec.calls == [("stdout", 0, ["a", "b"])]
+    # The in-flight batch is resent unchanged; "b" waits for seq 1.
+    assert rec.calls == [("stdout", 0, ["a"]), ("stdout", 1, ["b"])]
+
+
+def test_inflight_batch_is_resent_unchanged_after_stored_failure():
+    # The server stores each seq's first content, then the response is lost on
+    # every attempt of the first flush.
+    stored, attempts = {}, []
+
+    def post(stream, seq, lines):
+        attempts.append(seq)
+        stored.setdefault(seq, [entry["text"] for entry in lines])
+        if len(attempts) <= 4:
+            raise RuntimeError("response lost")
+
+    ship = LogShipper(post, "stdout", sleep=lambda s: None)
+    ship.write("a")
+    ship.flush()
+    ship.write("b")
+    ship.flush()
+    assert stored == {0: ["a"], 1: ["b"]}
 
 
 def test_scrub_is_applied_before_buffering():
