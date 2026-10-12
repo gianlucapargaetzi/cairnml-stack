@@ -12,7 +12,17 @@ from sqlalchemy.orm import sessionmaker
 
 from mlops_server import models  # noqa: F401  (register tables)
 from mlops_server.db import Base, make_engine
-from mlops_server.routers import admin, auth, enroll, experiments, meta, projects, telemetry
+from mlops_server.routers import (
+    admin,
+    artifacts,
+    auth,
+    enroll,
+    experiments,
+    meta,
+    projects,
+    telemetry,
+)
+from mlops_server.routers import storage as storage_api
 from mlops_server.settings import Settings
 
 
@@ -60,6 +70,10 @@ def create_app(
             or f"{settings.oidc_issuer.rstrip('/')}/protocol/openid-connect/certs",
         )
     app.state.oidc = oidc
+    if storage is None:
+        from mlops_server.services.storage import build_storage
+
+        storage = build_storage(settings)
     app.state.storage = storage
     app.state.github = github
     from mlops_common.keys import read_private_key
@@ -69,6 +83,8 @@ def create_app(
     app.state.tokens = TokenService(
         read_private_key(settings.signing_key_path), settings.public_url, settings.access_token_ttl
     )
-    for module in (meta, enroll, auth, admin, projects, experiments, telemetry):
+    for module in (
+        meta, enroll, auth, admin, projects, experiments, telemetry, artifacts, storage_api,
+    ):
         app.include_router(module.router, prefix="/api/v1")
     return app

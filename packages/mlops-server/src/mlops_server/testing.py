@@ -6,6 +6,7 @@ import json
 import os
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import jwt
 import pytest
@@ -13,6 +14,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 from mlops_common.http import KeyAuth
 from mlops_common.keys import generate_private_key, public_key_pem, write_private_key
+from mlops_common.schemas import StsResponse
 
 from mlops_server.app import create_app
 from mlops_server.db import Base
@@ -89,9 +91,33 @@ def settings(tmp_path, pg_url) -> Settings:
     )
 
 
+class StubStorage:
+    def __init__(self) -> None:
+        self.sts_calls: list[tuple[str, bool]] = []
+
+    def presign_put(self, key: str, expires: int = 3600) -> str:
+        return f"https://nas.test/artifacts/{key}?op=put"
+
+    def presign_get(self, key: str, expires: int = 3600) -> str:
+        return f"https://nas.test/artifacts/{key}?op=get"
+
+    def sts_credentials(self, project_slug: str, write: bool) -> StsResponse:
+        self.sts_calls.append((project_slug, write))
+        return StsResponse(
+            access_key="AK", secret_key="SK", session_token="ST",
+            expires_at=datetime(2030, 1, 1, tzinfo=UTC), endpoint_url="https://nas.test",
+            bucket="datasets", prefix=f"{project_slug}/",
+        )
+
+
 @pytest.fixture
-def app(settings, idp):
-    application = create_app(settings, oidc=idp.verifier())
+def stub_storage() -> StubStorage:
+    return StubStorage()
+
+
+@pytest.fixture
+def app(settings, idp, stub_storage):
+    application = create_app(settings, oidc=idp.verifier(), storage=stub_storage)
     Base.metadata.drop_all(application.state.engine)
     return application
 

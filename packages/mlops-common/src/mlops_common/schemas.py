@@ -175,3 +175,48 @@ class LogBatch(BaseModel):
     stream: Literal["stdout", "stderr"]
     seq: int = Field(ge=0)
     lines: list[LogLine] = Field(min_length=1, max_length=5000)
+
+
+class PresignRequest(BaseModel):
+    name: str
+
+
+class PresignResponse(BaseModel):
+    upload_url: str
+    key: str
+    expires_in: int
+
+
+ArtifactKind = Literal["file", "model", "script", "patch", "requirements", "log", "other"]
+
+
+class ArtifactRegister(BaseModel):
+    name: str
+    key: str
+    size: int = Field(default=0, ge=0)
+    kind: ArtifactKind = "file"
+    meta: dict[str, Any] = {}
+
+
+class ArtifactOut(BaseModel):
+    id: str
+    name: str
+    key: str
+    size: int
+    kind: ArtifactKind
+    meta: dict[str, Any]
+
+
+class StsRequest(BaseModel):
+    project: str
+    write: bool = False
+
+
+class StsResponse(BaseModel):
+    access_key: str
+    secret_key: str
+    session_token: str
+    expires_at: datetime
+    endpoint_url: str
+    bucket: str
+    prefix: str
