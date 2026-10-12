@@ -1,12 +1,18 @@
 import json
 from calendar import timegm
 
+import httpx
 import jwt
 import pytest
 import respx
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from mlops_server.services.github import GitHubApp, RepoNotAccessible, valid_repo
+from mlops_server.services.github import (
+    GitHubApp,
+    GitHubError,
+    RepoNotAccessible,
+    valid_repo,
+)
 
 API = "https://ghe.test/api/v3"
 
@@ -20,8 +26,18 @@ def app_key():
     return key.public_key(), pem
 
 
-@pytest.mark.parametrize("repo,ok", [("org/repo", True), ("a.b/c-d_e", True), ("org", False),
-                                      ("a/b/c", False), ("../x", False), ("org/re po", False)])
+@pytest.mark.parametrize(
+    "repo,ok",
+    [
+        ("org/repo", True),
+        ("a.b/c-d_e", True),
+        ("org", False),
+        ("a/b/c", False),
+        ("../x", False),
+        ("org/re po", False),
+        ("org/repo\n", False),
+    ],
+)
 def test_valid_repo(repo, ok):
     assert valid_repo(repo) is ok
 
@@ -29,7 +45,8 @@ def test_valid_repo(repo, ok):
 def _mock_install(router, repo="org/repo", expires="2030-01-01T00:00:00Z", token="ghs_1"):
     router.get(f"{API}/repos/{repo}/installation").respond(200, json={"id": 77})
     return router.post(f"{API}/app/installations/77/access_tokens").respond(
-        201, json={"token": token, "expires_at": expires})
+        201, json={"token": token, "expires_at": expires}
+    )
 
 
 @respx.mock
@@ -44,8 +61,9 @@ def test_installation_token_is_read_only_scoped_and_signed_as_app(app_key):
         "repositories": ["repo"],
         "permissions": {"contents": "read"},
     }
-    claims = jwt.decode(sent.headers["authorization"].removeprefix("Bearer "), public,
-                        algorithms=["RS256"])
+    claims = jwt.decode(
+        sent.headers["authorization"].removeprefix("Bearer "), public, algorithms=["RS256"]
+    )
     assert claims["iss"] == "123" and claims["exp"] - claims["iat"] <= 600
 
 
@@ -96,3 +114,58 @@ def test_repos_status_endpoint(server, enroll_client, stub_github):
     stub_github.inaccessible.add("org/secret")
     secret = dev.http.get("/api/v1/repos/status", params={"repo": "org/secret", "ref": "main"})
     assert secret.status_code == 404
+
+
+@respx.mock
+def test_ref_and_sha_are_percent_encoded_in_path(app_key):
+    _, pem = app_key
+    _mock_install(respx.mock)
+    route = respx.get(url__startswith=f"{API}/repos/org/repo/commits/").respond(404)
+    gh = GitHubApp("123", pem, API)
+    gh.head_commit("org/repo", "../../contents/X?x=1")
+    gh.commit_exists("org/repo", "a/b")
+    gh.head_commit("org/repo", "..")
+    paths = [call.request.url.raw_path.decode() for call in route.calls]
+    assert paths == [
+        "/api/v3/repos/org/repo/commits/..%2F..%2Fcontents%2FX%3Fx%3D1",
+        "/api/v3/repos/org/repo/commits/a%2Fb",
+        "/api/v3/repos/org/repo/commits/%2E%2E",
+    ]
+
+
+@respx.mock
+def test_transport_error_and_non_json_body_raise_github_error(app_key):
+    _, pem = app_key
+    _mock_install(respx.mock)
+    respx.get(f"{API}/repos/org/repo/commits/main").mock(side_effect=httpx.ConnectError("down"))
+    gh = GitHubApp("123", pem, API)
+    with pytest.raises(GitHubError):
+        gh.head_commit("org/repo", "main")
+    respx.get(f"{API}/repos/org/repo/commits/v2").respond(200, text="<html>")
+    with pytest.raises(GitHubError):
+        gh.head_commit("org/repo", "v2")
+
+
+@respx.mock
+def test_repos_status_maps_transport_error_to_502(server, enroll_client, app, app_key):
+    _, pem = app_key
+    dev = enroll_client("dev")
+    _mock_install(respx.mock, repo="org/repo")
+    respx.get(url__startswith=f"{API}/repos/org/repo/commits/").mock(
+        side_effect=httpx.ConnectError("down")
+    )
+    app.state.github = GitHubApp("123", pem, API)
+    response = dev.http.get("/api/v1/repos/status", params={"repo": "org/repo", "ref": "main"})
+    assert response.status_code == 502
+
+
+def test_repos_status_503_when_github_not_configured(server, enroll_client, app):
+    dev = enroll_client("dev")
+    app.state.github = None
+    response = dev.http.get("/api/v1/repos/status", params={"repo": "org/repo", "ref": "main"})
+    assert response.status_code == 503
+
+
+def test_repos_status_requires_authentication(server):
+    response = server.get("/api/v1/repos/status", params={"repo": "org/repo", "ref": "main"})
+    assert response.status_code == 401

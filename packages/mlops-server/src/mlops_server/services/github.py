@@ -6,6 +6,7 @@ import re
 import time
 from dataclasses import dataclass
 from datetime import datetime
+from urllib.parse import quote
 
 import httpx
 import jwt
@@ -15,7 +16,13 @@ _REFRESH_MARGIN = 300
 
 
 def valid_repo(repo: str) -> bool:
-    return bool(_REPO_RE.match(repo)) and ".." not in repo
+    return bool(_REPO_RE.fullmatch(repo)) and ".." not in repo
+
+
+def _segment(value: str) -> str:
+    """Percent-encode one path segment, including dot-only ones that httpx would normalize."""
+    encoded = quote(value, safe="")
+    return encoded.replace(".", "%2E") if encoded in (".", "..") else encoded
 
 
 class GitHubError(Exception):
@@ -49,6 +56,22 @@ class GitHubApp:
         self._installations: dict[str, int] = {}
         self._tokens: dict[str, InstallationToken] = {}
 
+    def _send(self, method: str, url: str, **kwargs) -> httpx.Response:
+        try:
+            return self._http.request(method, url, **kwargs)
+        except httpx.HTTPError:
+            raise GitHubError("GitHub transport error") from None
+
+    @staticmethod
+    def _json(response: httpx.Response) -> dict:
+        try:
+            body = response.json()
+        except ValueError:
+            raise GitHubError("GitHub returned a non-JSON body") from None
+        if not isinstance(body, dict):
+            raise GitHubError("GitHub returned an unexpected body")
+        return body
+
     def _app_jwt(self) -> str:
         now = int(self._clock())
         return jwt.encode(
@@ -64,51 +87,67 @@ class GitHubApp:
 
     def _installation_id(self, repo: str) -> int:
         if repo not in self._installations:
-            response = self._http.get(
-                f"{self._api}/repos/{repo}/installation", headers=self._headers(self._app_jwt())
+            response = self._send(
+                "GET",
+                f"{self._api}/repos/{repo}/installation",
+                headers=self._headers(self._app_jwt()),
             )
             if response.status_code == 404:
                 raise RepoNotAccessible(repo)
             if response.status_code != 200:
                 raise GitHubError(f"installation lookup failed: {response.status_code}")
-            self._installations[repo] = response.json()["id"]
+            installation_id = self._json(response).get("id")
+            if not isinstance(installation_id, int):
+                raise GitHubError("installation lookup returned no id")
+            self._installations[repo] = installation_id
         return self._installations[repo]
 
     def installation_token(self, repo: str) -> InstallationToken:
         cached = self._tokens.get(repo)
         if cached and cached.expires_at.timestamp() - self._clock() > _REFRESH_MARGIN:
             return cached
-        response = self._http.post(
+        response = self._send(
+            "POST",
             f"{self._api}/app/installations/{self._installation_id(repo)}/access_tokens",
             headers=self._headers(self._app_jwt()),
             json={"repositories": [repo.split("/", 1)[1]], "permissions": {"contents": "read"}},
         )
         if response.status_code != 201:
             raise GitHubError(f"token request failed: {response.status_code}")
-        body = response.json()
-        token = InstallationToken(
-            body["token"], datetime.fromisoformat(body["expires_at"].replace("Z", "+00:00"))
-        )
+        body = self._json(response)
+        try:
+            token = InstallationToken(
+                body["token"], datetime.fromisoformat(body["expires_at"].replace("Z", "+00:00"))
+            )
+        except (KeyError, TypeError, ValueError):
+            raise GitHubError("token response is malformed") from None
         self._tokens[repo] = token
         return token
 
     def _commit(self, repo: str, ref: str) -> dict | None:
         token = self.installation_token(repo).token
-        response = self._http.get(
-            f"{self._api}/repos/{repo}/commits/{ref}", headers=self._headers(token)
+        response = self._send(
+            "GET",
+            f"{self._api}/repos/{repo}/commits/{_segment(ref)}",
+            headers=self._headers(token),
         )
         if response.status_code in (404, 422):
             return None
         if response.status_code != 200:
             raise GitHubError(f"commit lookup failed: {response.status_code}")
-        return response.json()
+        return self._json(response)
 
     def commit_exists(self, repo: str, sha: str) -> bool:
         return self._commit(repo, sha) is not None
 
     def head_commit(self, repo: str, ref: str) -> str | None:
         found = self._commit(repo, ref)
-        return found["sha"] if found else None
+        if found is None:
+            return None
+        sha = found.get("sha")
+        if not isinstance(sha, str):
+            raise GitHubError("commit response has no sha")
+        return sha
 
 
 def build_github(settings) -> GitHubApp | None:
