@@ -84,3 +84,71 @@ def test_referenced_artifacts_must_exist_and_belong_to_project(
     assert dev.http.post("/api/v1/jobs", json=spec).status_code == 200
     spec["code"]["patch_key"] = "other/project/x/uncommitted.patch"
     assert dev.http.post("/api/v1/jobs", json=spec).status_code == 422
+
+
+@pytest.mark.parametrize("repo", ["../..", "org/re po", "org/repo\n", "org/..x"])
+def test_bad_repo_rejected_before_github(server, enroll_client, make_project, stub_github, repo):
+    dev = _setup(enroll_client, make_project)
+    code_spec = {"name": "j", "project": "vision/seg",
+                 "code": {"repo": repo, "commit": "a" * 40},
+                 "runtime": {"type": "python", "command": ["python", "t.py"]}}
+    assert dev.http.post("/api/v1/jobs", json=code_spec).status_code == 422
+    data_ref = {"path": "d", "repo": repo, "commit": "a" * 40}
+    data_spec = {"name": "j", "project": "vision/seg", "data": [data_ref],
+                 "runtime": {"type": "image", "image": "alpine"}}
+    assert dev.http.post("/api/v1/jobs", json=data_spec).status_code == 422
+    assert stub_github.token_calls == []
+
+
+@pytest.mark.parametrize("dest", ["x\n", "../x", "/abs", "a//b", "a b"])
+def test_unsafe_input_dest_rejected(server, enroll_client, make_project, dest):
+    dev = _setup(enroll_client, make_project)
+    inputs = [{"key": "vision/seg/e/x", "dest": dest}]
+    spec = {"name": "j", "project": "vision/seg", "inputs": inputs,
+            "runtime": {"type": "python", "command": ["python", "t.py"]}}
+    assert dev.http.post("/api/v1/jobs", json=spec).status_code == 422
+
+
+def test_unsafe_workdir_with_newline_rejected(server, enroll_client, make_project, stub_github):
+    dev = _setup(enroll_client, make_project)
+    stub_github.commits.add(("org/repo", "a" * 40))
+    spec = {"name": "j", "project": "vision/seg",
+            "code": {"repo": "org/repo", "commit": "a" * 40, "workdir": "src\n"},
+            "runtime": {"type": "python", "command": ["python", "t.py"]}}
+    assert dev.http.post("/api/v1/jobs", json=spec).status_code == 422
+
+
+@pytest.mark.parametrize("env_key", ["MLOPS_RUN_TOKEN", "mlops_x", "Mlops_Y"])
+def test_reserved_env_prefix_is_case_insensitive(server, enroll_client, make_project, env_key):
+    dev = _setup(enroll_client, make_project)
+    spec = {"name": "j", "project": "vision/seg", "runtime": {"type": "image", "image": "alpine"},
+            "env": {env_key: "x"}}
+    assert dev.http.post("/api/v1/jobs", json=spec).status_code == 422
+
+
+@pytest.mark.parametrize("resources", [
+    {"cpu": 10000}, {"memory_gb": 5000}, {"gpu": 65}, {"labels": ["x"] * 101},
+])
+def test_resource_upper_bounds(server, enroll_client, make_project, resources):
+    dev = _setup(enroll_client, make_project)
+    spec = {"name": "j", "project": "vision/seg", "resources": resources,
+            "runtime": {"type": "image", "image": "alpine"}}
+    assert dev.http.post("/api/v1/jobs", json=spec).status_code == 422
+
+
+def test_timeout_and_input_list_bounds(server, enroll_client, make_project):
+    dev = _setup(enroll_client, make_project)
+    base = {"name": "j", "project": "vision/seg", "runtime": {"type": "image", "image": "alpine"}}
+    too_long = {**base, "timeout_s": 7 * 86400 + 1}
+    assert dev.http.post("/api/v1/jobs", json=too_long).status_code == 422
+    many = {**base, "data": [{"path": f"d{i}"} for i in range(101)]}
+    assert dev.http.post("/api/v1/jobs", json=many).status_code == 422
+
+
+def test_dispatch_with_github_unconfigured_returns_503(server, enroll_client, make_project, app):
+    dev = _setup(enroll_client, make_project)
+    app.state.github = None  # the server runs without a GitHub App
+    spec = {"name": "j", "project": "vision/seg", "code": {"repo": "org/repo", "commit": "a" * 40},
+            "runtime": {"type": "python", "command": ["python", "t.py"]}}
+    response = dev.http.post("/api/v1/jobs", json=spec)
+    assert response.status_code == 503 and "not configured" in response.json()["detail"]

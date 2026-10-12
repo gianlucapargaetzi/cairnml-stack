@@ -101,11 +101,26 @@ class GitInfo(BaseModel):
     patch_key: str | None = None  # object key of the uncommitted-changes patch
 
 
+_REPO_RE = re.compile(r"[\w.-]+/[\w.-]+")
+
+
+def _valid_repo(repo: str) -> str:
+    """Same rule as mlops_server.services.github.valid_repo: owner/name, no '..'."""
+    if not _REPO_RE.fullmatch(repo) or ".." in repo:
+        raise ValueError("repo must be owner/name")
+    return repo
+
+
 class DatasetRef(BaseModel):
     path: str
     dvc_hash: str | None = None
     repo: str | None = None
     commit: str | None = None
+
+    @field_validator("repo")
+    @classmethod
+    def _repo(cls, value: str | None) -> str | None:
+        return None if value is None else _valid_repo(value)
 
 
 class ExperimentCreate(BaseModel):
@@ -223,14 +238,14 @@ class StsResponse(BaseModel):
     prefix: str
 
 
-_SAFE_PATH = re.compile(r"^[A-Za-z0-9._/-]+$")
+_SAFE_PATH = re.compile(r"[A-Za-z0-9._/-]+")
 
 
 def _safe_relative(path: str) -> str:
     if (
         not path
         or len(path) > 255
-        or not _SAFE_PATH.match(path)
+        or not _SAFE_PATH.fullmatch(path)
         or path.startswith("/")
         or any(part in ("", "..") for part in path.split("/"))
     ):
@@ -239,10 +254,15 @@ def _safe_relative(path: str) -> str:
 
 
 class CodeRef(BaseModel):
-    repo: str = Field(pattern=r"^[\w.-]+/[\w.-]+$")
+    repo: str
     commit: str = Field(pattern=r"^[0-9a-f]{40}$")
     workdir: str = "."
     patch_key: str | None = None
+
+    @field_validator("repo")
+    @classmethod
+    def _repo(cls, value: str) -> str:
+        return _valid_repo(value)
 
     @field_validator("workdir")
     @classmethod
@@ -263,7 +283,7 @@ class InputFile(BaseModel):
 class PythonRuntime(BaseModel):
     type: Literal["python"] = "python"
     python: str = Field(default="3.11", pattern=r"^3\.\d{1,2}$")
-    requirements: list[str] = []
+    requirements: list[str] = Field(default=[], max_length=100)
     requirements_file: str | None = None
     command: list[str] = Field(min_length=1)
 
@@ -287,24 +307,24 @@ JobRuntime = Annotated[
 
 
 class ResourceRequest(BaseModel):
-    cpu: int = Field(default=1, ge=1)
-    memory_gb: float = Field(default=1.0, gt=0)
-    gpu: int = Field(default=0, ge=0)
-    labels: list[str] = []
+    cpu: int = Field(default=1, ge=1, le=512)
+    memory_gb: float = Field(default=1.0, gt=0, le=4096)
+    gpu: int = Field(default=0, ge=0, le=64)
+    labels: list[str] = Field(default=[], max_length=100)
 
 
 class JobSpec(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     project: str
     code: CodeRef | None = None
-    inputs: list[InputFile] = []
-    data: list[DatasetRef] = []
+    inputs: list[InputFile] = Field(default=[], max_length=100)
+    data: list[DatasetRef] = Field(default=[], max_length=100)
     runtime: JobRuntime
     resources: ResourceRequest = ResourceRequest()
     queue: str = Field(default="default", min_length=1, max_length=100)
     params: dict[str, Any] = {}
     env: dict[str, str] = {}
-    timeout_s: int | None = Field(default=None, ge=60)
+    timeout_s: int | None = Field(default=None, ge=60, le=7 * 86400)
 
     @model_validator(mode="after")
     def _consistent(self) -> JobSpec:
@@ -312,7 +332,7 @@ class JobSpec(BaseModel):
             raise ValueError("a python job needs code or at least one input file")
         if self.runtime.type == "compose" and self.code is None:
             raise ValueError("a compose job needs code")
-        if any(key.startswith("MLOPS_") for key in self.env):
+        if any(key.upper().startswith("MLOPS_") for key in self.env):
             raise ValueError("env keys starting with MLOPS_ are reserved")
         return self
 
