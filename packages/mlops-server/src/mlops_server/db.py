@@ -16,4 +16,4 @@ def utcnow() -> datetime:
 
 
 def make_engine(url: str) -> Engine:
-    return create_engine(url, pool_pre_ping=True)
+    return create_engine(url, pool_pre_ping=True, pool_size=10, max_overflow=30)

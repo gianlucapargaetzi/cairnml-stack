@@ -355,3 +355,17 @@ class JobAssignment(BaseModel):
     job_id: str
     experiment_id: str
     spec: JobSpec
+
+
+class HeartbeatRequest(BaseModel):
+    running_job_ids: list[str] = []
+    capabilities: Capabilities | None = None
+
+
+class HeartbeatResponse(BaseModel):
+    cancel_job_ids: list[str] = []
+
+
+class PollRequest(BaseModel):
+    running_job_ids: list[str] = []
+    wait_s: int = Field(default=20, ge=0, le=25)

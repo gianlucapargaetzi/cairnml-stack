@@ -14,6 +14,7 @@ from mlops_server import models  # noqa: F401  (register tables)
 from mlops_server.db import Base, make_engine
 from mlops_server.routers import (
     admin,
+    agents,
     artifacts,
     auth,
     enroll,
@@ -91,7 +92,7 @@ def create_app(
     )
     for module in (
         meta, enroll, auth, admin, projects, experiments, telemetry, artifacts, storage_api, repos,
-        jobs,
+        jobs, agents,
     ):
         app.include_router(module.router, prefix="/api/v1")
     return app
