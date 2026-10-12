@@ -1,19 +1,40 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from mlops_common.schemas import GitInfo, JobOut, JobSpec
+from mlops_common.schemas import (
+    ArtifactUrlRequest,
+    GitInfo,
+    GitTokenRequest,
+    GitTokenResponse,
+    JobOut,
+    JobSpec,
+    JobStatusUpdate,
+    StsResponse,
+    TokenResponse,
+)
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from mlops_server.ids import new_id
-from mlops_server.models import Artifact, Experiment, Job
+from mlops_server.models import Artifact, Experiment, Job, Project
+from mlops_server.routers.experiments import apply_status
 from mlops_server.security.deps import Principal, get_session, require
 from mlops_server.services import access, audit
 from mlops_server.services.github import GitHubError, RepoNotAccessible
 
 router = APIRouter()
+agent_only = require("agent")
+client_only = require("client")
+
+# Agent-reported transitions. Terminal states have no outgoing edges, so a finished job
+# can no longer be written to by its agent.
+ALLOWED = {
+    "assigned": {"running", "failed", "cancelled"},
+    "running": {"finished", "failed", "cancelled"},
+}
 
 
 def job_out(job: Job) -> JobOut:
@@ -96,5 +117,167 @@ def dispatch(
     experiment.job_id = job.id
     session.add_all([experiment, job])
     audit.record(session, principal.id, "job.dispatched", request, job_id=job.id, queue=spec.queue)
+    session.commit()
+    return job_out(job)
+
+
+def _agent_job(session: Session, principal: Principal, job_id: str) -> Job:
+    job = session.get(Job, job_id)
+    if job is None or job.agent_id != principal.id:
+        raise HTTPException(404, "job not found")
+    return job
+
+
+def _active_agent_job(session: Session, principal: Principal, job_id: str) -> Job:
+    job = _agent_job(session, principal, job_id)
+    if job.status not in ("assigned", "running"):
+        raise HTTPException(409, f"job is {job.status}")
+    return job
+
+
+def _client_job(session: Session, principal: Principal, job_id: str, lock: bool = False) -> Job:
+    job = session.get(Job, job_id, with_for_update=lock) if lock else session.get(Job, job_id)
+    project = session.get(Project, job.project_id) if job else None
+    if job is None or not access.is_member(session, principal, project):
+        raise HTTPException(404, "job not found")
+    return job
+
+
+@router.post("/jobs/{job_id}/status", response_model=JobOut)
+def set_status(
+    job_id: str,
+    body: JobStatusUpdate,
+    request: Request,
+    principal: Annotated[Principal, Depends(agent_only)],
+    session: Annotated[Session, Depends(get_session)],
+):
+    job = _agent_job(session, principal, job_id)
+    if body.status not in ALLOWED.get(job.status, set()):
+        raise HTTPException(409, f"cannot go from {job.status} to {body.status}")
+    # apply_status locks and refreshes the experiment; it must run before any write to it.
+    apply_status(session.get(Experiment, job.experiment_id), body.status)
+    job.status = body.status
+    job.exit_code = body.exit_code
+    job.message = body.message
+    if body.status != "running":
+        job.finished_at = datetime.now(UTC)
+    audit.record(session, principal.id, "job.status", request, job_id=job.id, status=body.status)
+    session.commit()
+    return job_out(job)
+
+
+@router.post("/jobs/{job_id}/run-token", response_model=TokenResponse)
+def run_token(
+    job_id: str,
+    request: Request,
+    principal: Annotated[Principal, Depends(agent_only)],
+    session: Annotated[Session, Depends(get_session)],
+):
+    job = _active_agent_job(session, principal, job_id)
+    # sub must equal job.id: the principal dependency refuses run tokens whose sub differs.
+    token, expires_in = request.app.state.tokens.issue(
+        job.id, "run", uid=job.created_by, experiment_id=job.experiment_id,
+        job_id=job.id, ttl=request.app.state.settings.run_token_ttl,
+    )
+    audit.record(session, principal.id, "run_token.issued", request, job_id=job.id)
+    session.commit()
+    return TokenResponse(access_token=token, expires_in=expires_in)
+
+
+@router.post("/jobs/{job_id}/git-token", response_model=GitTokenResponse)
+def git_token(
+    job_id: str,
+    body: GitTokenRequest,
+    request: Request,
+    principal: Annotated[Principal, Depends(agent_only)],
+    session: Annotated[Session, Depends(get_session)],
+):
+    job = _active_agent_job(session, principal, job_id)
+    spec = JobSpec.model_validate(job.spec)
+    allowed = {spec.code.repo} if spec.code else set()
+    allowed |= {d.repo for d in spec.data if d.repo}
+    if body.repo not in allowed:
+        raise HTTPException(403, "repository is not part of this job")
+    github = request.app.state.github
+    if github is None:
+        raise HTTPException(503, "GitHub is not configured")
+    try:
+        token = github.installation_token(body.repo)
+    except RepoNotAccessible:
+        raise HTTPException(404, "GitHub App is not installed on this repository") from None
+    except GitHubError:
+        raise HTTPException(502, "GitHub request failed") from None
+    audit.record(session, principal.id, "git_token.issued", request, job_id=job.id, repo=body.repo)
+    session.commit()
+    return GitTokenResponse(token=token.token, expires_at=token.expires_at)
+
+
+@router.post("/jobs/{job_id}/sts", response_model=StsResponse)
+def job_sts(
+    job_id: str,
+    request: Request,
+    principal: Annotated[Principal, Depends(agent_only)],
+    session: Annotated[Session, Depends(get_session)],
+):
+    job = _active_agent_job(session, principal, job_id)
+    storage = request.app.state.storage
+    if storage is None:
+        raise HTTPException(503, "storage is not configured")
+    slug = session.get(Project, job.project_id).slug
+    creds = storage.sts_credentials(slug, False)  # read-only: jobs never write artifacts directly
+    audit.record(session, principal.id, "sts.issued", request, job_id=job.id, write=False)
+    session.commit()
+    return creds
+
+
+@router.post("/jobs/{job_id}/artifact-url")
+def artifact_url(
+    job_id: str,
+    body: ArtifactUrlRequest,
+    request: Request,
+    principal: Annotated[Principal, Depends(agent_only)],
+    session: Annotated[Session, Depends(get_session)],
+):
+    job = _active_agent_job(session, principal, job_id)
+    spec = JobSpec.model_validate(job.spec)
+    allowed = {i.key for i in spec.inputs}
+    if spec.code and spec.code.patch_key:
+        allowed.add(spec.code.patch_key)
+    if body.key not in allowed:
+        raise HTTPException(403, "key is not part of this job")
+    storage = request.app.state.storage
+    if storage is None:
+        raise HTTPException(503, "storage is not configured")
+    return {"url": storage.presign_get(body.key)}
+
+
+@router.get("/jobs/{job_id}", response_model=JobOut)
+def get_job(
+    job_id: str,
+    principal: Annotated[Principal, Depends(client_only)],
+    session: Annotated[Session, Depends(get_session)],
+):
+    return job_out(_client_job(session, principal, job_id))
+
+
+@router.post("/jobs/{job_id}/cancel", response_model=JobOut)
+def cancel_job(
+    job_id: str,
+    request: Request,
+    principal: Annotated[Principal, Depends(client_only)],
+    session: Annotated[Session, Depends(get_session)],
+):
+    # Lock the job row before reading its status: claim_next locks the same row, so a
+    # queued job cannot be assigned to an agent while it is being cancelled.
+    job = _client_job(session, principal, job_id, lock=True)
+    if job.status == "queued":
+        apply_status(session.get(Experiment, job.experiment_id), "cancelled")
+        job.status = "cancelled"
+        job.finished_at = datetime.now(UTC)
+    elif job.status in ("assigned", "running"):
+        job.cancel_requested = True
+    else:
+        raise HTTPException(409, f"job already {job.status}")
+    audit.record(session, principal.id, "job.cancel_requested", request, job_id=job.id)
     session.commit()
     return job_out(job)

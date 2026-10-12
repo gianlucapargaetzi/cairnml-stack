@@ -369,3 +369,22 @@ class HeartbeatResponse(BaseModel):
 class PollRequest(BaseModel):
     running_job_ids: list[str] = []
     wait_s: int = Field(default=20, ge=0, le=25)
+
+
+class JobStatusUpdate(BaseModel):
+    status: Literal["running", "finished", "failed", "cancelled"]
+    exit_code: int | None = None
+    message: str | None = Field(default=None, max_length=2000)
+
+
+class GitTokenRequest(BaseModel):
+    repo: str = Field(pattern=r"^[\w.-]+/[\w.-]+$")
+
+
+class GitTokenResponse(BaseModel):
+    token: str
+    expires_at: datetime
+
+
+class ArtifactUrlRequest(BaseModel):
+    key: str
