@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import threading
+import time
 from collections.abc import Callable
 from pathlib import Path
 
+import httpx
 from mlops_common.schemas import JobAssignment
 
 from mlops_agent.api import AgentApi
@@ -16,6 +19,11 @@ from mlops_agent.dvc import dataset_targets, dvc_pull
 from mlops_agent.executors.base import BaseExecutor, RunContext
 from mlops_agent.logship import LogShipper
 from mlops_agent.workspace import apply_patch, clone_at, download, safe_join
+
+log = logging.getLogger(__name__)
+
+# Waits before each retry of the final status: four attempts in total.
+_FINAL_BACKOFF_S = (0.5, 1.0, 2.0)
 
 
 class JobRunner:
@@ -36,6 +44,7 @@ class JobRunner:
         self._cancel_requested: set[str] = set()
         self._lock = threading.Lock()
         self._timeout_scale = 1.0  # tests shrink timeouts
+        self._sleep = time.sleep  # tests replace it to skip the backoff
 
     def cancel(self, job_id: str) -> None:
         with self._lock:
@@ -66,7 +75,7 @@ class JobRunner:
                 spec.code.commit if spec.code else None,
             )
             sts = self._api.sts(a.job_id)
-            secrets.extend([sts.secret_key, sts.session_token])
+            secrets.extend([sts.access_key, sts.secret_key, sts.session_token])
             self._dvc_pull(root, targets, sts)
         return safe_join(root, spec.code.workdir) if spec.code else root
 
@@ -83,6 +92,33 @@ class JobRunner:
             "MLOPS_PARAMS": json.dumps(a.spec.params),
         }
 
+    def _report_final(
+        self, job_id: str, status: str, exit_code: int | None, message: str | None
+    ) -> None:
+        """Send the terminal status, retrying transient failures. Never raises."""
+        for attempt, delay in enumerate((0.0, *_FINAL_BACKOFF_S), start=1):
+            if delay:
+                self._sleep(delay)
+            try:
+                self._api.set_status(job_id, status, exit_code, message)
+                return
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code < 500:
+                    # 4xx (for example 409 after a reap) will not change on retry.
+                    log.error("server rejected final status %s for job %s: %s", status, job_id, exc)
+                    return
+                log.warning(
+                    "final status %s for job %s, attempt %d: %s", status, job_id, attempt, exc
+                )
+            except httpx.TransportError as exc:
+                log.warning(
+                    "final status %s for job %s, attempt %d: %s", status, job_id, attempt, exc
+                )
+            except Exception:
+                log.exception("could not send final status %s for job %s", status, job_id)
+                return
+        log.error("giving up on final status %s for job %s", status, job_id)
+
     def run(self, a: JobAssignment) -> None:
         secrets: list[str] = []
 
@@ -98,10 +134,14 @@ class JobRunner:
         out = LogShipper(post("stdout"), "stdout", scrub=scrub)
         err = LogShipper(post("stderr"), "stderr", scrub=scrub)
         root = self._settings.paths.work / a.job_id
-        status, exit_code, message = "failed", None, None
+        timeout_s = a.spec.timeout_s
         executor: BaseExecutor | None = None
         timer: threading.Timer | None = None
         timed_out = threading.Event()
+        returned = threading.Event()  # set once the outcome is decided: a late timer is a no-op
+        gate = threading.Lock()  # orders the timer's flag against the decision
+        error: str | None = None
+        exit_code: int | None = None
         try:
             self._api.set_status(a.job_id, "running")
             out.start()
@@ -109,19 +149,24 @@ class JobRunner:
             root.mkdir(parents=True, exist_ok=True)
             workdir = self._prepare(a, root, secrets)
             env = self._env(a, secrets)
+            if self._settings.dockerhub_token:
+                secrets.append(self._settings.dockerhub_token)  # before the executor can log in
             executor = self._make_executor(a.spec.runtime.type)
             with self._lock:
                 self._active[a.job_id] = executor
                 cancelled_early = a.job_id in self._cancel_requested
             if cancelled_early:
                 executor.cancel()
-            if a.spec.timeout_s:
+            if timeout_s:
 
                 def on_timeout() -> None:
-                    timed_out.set()
+                    with gate:
+                        if returned.is_set():
+                            return
+                        timed_out.set()
                     executor.cancel()
 
-                timer = threading.Timer(a.spec.timeout_s * self._timeout_scale, on_timeout)
+                timer = threading.Timer(timeout_s * self._timeout_scale, on_timeout)
                 timer.daemon = True
                 timer.start()
             ctx = RunContext(
@@ -135,29 +180,32 @@ class JobRunner:
                 err.write,
                 self._settings,
             )
-            exit_code = executor.run(ctx) if not cancelled_early else 130
-            if executor.cancelled and not timed_out.is_set():
-                status = (
-                    "cancelled"  # cancelled wins over any exit code: never finished after cancel
-                )
-            elif timed_out.is_set():
-                status, message = "failed", f"timed out after {a.spec.timeout_s} s"
-            elif exit_code == 0:
-                status = "finished"
-            else:
-                status, message = "failed", f"exit code {exit_code}"
+            exit_code = 130 if cancelled_early else executor.run(ctx)
         except Exception as exc:
-            message = scrub(str(exc))[:1000]
-            err.write(f"mlops-agent: {message}")
-            if executor is not None and executor.cancelled and not timed_out.is_set():
-                status = "cancelled"
+            error = scrub(str(exc))[:1000]
+            err.write(f"mlops-agent: {error}")
         finally:
+            with gate:
+                returned.set()
+                timed = timed_out.is_set()  # one snapshot: the decision uses only this
             if timer is not None:
                 timer.cancel()
             with self._lock:
+                cancelled = a.job_id in self._cancel_requested
                 self._active.pop(a.job_id, None)
                 self._cancel_requested.discard(a.job_id)
             out.close()
             err.close()
             shutil.rmtree(root, ignore_errors=True)
-            self._api.set_status(a.job_id, status, exit_code, message)
+            # Priority: cancel, then timeout, then an error, then the exit code.
+            if cancelled:
+                status, message = "cancelled", error
+            elif timed:
+                status, message = "failed", f"timed out after {timeout_s} s"
+            elif error is not None:
+                status, message = "failed", error
+            elif exit_code == 0:
+                status, message = "finished", None
+            else:
+                status, message = "failed", f"exit code {exit_code}"
+            self._report_final(a.job_id, status, exit_code, message)
