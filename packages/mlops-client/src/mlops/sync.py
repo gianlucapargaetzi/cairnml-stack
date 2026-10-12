@@ -20,6 +20,8 @@ import os
 import shutil
 from pathlib import Path
 
+import httpx
+
 from mlops import transfer
 from mlops.config import spool_root
 from mlops.spool import Spool
@@ -37,6 +39,14 @@ def _write_meta(directory: Path, meta: dict) -> None:
     os.replace(tmp, directory / "meta.json")
 
 
+def _artifact_error(exc: Exception) -> str:
+    # Never include str(exc): httpx puts the presigned URL (a one-hour write capability)
+    # into HTTP error messages.
+    if isinstance(exc, httpx.HTTPStatusError):
+        return f"HTTP {exc.response.status_code}"
+    return type(exc).__name__
+
+
 def _sync_artifacts(
     api, spool: Spool, directory: Path, meta: dict, experiment_id: str, put
 ) -> None:
@@ -52,7 +62,7 @@ def _sync_artifacts(
         payload = event["payload"]
         try:
             presigned = api.presign(experiment_id, payload["name"])
-            put(presigned["upload_url"], spool.file_path(payload["name"]).read_bytes())
+            put(presigned["upload_url"], spool.file_path(payload["name"]))
             api.register_artifact(
                 experiment_id,
                 payload["name"],
@@ -62,7 +72,7 @@ def _sync_artifacts(
                 payload["meta"],
             )
         except Exception as exc:
-            errors.append(f"artifact {payload['name']}: {exc}")
+            errors.append(f"artifact {payload['name']}: {_artifact_error(exc)}")
             continue
         done.add(ordinal)
         meta = {**meta, "artifacts_registered": sorted(done)}
@@ -107,6 +117,15 @@ def sync_all(api, root: Path | None = None, put=None, failed: list[str] | None =
             if failed is not None:
                 failed.append(f"{directory.name}: {exc}")
             continue
-        shutil.rmtree(directory, ignore_errors=True)
+        try:
+            # replay() already removes the directory when no events or artifacts remain.
+            if directory.exists():
+                shutil.rmtree(directory)
+        except OSError as exc:
+            # The run is on the server, but a leftover spool must not pass as a clean sync.
+            log.warning("synced %s but could not remove its spool: %s", directory.name, exc)
+            if failed is not None:
+                failed.append(f"{directory.name}: could not remove the spool: {exc}")
+            continue
         synced.append(experiment_id)
     return synced

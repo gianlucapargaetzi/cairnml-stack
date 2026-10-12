@@ -1,10 +1,13 @@
+import shutil
 import subprocess
+from pathlib import Path
 
 import httpx
 import mlops
 import pytest
 import yaml
 from mlops import runtime
+from mlops import transfer as transfer_module
 from mlops.api import ApiClient
 from mlops.cli import app as cli
 from mlops.config import spool_root
@@ -14,6 +17,8 @@ from mlops.spool import Spool
 from mlops.sync import sync_all
 from mlops.testing import make_repo
 from typer.testing import CliRunner
+
+REAL_PUT = transfer_module.put_file  # captured before the sdk fixture patches it
 
 
 class Recorder:
@@ -121,7 +126,12 @@ def _offline_task(tmp_path, monkeypatch):
 def test_sync_replays_an_offline_run_exactly_once(sdk, tmp_path, monkeypatch):
     experiment = _offline_task(tmp_path, monkeypatch)
     puts = []
-    synced = sync_all(sdk.api, put=lambda url, source, http=None: puts.append(source))
+
+    def record(url, source, http=None):
+        # sync streams a path; read it here to check the uploaded content.
+        puts.append(source.read_bytes() if isinstance(source, Path) else source)
+
+    synced = sync_all(sdk.api, put=record)
     assert len(synced) == 1
     exp = sdk.api.get_experiment(synced[0])
     assert (
@@ -193,3 +203,38 @@ def test_sync_retry_reuses_the_experiment_and_registers_each_artifact_once(
     assert names.count("out.txt") == 1
     runs = [e for e in sdk.api.list_experiments("vision/seg") if e["name"] == "offline-run"]
     assert [e["id"] for e in runs] == synced
+
+
+def test_artifact_put_failure_never_reports_the_presigned_url(sdk, tmp_path, monkeypatch):
+    _offline_task(tmp_path, monkeypatch)
+    urls: list[str] = []
+
+    def forbidden(request):
+        return httpx.Response(403, text="signature mismatch")
+
+    client = httpx.Client(transport=httpx.MockTransport(forbidden))
+
+    def put_403(url, source, http=None):
+        urls.append(url)
+        REAL_PUT(url, source, http=client)
+
+    failed: list[str] = []
+    assert sync_all(sdk.api, put=put_403, failed=failed) == []
+    assert urls and failed
+    query = urls[0].split("?", 1)[1]
+    assert "HTTP 403" in failed[0]
+    assert urls[0] not in failed[0] and query not in failed[0]
+
+
+def test_a_spool_that_cannot_be_removed_is_reported_not_silently_kept(sdk, tmp_path, monkeypatch):
+    _offline_task(tmp_path, monkeypatch)
+
+    def refuse(path, *args, **kwargs):
+        raise PermissionError("read-only spool")
+
+    monkeypatch.setattr("mlops.sync.shutil.rmtree", refuse)
+    failed: list[str] = []
+    assert sync_all(sdk.api, put=lambda *a, **k: None, failed=failed) == []
+    assert any("could not remove the spool" in item for item in failed)
+    monkeypatch.undo()
+    assert shutil  # the real rmtree is back for the next sync
