@@ -236,3 +236,73 @@ def sync() -> None:
     typer.echo(f"synced {len(synced)} experiment(s)")
     if failed:
         _fail(f"{len(failed)} run(s) not synced; their spool is kept, run `mlops sync` again")
+
+
+admin_app = typer.Typer(help="administration (requires the admin role)", no_args_is_help=True)
+app.add_typer(admin_app, name="admin")
+
+
+def _admin(call):
+    """Run an admin call as this enrolled client. The server enforces the admin role."""
+    api = _api()
+    with _remote(api):
+        return call(api)
+
+
+@admin_app.command("agent-token")
+def admin_agent_token(
+    queue: list[str] = typer.Option(["default"], "--queue", help="Queue the agent may serve"),  # noqa: B008
+    ttl: int = typer.Option(900, help="Seconds until the token expires"),
+) -> None:
+    """Create a one-time token that lets one agent enroll. Prints only the token."""
+    typer.echo(_admin(lambda api: api.create_agent_token(list(queue), ttl))["token"])
+
+
+@admin_app.command("project-create")
+def admin_project_create(
+    slug: str,
+    name: str = typer.Option(None, help="Display name (defaults to the slug)"),
+) -> None:
+    """Create a project."""
+    _admin(lambda api: api.create_project(slug, name or slug))
+    typer.echo(f"created project {slug}")
+
+
+@admin_app.command("project-add-member")
+def admin_add_member(slug: str, username: str) -> None:
+    """Give a user access to a project."""
+    _admin(lambda api: api.add_member(slug, username))
+    typer.echo(f"added {username} to {slug}")
+
+
+@admin_app.command("agents")
+def admin_agents() -> None:
+    """List agents."""
+    for agent in _admin(lambda api: api.list_agents()):
+        state = "revoked" if agent["revoked"] else "active"
+        typer.echo(
+            f"{agent['id']}  {state:<8} queues={','.join(agent['queues'])} "
+            f"last_seen={agent['last_seen']}"
+        )
+
+
+@admin_app.command("clients")
+def admin_clients() -> None:
+    """List enrolled clients."""
+    for client in _admin(lambda api: api.list_clients()):
+        state = "revoked" if client["revoked"] else "active"
+        typer.echo(f"{client['id']}  {state:<8} {client['name']} user={client['user_id']}")
+
+
+@admin_app.command("revoke-agent")
+def admin_revoke_agent(agent_id: str) -> None:
+    """Revoke an agent so it can no longer authenticate."""
+    _admin(lambda api: api.revoke_agent(agent_id))
+    typer.echo(f"revoked {agent_id}")
+
+
+@admin_app.command("revoke-client")
+def admin_revoke_client(client_id: str) -> None:
+    """Revoke a client so it can no longer authenticate."""
+    _admin(lambda api: api.revoke_client(client_id))
+    typer.echo(f"revoked {client_id}")

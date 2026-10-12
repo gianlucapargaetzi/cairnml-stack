@@ -127,3 +127,30 @@ class ApiClient:
 
     def repo_status(self, repo: str, ref: str) -> dict:
         return self._json(self._http.get("/api/v1/repos/status", params={"repo": repo, "ref": ref}))
+
+    def create_agent_token(self, queues: list[str], ttl: int = 900) -> dict:
+        return self._json(
+            self._http.post("/api/v1/admin/agent-tokens", json={"queues": queues, "ttl": ttl})
+        )
+
+    def create_project(self, slug: str, name: str) -> dict:
+        return self._json(self._http.post("/api/v1/projects", json={"slug": slug, "name": name}))
+
+    def add_member(self, project: str, username: str) -> dict:
+        return self._json(
+            self._http.post(
+                "/api/v1/project-members", json={"project": project, "username": username}
+            )
+        )
+
+    def list_agents(self) -> list[dict]:
+        return self._json(self._http.get("/api/v1/admin/agents"))
+
+    def list_clients(self) -> list[dict]:
+        return self._json(self._http.get("/api/v1/admin/clients"))
+
+    def revoke_agent(self, agent_id: str) -> dict:
+        return self._json(self._http.post(f"/api/v1/admin/agents/{agent_id}/revoke"))
+
+    def revoke_client(self, client_id: str) -> dict:
+        return self._json(self._http.post(f"/api/v1/admin/clients/{client_id}/revoke"))
