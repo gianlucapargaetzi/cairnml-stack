@@ -70,7 +70,16 @@ def build_job_spec(
     }
     if env:
         spec["env"] = env
-    if git and git.get("repo") and git.get("commit"):
+    # A script recorded as an artifact lives outside the checkout (the recorder uploads it
+    # only then), so it is the input to run, even when git info is present.
+    artifact = next(
+        (a for a in artifacts if a.get("kind") == "script" and a.get("name") == script), None
+    )
+    has_repo = bool(git and git.get("repo") and git.get("commit"))
+    if artifact is not None:
+        spec["inputs"] = [{"key": artifact["key"], "dest": script}]
+        spec["runtime"] = {"type": "python", "command": ["python", script, *tail]}
+    elif has_repo:
         if not script:
             raise DispatchError("the experiment has git info but no script to run")
         workdir = git.get("cwd") or "."
@@ -82,18 +91,12 @@ def build_job_spec(
         }
         relative = posixpath.relpath(script, workdir)
         spec["runtime"] = {"type": "python", "command": ["python", relative, *tail]}
+    elif not script:
+        raise DispatchError("the experiment has no git commit and no script to run")
     else:
-        if not script:
-            raise DispatchError("the experiment has no git commit and no script to run")
-        match = next(
-            (a for a in artifacts if a.get("kind") == "script" and a.get("name") == script), None
+        raise DispatchError(
+            "the experiment has no script artifact to run; it was not recorded outside a repo"
         )
-        if match is None:
-            raise DispatchError(
-                "the experiment has no script artifact to run; it was not recorded outside a repo"
-            )
-        spec["inputs"] = [{"key": match["key"], "dest": script}]
-        spec["runtime"] = {"type": "python", "command": ["python", script, *tail]}
     spec["runtime"].update(
         python=_python_minor(exp.get("python_version")),
         requirements=list(exp.get("requirements") or []),

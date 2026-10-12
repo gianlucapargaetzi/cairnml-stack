@@ -178,7 +178,14 @@ class Experiment:
         if self.mode == "offline":
             raise ExperimentError("cannot dispatch while the server is unreachable")
         self._uplink.flush()
-        job = dispatch_experiment(self._api, self.id, queue=queue, resources=resources)
+        try:
+            job = dispatch_experiment(self._api, self.id, queue=queue, resources=resources)
+        except Exception as exc:
+            # Close as failed so the run is not recorded as "finished" when the caller
+            # catches the error. Re-raise: the caller decides what happens next.
+            self._patch(notes=f"dispatch failed: {exc}")
+            self.close(status="failed")
+            raise
         self._patch(notes=f"continued remotely as {job['experiment_id']}")
         self.close(status="cancelled")
         print(f"dispatched as job {job['id']} (experiment {job['experiment_id']})")

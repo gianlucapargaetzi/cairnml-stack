@@ -1,7 +1,10 @@
 import sys
 
+import httpx
 import mlops
 import pytest
+from mlops import runtime
+from mlops.api import ApiClient
 from mlops.capture import args as capargs
 from mlops.cli import app as cli
 from mlops.dispatch import DispatchError, build_job_spec
@@ -72,8 +75,21 @@ def test_build_job_spec_for_a_script_outside_a_repo():
     assert spec["runtime"]["command"] == ["python", "experiment.py", "--n", "3"]
 
 
+def test_script_artifact_wins_over_git_info():
+    # A script outside the checkout is uploaded as an artifact and recorded by basename.
+    # The commit does not contain it, so it must run as an input, not from the checkout.
+    exp = _exp(script="experiment.py", argv=["experiment.py", "--n", "3"])
+    artifacts = [
+        {"name": "experiment.py", "kind": "script", "key": "vision/seg/exp_1/experiment.py"}
+    ]
+    spec = build_job_spec(exp, artifacts)
+    assert spec["inputs"] == [{"key": "vision/seg/exp_1/experiment.py", "dest": "experiment.py"}]
+    assert spec["runtime"]["command"] == ["python", "experiment.py", "--n", "3"]
+    assert "code" not in spec
+
+
 def test_build_job_spec_refuses_what_it_cannot_reproduce():
-    with pytest.raises(DispatchError, match="redacted"):
+    with pytest.raises(DispatchError, match=r"argv\[2\].*redacted"):
         build_job_spec(_exp(argv=["src/train.py", "--api-key", "***"]), [])
     with pytest.raises(DispatchError, match="no git commit and no script"):
         build_job_spec(_exp(git=None, script=None), [])
@@ -120,8 +136,10 @@ def test_execute_remotely_surfaces_unpushed_commit(sdk, stub_github, tmp_path, m
     experiment = mlops.init(
         "vision/seg", "unpushed", script=work / "train.py"
     )  # stub_github does not know the commit
-    with pytest.raises(Exception, match="push it first"):
+    with pytest.raises(DispatchError, match="push it first"):
         experiment.execute_remotely(exit_process=False)
+    local = sdk.api.get_experiment(experiment.id)
+    assert local["status"] == "failed" and "dispatch failed" in local["notes"]
 
 
 def test_execute_remotely_is_a_noop_in_job_mode_and_offline_is_refused(sdk, tmp_path, monkeypatch):
@@ -175,3 +193,18 @@ def test_cli_dispatch_file_and_server_errors(sdk, stub_github, tmp_path):
     )
     failed = runner.invoke(cli, ["dispatch", "--file", str(bad)])
     assert failed.exit_code == 1 and "push it first" in failed.output
+
+
+def test_cli_reports_unreachable_server_in_one_line(cfg_env, monkeypatch):
+    unreachable = ApiClient(httpx.Client(base_url="http://127.0.0.1:9", timeout=2.0))
+    monkeypatch.setattr(runtime, "make_api", lambda *a, **k: unreachable)
+    out = CliRunner().invoke(cli, ["ls"])
+    assert out.exit_code == 1 and "cannot reach http://127.0.0.1:9" in out.output
+    assert "Traceback" not in out.output
+
+
+def test_cli_reports_not_enrolled_in_one_line(cfg_env):
+    runtime.set_api_override(None)
+    out = CliRunner().invoke(cli, ["job", "show", "job_x"])
+    assert out.exit_code == 1 and "not enrolled: run mlops enroll" in out.output
+    assert "Traceback" not in out.output
