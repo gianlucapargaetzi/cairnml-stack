@@ -18,6 +18,7 @@ from mlops_server.routers import (
     auth,
     enroll,
     experiments,
+    jobs,
     meta,
     projects,
     repos,
@@ -90,6 +91,7 @@ def create_app(
     )
     for module in (
         meta, enroll, auth, admin, projects, experiments, telemetry, artifacts, storage_api, repos,
+        jobs,
     ):
         app.include_router(module.router, prefix="/api/v1")
     return app

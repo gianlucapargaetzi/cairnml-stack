@@ -246,3 +246,22 @@ class StubGitHub:
 @pytest.fixture
 def stub_github() -> StubGitHub:
     return StubGitHub()
+
+
+@pytest.fixture
+def new_job(stub_github):
+    def _new(http, project="vision/seg", queue="default", runtime=None, resources=None, **extra):
+        stub_github.commits.add(("org/repo", "a" * 40))
+        spec = {
+            "name": "job", "project": project, "queue": queue,
+            "code": {"repo": "org/repo", "commit": "a" * 40},
+            "runtime": runtime
+            or {"type": "python", "python": "3.11", "command": ["python", "train.py"]},
+            "resources": resources or {},
+            **extra,
+        }
+        response = http.post("/api/v1/jobs", json=spec)
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    return _new

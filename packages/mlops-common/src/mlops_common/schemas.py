@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 RuntimeName = Literal["python", "image", "compose"]
 
@@ -220,3 +221,117 @@ class StsResponse(BaseModel):
     endpoint_url: str
     bucket: str
     prefix: str
+
+
+_SAFE_PATH = re.compile(r"^[A-Za-z0-9._/-]+$")
+
+
+def _safe_relative(path: str) -> str:
+    if (
+        not path
+        or len(path) > 255
+        or not _SAFE_PATH.match(path)
+        or path.startswith("/")
+        or any(part in ("", "..") for part in path.split("/"))
+    ):
+        raise ValueError("must be a safe relative path")
+    return path
+
+
+class CodeRef(BaseModel):
+    repo: str = Field(pattern=r"^[\w.-]+/[\w.-]+$")
+    commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    workdir: str = "."
+    patch_key: str | None = None
+
+    @field_validator("workdir")
+    @classmethod
+    def _workdir(cls, value: str) -> str:
+        return value if value == "." else _safe_relative(value)
+
+
+class InputFile(BaseModel):
+    key: str
+    dest: str
+
+    @field_validator("dest")
+    @classmethod
+    def _dest(cls, value: str) -> str:
+        return _safe_relative(value)
+
+
+class PythonRuntime(BaseModel):
+    type: Literal["python"] = "python"
+    python: str = Field(default="3.11", pattern=r"^3\.\d{1,2}$")
+    requirements: list[str] = []
+    requirements_file: str | None = None
+    command: list[str] = Field(min_length=1)
+
+
+class ImageRuntime(BaseModel):
+    type: Literal["image"] = "image"
+    image: str = Field(min_length=1)
+    entrypoint: list[str] | None = None
+    command: list[str] | None = None
+
+
+class ComposeRuntime(BaseModel):
+    type: Literal["compose"] = "compose"
+    file: str = "compose.yaml"
+    service: str = Field(min_length=1)
+
+
+JobRuntime = Annotated[
+    PythonRuntime | ImageRuntime | ComposeRuntime, Field(discriminator="type")
+]
+
+
+class ResourceRequest(BaseModel):
+    cpu: int = Field(default=1, ge=1)
+    memory_gb: float = Field(default=1.0, gt=0)
+    gpu: int = Field(default=0, ge=0)
+    labels: list[str] = []
+
+
+class JobSpec(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    project: str
+    code: CodeRef | None = None
+    inputs: list[InputFile] = []
+    data: list[DatasetRef] = []
+    runtime: JobRuntime
+    resources: ResourceRequest = ResourceRequest()
+    queue: str = Field(default="default", min_length=1, max_length=100)
+    params: dict[str, Any] = {}
+    env: dict[str, str] = {}
+    timeout_s: int | None = Field(default=None, ge=60)
+
+    @model_validator(mode="after")
+    def _consistent(self) -> JobSpec:
+        if self.runtime.type == "python" and self.code is None and not self.inputs:
+            raise ValueError("a python job needs code or at least one input file")
+        if self.runtime.type == "compose" and self.code is None:
+            raise ValueError("a compose job needs code")
+        if any(key.startswith("MLOPS_") for key in self.env):
+            raise ValueError("env keys starting with MLOPS_ are reserved")
+        return self
+
+
+JobStatus = Literal["queued", "assigned", "running", "finished", "failed", "cancelled"]
+
+
+class JobOut(BaseModel):
+    id: str
+    experiment_id: str
+    status: JobStatus
+    queue: str
+    agent_id: str | None
+    exit_code: int | None
+    message: str | None
+    created_at: datetime
+
+
+class JobAssignment(BaseModel):
+    job_id: str
+    experiment_id: str
+    spec: JobSpec
