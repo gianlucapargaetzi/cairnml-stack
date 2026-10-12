@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -84,13 +83,14 @@ def capture_git(start: Path | None = None) -> GitState | None:
 
 
 def build_patch(root: Path) -> bytes:
-    git_dir = _out(["rev-parse", "--absolute-git-dir"], root)
+    # A temporary index seeded from HEAD carries no stat data, so every path is
+    # compared by content. Copying the real index can keep stale stat data and miss
+    # edits made within the same timestamp tick as the last index write.
     with tempfile.TemporaryDirectory() as tmp:
-        index = Path(tmp) / "index"
-        real_index = Path(git_dir) / "index"
-        if real_index.exists():
-            shutil.copy(real_index, index)
-        env = {"GIT_INDEX_FILE": str(index)}
+        env = {"GIT_INDEX_FILE": str(Path(tmp) / "index")}
+        seeded = _run(["read-tree", "HEAD"], root, env)
+        if seeded.returncode != 0:
+            raise RuntimeError(f"git read-tree failed: {seeded.stderr.decode().strip()}")
         added = _run(["add", "-A"], root, env)
         if added.returncode != 0:
             raise RuntimeError(f"git add failed: {added.stderr.decode().strip()}")
