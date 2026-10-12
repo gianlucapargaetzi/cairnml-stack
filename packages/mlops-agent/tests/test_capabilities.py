@@ -29,9 +29,32 @@ def test_full_machine():
 
 def test_no_gpu_no_compose():
     caps = _detect({"docker compose": (1, "")})
-    assert caps.gpus == 0 and caps.runtimes == ["python", "image"]
+    assert caps.gpus == 0 and caps.gpu_models == [] and caps.docker is True
+    assert caps.runtimes == ["python", "image"]
 
 
 def test_no_docker_means_no_runtimes():
     caps = _detect({}, docker=False)
     assert caps.docker is False and caps.runtimes == []
+
+
+def test_nvidia_smi_nonzero_exit_gives_no_gpus():
+    caps = _detect({"nvidia-smi --query-gpu=name": (9, "driver error")})
+    assert caps.gpus == 0 and caps.gpu_models == []
+
+
+def test_permission_error_from_nvidia_smi_gives_no_gpus():
+    def run(cmd, **kwargs):
+        if cmd[0] == "nvidia-smi":
+            raise PermissionError(cmd[0])
+        return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
+
+    caps = detect((), run=run, docker_ok=lambda: True, cpu_count=lambda: 4,
+                  mem_bytes=lambda: 8 * 1024**3)
+    assert caps.gpus == 0 and caps.runtimes == ["python", "image"]
+
+
+def test_gpus_present_but_docker_down():
+    caps = _detect({"nvidia-smi --query-gpu=name": (0, "NVIDIA A100\n"),
+                    "docker compose": (0, "v2")}, docker=False)
+    assert caps.gpus == 1 and caps.runtimes == [] and caps.docker is False

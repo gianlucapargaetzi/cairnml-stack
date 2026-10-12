@@ -29,7 +29,7 @@ def _gpus(run: Callable) -> list[str]:
             ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
             capture_output=True, text=True, timeout=15,
         )
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired):
         return []
     if result.returncode != 0:
         return []
@@ -40,7 +40,7 @@ def _compose_ok(run: Callable) -> bool:
     try:
         result = run(["docker", "compose", "version"], capture_output=True, text=True, timeout=15)
         return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired):
         return False
 
 
