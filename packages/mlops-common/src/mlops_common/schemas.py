@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -84,3 +84,72 @@ class ProjectOut(BaseModel):
 class MemberAdd(BaseModel):
     project: str
     username: str
+
+
+ExperimentStatus = Literal["created", "queued", "running", "finished", "failed", "cancelled"]
+TERMINAL_STATUSES = {"finished", "failed", "cancelled"}
+
+
+class GitInfo(BaseModel):
+    repo: str | None = None  # "owner/name"
+    remote_url: str | None = None
+    commit: str | None = None
+    branch: str | None = None
+    dirty: bool = False
+    cwd: str = "."  # working directory relative to the repo root
+    patch_key: str | None = None  # object key of the uncommitted-changes patch
+
+
+class DatasetRef(BaseModel):
+    path: str
+    dvc_hash: str | None = None
+    repo: str | None = None
+    commit: str | None = None
+
+
+class ExperimentCreate(BaseModel):
+    project: str
+    name: str = Field(min_length=1, max_length=200)
+    config: dict[str, Any] = {}
+    source: Literal["local", "job"] = "local"
+    parent_id: str | None = None
+
+
+class ExperimentPatch(BaseModel):
+    status: ExperimentStatus | None = None
+    params: dict[str, Any] | None = None
+    config: dict[str, Any] | None = None
+    git: GitInfo | None = None
+    datasets: list[DatasetRef] | None = None
+    requirements: list[str] | None = None
+    argv: list[str] | None = None
+    env: dict[str, str] | None = None
+    python_version: str | None = None
+    platform: str | None = None
+    script: str | None = None
+    notes: str | None = None
+
+
+class ExperimentOut(BaseModel):
+    id: str
+    project: str
+    name: str
+    status: ExperimentStatus
+    source: str
+    owner: str
+    parent_id: str | None
+    job_id: str | None
+    config: dict[str, Any]
+    params: dict[str, Any]
+    git: GitInfo | None
+    datasets: list[DatasetRef]
+    requirements: list[str]
+    argv: list[str]
+    env: dict[str, str]
+    python_version: str | None
+    platform: str | None
+    script: str | None
+    notes: str | None
+    created_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
