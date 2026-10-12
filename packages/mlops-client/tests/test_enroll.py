@@ -1,0 +1,114 @@
+import stat
+
+import httpx
+import pytest
+import respx
+from fastapi.testclient import TestClient
+from mlops.api import ApiClient
+from mlops.cli import app as cli_app
+from mlops.config import key_path, load_config
+from mlops.enroll import enroll, whoami
+from mlops.idp import LoginFailed, device_login
+from mlops_common.http import KeyAuth
+from mlops_common.keys import read_private_key
+
+ISSUER = "http://mlops-idp:8080/realms/mlops"
+
+
+def _mock_idp(router, token_responses):
+    router.get(f"{ISSUER}/.well-known/openid-configuration").respond(
+        200,
+        json={
+            "device_authorization_endpoint": f"{ISSUER}/device",
+            "token_endpoint": f"{ISSUER}/token",
+        },
+    )
+    router.post(f"{ISSUER}/device").respond(
+        200,
+        json={
+            "device_code": "dc",
+            "user_code": "ABCD",
+            "interval": 1,
+            "expires_in": 600,
+            "verification_uri_complete": f"{ISSUER}/device?user_code=ABCD",
+        },
+    )
+    return router.post(f"{ISSUER}/token").mock(side_effect=token_responses)
+
+
+@respx.mock
+def test_device_login_polls_until_approved():
+    route = _mock_idp(
+        respx.mock,
+        [
+            httpx.Response(400, json={"error": "authorization_pending"}),
+            httpx.Response(400, json={"error": "slow_down"}),
+            httpx.Response(200, json={"access_token": "idp-token"}),
+        ],
+    )
+    printed, opened, slept = [], [], []
+    token = device_login(
+        ISSUER, "mlops-cli", sleep=slept.append, out=printed.append, open_browser=opened.append
+    )
+    assert token == "idp-token" and route.call_count == 3
+    assert any("ABCD" in line for line in printed) and opened == [f"{ISSUER}/device?user_code=ABCD"]
+    assert slept == [1, 1, 6]  # slow_down adds 5 seconds
+
+
+@respx.mock
+def test_device_login_reports_denial():
+    _mock_idp(
+        respx.mock,
+        [httpx.Response(400, json={"error": "access_denied", "error_description": "no"})],
+    )
+    with pytest.raises(LoginFailed, match="no"):
+        device_login(
+            ISSUER,
+            "mlops-cli",
+            sleep=lambda s: None,
+            out=lambda s: None,
+            open_browser=lambda u: None,
+        )
+
+
+def test_enroll_writes_config_and_a_private_key(cfg_env, server, idp, settings):
+    cfg = enroll(server, "laptop", idp_token=idp.token(username="dev"))
+    assert cfg.server_url == settings.public_url and cfg.client_id.startswith("cli_")
+    assert stat.S_IMODE(key_path().stat().st_mode) == 0o600 and load_config() == cfg
+
+
+def test_enrolled_key_works_without_the_idp(cfg_env, server, idp, app, settings):
+    cfg = enroll(server, "laptop", idp_token=idp.token(username="dev"))
+    http = TestClient(app)
+    http.auth = KeyAuth(
+        cfg.server_url, cfg.client_id, read_private_key(key_path()), token_client=TestClient(app)
+    )
+    me = whoami(ApiClient(http))
+    assert me["kind"] == "client"
+
+
+def test_login_is_used_when_no_idp_token_is_given(cfg_env, server, idp):
+    cfg = enroll(server, "laptop", login=lambda issuer, client_id: idp.token(username="dev"))
+    assert load_config() == cfg
+
+
+def test_enroll_twice_needs_force(cfg_env, server, idp):
+    enroll(server, "a", idp_token=idp.token())
+    with pytest.raises(RuntimeError, match="already enrolled"):
+        enroll(server, "b", idp_token=idp.token())
+    assert (
+        enroll(server, "b", idp_token=idp.token(), force=True).client_id == load_config().client_id
+    )
+
+
+def test_rejected_idp_token_leaves_nothing_behind(cfg_env, server, idp):
+    with pytest.raises(httpx.HTTPStatusError):
+        enroll(server, "a", idp_token=idp.token(azp="other-client"))
+    assert load_config() is None and not key_path().exists()
+
+
+def test_cli_whoami_without_enrollment(cfg_env):
+    from typer.testing import CliRunner
+
+    result = CliRunner().invoke(cli_app, ["whoami"])
+    assert result.exit_code == 1 and "mlops enroll" in result.output
