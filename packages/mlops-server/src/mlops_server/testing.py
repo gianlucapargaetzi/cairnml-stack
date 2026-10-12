@@ -131,3 +131,42 @@ def enroll_client(app, server, idp, settings):
         return EnrolledClient(body["client_id"], body["user_id"], key, http)
 
     return _enroll
+
+
+@dataclass
+class EnrolledAgent:
+    agent_id: str
+    key: object
+    http: TestClient
+
+
+@pytest.fixture
+def make_agent(app, server, enroll_client, settings):
+    admin = enroll_client("root", roles=("mlops-admin",), name="admin-box")
+
+    def _make(
+        queues=("default",), cpu=8, memory_gb=32.0, gpus=0, labels=(),
+        runtimes=("python", "image", "compose"),
+    ) -> EnrolledAgent:
+        token = admin.http.post("/api/v1/admin/agent-tokens", json={"queues": list(queues)})
+        assert token.status_code == 200, token.text
+        key = generate_private_key()
+        response = server.post(
+            "/api/v1/enroll/agent",
+            json={
+                "token": token.json()["token"],
+                "name": "agent",
+                "public_key": public_key_pem(key),
+                "capabilities": {
+                    "cpu": cpu, "memory_gb": memory_gb, "gpus": gpus,
+                    "labels": list(labels), "runtimes": list(runtimes),
+                },
+            },
+        )
+        assert response.status_code == 200, response.text
+        agent_id = response.json()["agent_id"]
+        http = TestClient(app)
+        http.auth = KeyAuth(settings.public_url, agent_id, key, token_client=TestClient(app))
+        return EnrolledAgent(agent_id, key, http)
+
+    return _make
