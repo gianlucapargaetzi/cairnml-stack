@@ -1,0 +1,38 @@
+{
+  "realm": "mlops",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "roles": { "realm": [ { "name": "mlops-admin", "description": "May create agent enrollment tokens, projects and revoke machines" } ] },
+  "clients": [
+    {
+      "clientId": "mlops-cli",
+      "name": "mlops command line client",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": true,
+      "attributes": { "oauth2.device.authorization.grant.enabled": "true" }
+    }
+  ],
+  "users": [
+    {
+      "username": "dev", "enabled": true, "emailVerified": true,
+      "email": "dev@example.test", "firstName": "Dev", "lastName": "User",
+      "credentials": [ { "type": "password", "value": "dev", "temporary": false } ]
+    },
+    {
+      "username": "eve", "enabled": true, "emailVerified": true,
+      "email": "eve@example.test", "firstName": "Eve", "lastName": "Outsider",
+      "credentials": [ { "type": "password", "value": "eve", "temporary": false } ]
+    },
+    {
+      "username": "admin", "enabled": true, "emailVerified": true,
+      "email": "admin@example.test", "firstName": "Admin", "lastName": "User",
+      "realmRoles": [ "mlops-admin" ],
+      "credentials": [ { "type": "password", "value": "admin", "temporary": false } ]
+    }
+  ]
+}

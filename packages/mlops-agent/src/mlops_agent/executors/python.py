@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import threading
+from pathlib import Path
 
 from mlops_agent.executors.base import BaseExecutor, RunContext
 from mlops_agent.executors.docker_run import container_dir, run_container
@@ -13,10 +14,17 @@ _SETUP_LOCKS_GUARD = threading.Lock()
 _JOB_PATH = "/venv/bin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 
-def venv_volume_name(python: str, requirements_text: str, client_spec: str) -> str:
-    digest = hashlib.sha256(f"{python}\n{requirements_text}\n{client_spec}".encode()).hexdigest()[
-        :16
-    ]
+def wheels_digest(wheels_dir: Path | None) -> str:
+    if wheels_dir is None or not Path(wheels_dir).is_dir():
+        return ""
+    entries = sorted((p.name, p.stat().st_size) for p in Path(wheels_dir).iterdir() if p.is_file())
+    return hashlib.sha256(repr(entries).encode()).hexdigest()[:12]
+
+
+def venv_volume_name(python: str, requirements_text: str, client_spec: str, extra: str = "") -> str:
+    digest = hashlib.sha256(
+        f"{python}\n{requirements_text}\n{client_spec}\n{extra}".encode()
+    ).hexdigest()[:16]
     return f"mlops-venv-{python}-{digest}"
 
 
@@ -76,7 +84,12 @@ class PythonExecutor(BaseExecutor):
         requirements_path.write_text(text)
 
         image = f"python:{runtime.python}-slim"
-        volume = venv_volume_name(runtime.python, text, ctx.settings.client_pip_spec)
+        volume = venv_volume_name(
+            runtime.python,
+            text,
+            ctx.settings.client_pip_spec,
+            wheels_digest(ctx.settings.wheels_dir),
+        )
         mounts = {
             str(ctx.root): {"bind": "/work", "mode": "rw"},
             volume: {"bind": "/venv", "mode": "rw"},
