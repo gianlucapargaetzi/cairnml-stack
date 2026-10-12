@@ -134,3 +134,60 @@ def test_cancel_kills_the_running_container(tmp_path):
     executor.cancel()
     thread.join(5)
     assert main.killed and result["code"] == 137 and executor.cancelled and main.removed
+
+
+def test_requirements_file_escaping_the_workdir_is_refused(tmp_path):
+    # the schema rejects these; the executor must refuse too if the spec changed after validation
+    ctx, out, err = _ctx(tmp_path / "a")
+    secret = tmp_path / "var" / "lib" / "x"
+    secret.parent.mkdir(parents=True)
+    secret.write_text("SECRET-ESCAPE\n")
+    absolute = tmp_path / "abs-secret"
+    absolute.write_text("SECRET-ABS\n")
+    for path in ["../../var/lib/x", "/etc/passwd", str(absolute)]:
+        ctx.spec.runtime.requirements = []
+        ctx.spec.runtime.requirements_file = path
+        docker = FakeDocker([FakeContainer(0), FakeContainer(0)])
+        assert PythonExecutor(docker).run(ctx) == 1
+        assert docker.containers.runs == []
+        assert not (ctx.root / ".mlops" / "requirements.txt").exists()
+        assert any("outside" in line for line in err)
+    assert not any("SECRET" in line for line in out + err)
+
+
+def test_missing_requirements_file_returns_failure_with_message(tmp_path):
+    ctx, out, err = _ctx(tmp_path)
+    ctx.spec.runtime.requirements = []
+    ctx.spec.runtime.requirements_file = "missing.txt"
+    docker = FakeDocker([])
+    assert PythonExecutor(docker).run(ctx) == 1
+    assert docker.containers.runs == [] and err and "missing.txt" in err[0]
+
+
+def test_job_run_mounts_the_venv_read_only_and_setup_read_write(tmp_path):
+    ctx, *_ = _ctx(tmp_path)
+    docker = FakeDocker([FakeContainer(0), FakeContainer(0)])
+    PythonExecutor(docker).run(ctx)
+    setup, main = docker.containers.runs
+    volume = venv_volume_name("3.11", "numpy==1.26.4", "mlops-client")
+    assert setup["volumes"][volume]["mode"] == "rw"
+    assert main["volumes"][volume] == {"bind": "/venv", "mode": "ro"}
+
+
+def test_cancel_before_registration_kills_the_container(tmp_path):
+    from mlops_agent.executors.docker_run import run_container
+
+    ctx, *_ = _ctx(tmp_path)
+    executor = PythonExecutor(FakeDocker([]))
+    executor.cancel()
+    container = FakeContainer(0)
+    code = run_container(
+        FakeDocker([container]),
+        "img",
+        ["true"],
+        ctx=ctx,
+        volumes={},
+        environment={},
+        executor=executor,
+    )
+    assert code == 137 and container.killed and container.removed

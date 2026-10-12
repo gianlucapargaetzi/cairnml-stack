@@ -63,7 +63,7 @@ def run_container(
         kwargs.update(_limits(ctx))
 
     container = client.containers.run(**kwargs)
-    executor._container = container
+    executor._attach(container)
     threads = [
         threading.Thread(target=_pump, args=(container, True, ctx.stdout), daemon=True),
         threading.Thread(target=_pump, args=(container, False, ctx.stderr), daemon=True),
@@ -79,4 +79,4 @@ def run_container(
         try:
             container.remove(force=True)
         finally:
-            executor._container = None
+            executor._detach()

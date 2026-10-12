@@ -29,6 +29,7 @@ class RunContext:
 class BaseExecutor(ABC):
     def __init__(self) -> None:
         self._cancelled = threading.Event()
+        self._lock = threading.Lock()  # guards _cancelled and _container together
         self._container = None
 
     @property
@@ -36,11 +37,25 @@ class BaseExecutor(ABC):
         return self._cancelled.is_set()
 
     def cancel(self) -> None:
-        self._cancelled.set()
+        with self._lock:
+            self._cancelled.set()
         self._kill()
 
+    def _attach(self, container) -> None:
+        """Register a started container; kill it at once if cancel() already ran."""
+        with self._lock:
+            self._container = container
+            cancelled = self._cancelled.is_set()
+        if cancelled:
+            self._kill()
+
+    def _detach(self) -> None:
+        with self._lock:
+            self._container = None
+
     def _kill(self) -> None:
-        container = self._container
+        with self._lock:
+            container = self._container
         if container is not None:
             try:
                 container.kill()

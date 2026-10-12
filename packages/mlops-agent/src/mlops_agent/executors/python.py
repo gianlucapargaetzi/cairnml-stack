@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import threading
-from collections import defaultdict
 
 from mlops_agent.executors.base import BaseExecutor, RunContext
 from mlops_agent.executors.docker_run import run_container
 
-_SETUP_LOCKS: dict[str, threading.Lock] = defaultdict(threading.Lock)
+_SETUP_LOCKS: dict[str, threading.Lock] = {}
+_SETUP_LOCKS_GUARD = threading.Lock()
 _JOB_PATH = "/venv/bin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 
@@ -20,14 +20,28 @@ def venv_volume_name(python: str, requirements_text: str, client_spec: str) -> s
     return f"mlops-venv-{python}-{digest}"
 
 
+def _setup_lock(volume: str) -> threading.Lock:
+    with _SETUP_LOCKS_GUARD:
+        return _SETUP_LOCKS.setdefault(volume, threading.Lock())
+
+
+def _read_in_workdir(ctx: RunContext, relative: str) -> str:
+    base = ctx.workdir.resolve()
+    target = (base / relative).resolve()  # follows symlinks, so escapes are visible here
+    if not target.is_relative_to(base):
+        raise ValueError(f"requirements file {relative!r} is outside the job workdir")
+    return target.read_text()
+
+
 def _requirements_text(ctx: RunContext) -> str:
     runtime = ctx.spec.runtime
     if runtime.requirements:
         return "\n".join(runtime.requirements)
     if runtime.requirements_file:
-        return (ctx.workdir / runtime.requirements_file).read_text()
-    default = ctx.workdir / "requirements.txt"
-    return default.read_text() if default.exists() else ""
+        return _read_in_workdir(ctx, runtime.requirements_file)
+    if (ctx.workdir / "requirements.txt").exists():
+        return _read_in_workdir(ctx, "requirements.txt")
+    return ""
 
 
 def _container_dir(ctx: RunContext) -> str:
@@ -57,7 +71,11 @@ class PythonExecutor(BaseExecutor):
 
     def run(self, ctx: RunContext) -> int:
         runtime = ctx.spec.runtime
-        text = _requirements_text(ctx)
+        try:
+            text = _requirements_text(ctx)
+        except (OSError, ValueError) as exc:  # missing or escaping file: a failed run, not a crash
+            ctx.stderr(f"cannot read requirements: {exc}")
+            return 1
         requirements_path = ctx.root / ".mlops" / "requirements.txt"
         requirements_path.parent.mkdir(parents=True, exist_ok=True)
         requirements_path.write_text(text)
@@ -72,7 +90,7 @@ class PythonExecutor(BaseExecutor):
         setup_mounts = dict(mounts)
         if ctx.settings.wheels_dir:
             setup_mounts[str(ctx.settings.wheels_dir)] = {"bind": "/wheels", "mode": "ro"}
-        with _SETUP_LOCKS[volume]:  # two jobs must not build the same venv concurrently
+        with _setup_lock(volume):  # two jobs must not build the same venv concurrently
             code = run_container(
                 self._client,
                 image,
@@ -92,12 +110,14 @@ class PythonExecutor(BaseExecutor):
             "VIRTUAL_ENV": "/venv",
             "PYTHONUNBUFFERED": "1",
         }
+        # the cached venv is shared by every job with the same requirements: jobs get it read-only
+        job_mounts = {**mounts, volume: {"bind": "/venv", "mode": "ro"}}
         return run_container(
             self._client,
             image,
             list(runtime.command),
             ctx=ctx,
-            volumes=mounts,
+            volumes=job_mounts,
             environment=environment,
             executor=self,
             working_dir=_container_dir(ctx),

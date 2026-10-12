@@ -287,6 +287,20 @@ class PythonRuntime(BaseModel):
     requirements_file: str | None = None
     command: list[str] = Field(min_length=1)
 
+    @field_validator("requirements")
+    @classmethod
+    def _requirements(cls, value: list[str]) -> list[str]:
+        # an entry starting with "-" would reach pip as an option (e.g. --index-url, -r)
+        for entry in value:
+            if entry.startswith("-") or "\n" in entry or "\r" in entry or "\x00" in entry:
+                raise ValueError("requirements entries must be package specifiers")
+        return value
+
+    @field_validator("requirements_file")
+    @classmethod
+    def _requirements_file(cls, value: str | None) -> str | None:
+        return None if value is None else _safe_relative(value)
+
 
 class ImageRuntime(BaseModel):
     type: Literal["image"] = "image"
