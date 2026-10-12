@@ -20,6 +20,7 @@ from mlops_server.routers import (
     experiments,
     meta,
     projects,
+    repos,
     telemetry,
 )
 from mlops_server.routers import storage as storage_api
@@ -75,6 +76,10 @@ def create_app(
 
         storage = build_storage(settings)
     app.state.storage = storage
+    if github is None:
+        from mlops_server.services.github import build_github
+
+        github = build_github(settings)
     app.state.github = github
     from mlops_common.keys import read_private_key
 
@@ -84,7 +89,7 @@ def create_app(
         read_private_key(settings.signing_key_path), settings.public_url, settings.access_token_ttl
     )
     for module in (
-        meta, enroll, auth, admin, projects, experiments, telemetry, artifacts, storage_api,
+        meta, enroll, auth, admin, projects, experiments, telemetry, artifacts, storage_api, repos,
     ):
         app.include_router(module.router, prefix="/api/v1")
     return app

@@ -18,6 +18,7 @@ from mlops_common.schemas import StsResponse
 
 from mlops_server.app import create_app
 from mlops_server.db import Base
+from mlops_server.services.github import InstallationToken, RepoNotAccessible
 from mlops_server.settings import Settings
 
 
@@ -116,8 +117,10 @@ def stub_storage() -> StubStorage:
 
 
 @pytest.fixture
-def app(settings, idp, stub_storage):
-    application = create_app(settings, oidc=idp.verifier(), storage=stub_storage)
+def app(settings, idp, stub_storage, stub_github):
+    application = create_app(
+        settings, oidc=idp.verifier(), storage=stub_storage, github=stub_github
+    )
     Base.metadata.drop_all(application.state.engine)
     return application
 
@@ -213,3 +216,33 @@ def make_project(enroll_client):
         return slug
 
     return _make
+
+
+class StubGitHub:
+    def __init__(self) -> None:
+        self.commits: set[tuple[str, str]] = set()
+        self.heads: dict[tuple[str, str], str] = {}
+        self.inaccessible: set[str] = set()
+        self.token_calls: list[str] = []
+
+    def _check(self, repo: str) -> None:
+        if repo in self.inaccessible:
+            raise RepoNotAccessible(repo)
+
+    def installation_token(self, repo: str) -> InstallationToken:
+        self._check(repo)
+        self.token_calls.append(repo)
+        return InstallationToken("ghs_stub", datetime(2030, 1, 1, tzinfo=UTC))
+
+    def commit_exists(self, repo: str, sha: str) -> bool:
+        self._check(repo)
+        return (repo, sha) in self.commits
+
+    def head_commit(self, repo: str, ref: str) -> str | None:
+        self._check(repo)
+        return self.heads.get((repo, ref))
+
+
+@pytest.fixture
+def stub_github() -> StubGitHub:
+    return StubGitHub()
