@@ -32,6 +32,7 @@ class Recorder:
 
 def test_init_repo_writes_project_file_and_configures_the_remote(sdk, stub_github, tmp_path):
     work, _ = make_repo(tmp_path)
+    stub_github.add_repo("owner/name")
     stub_github.heads[("owner/name", "HEAD")] = "a" * 40
     run = Recorder()
     result = init_repo(work, "vision/seg", sdk.api, run=run, which=lambda name: "/usr/bin/dvc")
@@ -270,3 +271,19 @@ def test_sync_keeps_the_task_of_an_offline_run(sdk, tmp_path, monkeypatch):
     assert sdk.api.get_experiment(synced[0])["task"] == "training"
     tasks = {t["name"]: t for t in sdk.api.list_tasks("vision/seg")}
     assert tasks["training"]["primary_metric"] == "loss"
+
+
+def test_init_repo_reraises_server_errors_other_than_not_installed(
+    sdk, stub_github, tmp_path, monkeypatch
+):
+    work, _ = make_repo(tmp_path)
+    stub_github.add_repo("owner/name")
+
+    def server_error(*args, **kwargs):
+        request = httpx.Request("POST", "http://x")
+        response = httpx.Response(500, json={"detail": "boom"}, request=request)
+        response.raise_for_status()
+
+    monkeypatch.setattr(sdk.api, "link_repo", server_error)
+    with pytest.raises(httpx.HTTPStatusError):
+        init_repo(work, "vision/seg", sdk.api, run=Recorder(), which=lambda name: "/usr/bin/dvc")

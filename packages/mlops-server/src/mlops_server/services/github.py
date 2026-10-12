@@ -12,7 +12,7 @@ from urllib.parse import quote
 import httpx
 import jwt
 
-_REPO_RE = re.compile(r"^[\w.-]+/[\w.-]+$")
+_REPO_RE = re.compile(r"^[\w-][\w.-]*/[\w-][\w.-]*$")
 _REFRESH_MARGIN = 300
 
 

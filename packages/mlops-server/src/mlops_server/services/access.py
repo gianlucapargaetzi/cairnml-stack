@@ -33,6 +33,21 @@ def ensure_member(session: Session, principal: Principal, slug: str) -> Project:
     return project
 
 
+def repo_visible(session: Session, principal: Principal, repo: str) -> bool:
+    """True when `repo` is linked to a project the caller belongs to (any project for admins)."""
+    if principal.is_admin:
+        return True
+    if principal.kind != "client" or principal.user_id is None:
+        return False
+    stmt = (
+        select(ProjectRepo.repo)
+        .join(ProjectMember, ProjectMember.project_id == ProjectRepo.project_id)
+        .where(ProjectRepo.repo == repo, ProjectMember.user_id == principal.user_id)
+        .limit(1)
+    )
+    return session.scalar(stmt) is not None
+
+
 def ensure_linked(session: Session, project: Project, repo: str) -> ProjectRepo:
     link = session.get(ProjectRepo, (project.id, repo))
     if link is None:

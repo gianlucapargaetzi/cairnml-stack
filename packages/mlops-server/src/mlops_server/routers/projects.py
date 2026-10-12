@@ -172,7 +172,7 @@ def _ref(cache, github, repo: str, ref: str | None) -> str:
 
 
 def _safe_path(path: str) -> str:
-    if not path or path.startswith("/") or ".." in path.split("/"):
+    if not path or path.startswith("/") or any(p in ("", ".", "..") for p in path.split("/")):
         raise HTTPException(422, "path must be a relative repository path")
     return path
 

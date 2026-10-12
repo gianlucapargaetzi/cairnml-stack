@@ -136,3 +136,15 @@ def test_cache_serves_repeated_reads_until_ttl_expires():
     assert cache.get_or_set("k", factory) == 2
     cache.clear()
     assert cache.get_or_set("k", factory) == 3
+
+
+def test_cache_stays_bounded_and_drops_expired_entries():
+    now = [0.0]
+    cache = TtlCache(60, clock=lambda: now[0], max_entries=8)
+    for i in range(1000):
+        cache.get_or_set(("k", i), lambda i=i: i)
+    assert len(cache) == 8
+    assert cache.get_or_set(("k", 999), lambda: "miss") == 999  # the newest entries survive
+    now[0] = 61
+    cache.get_or_set("fresh", lambda: 1)
+    assert len(cache) == 1  # expired entries are purged on write

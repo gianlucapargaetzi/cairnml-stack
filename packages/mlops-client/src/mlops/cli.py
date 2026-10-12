@@ -259,6 +259,8 @@ def repo_init(
             info = init_repo(Path.cwd(), project, api)
         except (ValueError, RuntimeError) as exc:
             _fail(str(exc))
+        except httpx.HTTPStatusError as exc:
+            _fail(server_detail(exc))
     typer.echo(f"project {info['project']}: remote {info['remote_url']} ({info['endpoint']})")
     typer.echo(f"GitHub App: {info['github_app']}")
 

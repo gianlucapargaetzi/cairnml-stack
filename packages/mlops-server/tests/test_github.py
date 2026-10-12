@@ -35,6 +35,11 @@ def app_key():
         ("a/b/c", False),
         ("../x", False),
         ("org/re po", False),
+        ("org/.", False),
+        ("./x", False),
+        (".hidden/x", False),
+        ("org/.hidden", False),
+        ("org/..", False),
         ("org/repo\n", False),
     ],
 )
@@ -104,9 +109,20 @@ def test_commit_exists_and_head(app_key):
     assert gh.head_commit("org/repo", "nope") is None
 
 
-def test_repos_status_endpoint(server, enroll_client, stub_github):
+def _link_for(dev, make_project, stub_github, repo: str) -> None:
+    """Link `repo` to a project `dev` belongs to, so the status route is visible to dev."""
+    make_project("vision/seg", members=["dev"])
+    stub_github.add_repo(repo)
+    linked = dev.http.post(
+        "/api/v1/projects/repos", json={"project": "vision/seg", "repo": repo, "role": "code"}
+    )
+    assert linked.status_code == 200, linked.text
+
+
+def test_repos_status_endpoint(server, enroll_client, stub_github, make_project):
     stub_github.heads[("org/repo", "main")] = "d" * 40
     dev = enroll_client("dev")
+    _link_for(dev, make_project, stub_github, "org/repo")
     ok = dev.http.get("/api/v1/repos/status", params={"repo": "org/repo", "ref": "main"})
     assert ok.json() == {"repo": "org/repo", "ref": "main", "head": "d" * 40}
     bad = dev.http.get("/api/v1/repos/status", params={"repo": "bad", "ref": "main"})
@@ -147,9 +163,12 @@ def test_transport_error_and_non_json_body_raise_github_error(app_key):
 
 
 @respx.mock
-def test_repos_status_maps_transport_error_to_502(server, enroll_client, app, app_key):
+def test_repos_status_maps_transport_error_to_502(
+    server, enroll_client, app, app_key, make_project, stub_github
+):
     _, pem = app_key
     dev = enroll_client("dev")
+    _link_for(dev, make_project, stub_github, "org/repo")
     _mock_install(respx.mock, repo="org/repo")
     respx.get(url__startswith=f"{API}/repos/org/repo/commits/").mock(
         side_effect=httpx.ConnectError("down")
@@ -159,8 +178,11 @@ def test_repos_status_maps_transport_error_to_502(server, enroll_client, app, ap
     assert response.status_code == 502
 
 
-def test_repos_status_503_when_github_not_configured(server, enroll_client, app):
+def test_repos_status_503_when_github_not_configured(
+    server, enroll_client, app, make_project, stub_github
+):
     dev = enroll_client("dev")
+    _link_for(dev, make_project, stub_github, "org/repo")
     app.state.github = None
     response = dev.http.get("/api/v1/repos/status", params={"repo": "org/repo", "ref": "main"})
     assert response.status_code == 503

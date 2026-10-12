@@ -10,6 +10,7 @@ import httpx
 import yaml
 
 from mlops.capture.git import capture_git
+from mlops.dispatch import server_detail
 
 
 def _dvc(run, path: Path, *args: str) -> None:
@@ -51,15 +52,14 @@ def init_repo(path: Path, project: str, api, run=subprocess.run, which=None) -> 
 
     app_state = "unknown"
     if git.repo:
-        try:
-            api.repo_status(git.repo, "HEAD")
-            app_state = "installed"
-        except httpx.HTTPStatusError as exc:
-            app_state = "not installed" if exc.response.status_code == 404 else "unknown"
+        # Linking probes the App on the server, so it also reports whether the App is installed.
         try:
             api.link_repo(project, git.repo, "code")
-        except httpx.HTTPStatusError:
-            pass  # not fatal: the GitHub App may not be installed yet; the summary shows its state
+            app_state = "installed"
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code != 422 or "not installed" not in server_detail(exc):
+                raise
+            app_state = "not installed"
     return {
         "project": project,
         "remote_url": remote_url,

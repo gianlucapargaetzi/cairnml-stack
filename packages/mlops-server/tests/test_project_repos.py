@@ -118,3 +118,41 @@ def test_history_reads_are_cached_and_map_github_errors(server, dev, stub_github
         dev.http.get("/api/v1/projects/repos/commits", params={**params, "ref": "zzz"}).status_code
         == 404
     )
+
+
+def test_repo_status_is_limited_to_linked_repos_and_admins(
+    server, enroll_client, make_project, stub_github
+):
+    dev = enroll_client("dev")
+    root = enroll_client("root", roles=["mlops-admin"])
+    eve = enroll_client("eve")
+    make_project("vision/seg", members=["dev"])
+    for repo in ("org/code", "org/other"):
+        stub_github.add_repo(repo)
+        stub_github.heads[(repo, "main")] = "c" * 40
+    params = {"repo": "org/code", "ref": "main"}
+    status = "/api/v1/repos/status"
+    # installed but not linked: a member gets 404
+    assert dev.http.get(status, params={"repo": "org/other", "ref": "main"}).status_code == 404
+    dev.http.post(
+        "/api/v1/projects/repos", json={"project": "vision/seg", "repo": "org/code", "role": "code"}
+    )
+    linked = dev.http.get(status, params=params)
+    assert linked.status_code == 200 and linked.json()["head"] == "c" * 40
+    # a user outside the project cannot see the linked repo
+    assert eve.http.get(status, params=params).status_code == 404
+    # an admin sees any installed repo
+    assert root.http.get(status, params={"repo": "org/other", "ref": "main"}).status_code == 200
+
+
+def test_history_paths_reject_dot_segments(server, enroll_client, make_project, stub_github):
+    dev = enroll_client("dev")
+    make_project("vision/seg", members=["dev"])
+    stub_github.add_repo("org/code")
+    dev.http.post(
+        "/api/v1/projects/repos", json={"project": "vision/seg", "repo": "org/code", "role": "code"}
+    )
+    base = {"project": "vision/seg", "repo": "org/code", "ref": "main"}
+    for path in ("a/./b", "a/../b", "./a", "a//b"):
+        response = dev.http.get("/api/v1/projects/repos/file", params={**base, "path": path})
+        assert response.status_code == 422, path
