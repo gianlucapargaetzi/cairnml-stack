@@ -91,3 +91,44 @@ def test_stub_directory_mirrors_the_database_by_default(server, enroll_client, s
     stub_directory.remove("sub-carol")
     assert stub_directory.get_user("sub-carol") is None
     assert carol.user_id
+
+
+@respx.mock
+@pytest.mark.parametrize("subject", [".", ".."])
+def test_dot_segment_subjects_are_rejected_before_any_request(subject):
+    token = _token(respx.mock)
+    with pytest.raises(DirectoryError):
+        KeycloakDirectory(ISSUER, "mlops-server", "secret").get_user(subject)
+    assert token.call_count == 0
+    assert len(respx.calls) == 0
+
+
+@respx.mock
+@pytest.mark.parametrize("token_reply, user_reply, roles_reply", [
+    ({"json": {"expires_in": 300}}, None, None),                       # no access_token
+    ({"json": ["not", "a", "dict"]}, None, None),                      # token body not an object
+    ({"content": b"<html>"}, None, None),                              # token body not JSON
+    ({"json": {"access_token": "t", "expires_in": "soon"}}, None, None),  # bad lifetime
+    (None, {"json": ["enabled"]}, None),                               # user body not an object
+    (None, {"json": {"enabled": True}}, {"json": {"name": "mlops-admin"}}),  # roles not a list
+    (None, {"json": {"enabled": True}}, {"json": [{"role": "mlops-admin"}]}),  # item without name
+    (None, {"json": {"enabled": True}}, {"json": ["mlops-admin"]}),    # item not an object
+])
+def test_malformed_replies_raise_directory_error(token_reply, user_reply, roles_reply):
+    respx.post(f"{ISSUER}/protocol/openid-connect/token").respond(
+        200, **(token_reply or {"json": {"access_token": "svc-token", "expires_in": 300}}))
+    respx.get(f"{ADMIN}/users/u-m").respond(200, **(user_reply or {"json": {"enabled": True}}))
+    respx.get(f"{ADMIN}/users/u-m/role-mappings/realm/composite").respond(
+        200, **(roles_reply or {"json": []}))
+    with pytest.raises(DirectoryError):
+        KeycloakDirectory(ISSUER, "mlops-server", "secret").get_user("u-m")
+
+
+@respx.mock
+def test_transport_errors_do_not_chain_the_httpx_request():
+    _token(respx.mock)
+    respx.get(f"{ADMIN}/users/u").mock(side_effect=httpx.ConnectError("down"))
+    with pytest.raises(DirectoryError) as excinfo:
+        KeycloakDirectory(ISSUER, "mlops-server", "secret").get_user("u")
+    assert excinfo.value.__cause__ is None
+    assert excinfo.value.__suppress_context__ is True
