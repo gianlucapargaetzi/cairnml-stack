@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 from mlops_server.ids import new_id
 from mlops_server.models import Agent, Artifact, Experiment, Job, Project
 from mlops_server.routers.experiments import apply_status
-from mlops_server.security.deps import READERS, Principal, get_session, require
+from mlops_server.security.deps import READERS, Principal, get_session, require, require_writer
 from mlops_server.services import access, audit
 from mlops_server.services.github import GitHubError, RepoNotAccessible
 from mlops_server.services.tasks import get_or_create_task
@@ -302,7 +302,7 @@ def get_job(
 def cancel_job(
     job_id: str,
     request: Request,
-    principal: Annotated[Principal, Depends(client_only)],
+    principal: Annotated[Principal, Depends(require_writer("client"))],
     session: Annotated[Session, Depends(get_session)],
 ):
     # Lock the job row before reading its status: claim_next locks the same row, so a
@@ -316,6 +316,7 @@ def cancel_job(
         job.cancel_requested = True
     else:
         raise HTTPException(409, f"job already {job.status}")
-    audit.record(session, principal.id, "job.cancel_requested", request, job_id=job.id)
+    actor = principal.user_id or principal.id  # browser sessions name the person
+    audit.record(session, actor, "job.cancel_requested", request, job_id=job.id)
     session.commit()
     return job_out(job)

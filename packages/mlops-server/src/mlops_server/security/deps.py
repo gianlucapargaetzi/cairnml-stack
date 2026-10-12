@@ -8,8 +8,9 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Annotated
+from urllib.parse import urlparse
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, Header, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -112,6 +113,32 @@ def require(*kinds: str, admin: bool = False) -> Callable[..., Principal]:
             raise HTTPException(403, "this token type is not allowed here")
         if admin and not principal.is_admin:
             raise HTTPException(403, "admin role required")
+        return principal
+
+    return dependency
+
+
+def public_origin(settings) -> str:
+    parsed = urlparse(settings.public_url)
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def require_writer(*kinds: str, admin: bool = False) -> Callable[..., Principal]:
+    """Like `require(*kinds, "web")`, but a browser session must also echo its CSRF token
+    and, when an Origin header is sent, come from the public origin of this server."""
+    base = require(*kinds, "web", admin=admin)
+
+    def dependency(
+        request: Request,
+        principal: Principal = Depends(base),  # noqa: B008 (closure dependency)
+        x_csrf_token: str = Header(default=""),
+    ) -> Principal:
+        if principal.kind == "web":
+            if not principal.csrf or not hmac.compare_digest(principal.csrf, x_csrf_token):
+                raise HTTPException(403, "missing or wrong CSRF token")
+            origin = request.headers.get("origin")
+            if origin and origin.rstrip("/") != public_origin(request.app.state.settings):
+                raise HTTPException(403, "cross-origin request refused")
         return principal
 
     return dependency

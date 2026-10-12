@@ -39,7 +39,6 @@ WRITES = [
     ("post", "/api/v1/experiments/{exp}/logs",
      {"stream": "stdout", "seq": 0, "lines": [{"ts": 1, "text": "x"}]}),
     ("post", "/api/v1/experiments/{exp}/artifacts/presign", {"name": "a"}),
-    ("post", "/api/v1/jobs/{job}/cancel", None),
     ("post", "/api/v1/storage/sts", {"project": "vision/seg"}),
     ("post", "/api/v1/projects", {"slug": "a", "name": "a"}),
     ("post", "/api/v1/admin/agent-tokens", {}),

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from mlops_server.ids import new_id
 from mlops_server.models import Project, Task
-from mlops_server.security.deps import READERS, Principal, get_session, require
+from mlops_server.security.deps import READERS, Principal, get_session, require, require_writer
 from mlops_server.services import access
 
 router = APIRouter()
@@ -81,7 +81,7 @@ def get_task(
 def patch_task(
     task_id: str,
     body: TaskPatch,
-    principal: Annotated[Principal, Depends(require("client"))],
+    principal: Annotated[Principal, Depends(require_writer("client"))],
     session: Annotated[Session, Depends(get_session)],
 ):
     task = load_task(session, principal, task_id)
