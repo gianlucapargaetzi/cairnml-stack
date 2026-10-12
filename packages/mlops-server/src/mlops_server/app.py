@@ -55,7 +55,17 @@ def create_app(
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         Base.metadata.create_all(engine)
+        reaper = None
+        if settings.reaper_interval > 0:
+            from mlops_server.services.reaper import ReaperThread
+
+            reaper = ReaperThread(
+                app.state.session_factory, settings.agent_timeout, settings.reaper_interval
+            )
+            reaper.start()
         yield
+        if reaper is not None:
+            reaper.stop()
         engine.dispose()
 
     app = FastAPI(title="mlops-server", lifespan=lifespan)

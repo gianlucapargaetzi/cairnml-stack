@@ -89,6 +89,7 @@ def settings(tmp_path, pg_url) -> Settings:
         signing_key_path=key_path,
         oidc_issuer=FakeIdp.ISSUER,
         oidc_client_id="mlops-cli",
+        reaper_interval=0,
     )
 
 

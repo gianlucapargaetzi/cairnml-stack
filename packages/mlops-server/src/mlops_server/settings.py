@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     access_token_ttl: int = 3600
     run_token_ttl: int = 86400
     agent_timeout: int = 90
+    reaper_interval: int = 30
 
     oidc_issuer: str
     oidc_client_id: str = "mlops-cli"
