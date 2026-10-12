@@ -167,6 +167,25 @@ class Experiment:
         except (OSError, TypeError, ValueError) as exc:
             log.warning("could not spool artifact %s, dropping it: %s", name, exc)
 
+    def execute_remotely(
+        self, queue: str = "default", resources: dict | None = None, exit_process: bool = True
+    ) -> dict | None:
+        """Re-run this script on an agent. In job mode (already on an agent) it returns None."""
+        from mlops.dispatch import dispatch_experiment
+
+        if self.mode == "job":
+            return None
+        if self.mode == "offline":
+            raise ExperimentError("cannot dispatch while the server is unreachable")
+        self._uplink.flush()
+        job = dispatch_experiment(self._api, self.id, queue=queue, resources=resources)
+        self._patch(notes=f"continued remotely as {job['experiment_id']}")
+        self.close(status="cancelled")
+        print(f"dispatched as job {job['id']} (experiment {job['experiment_id']})")
+        if exit_process:
+            raise SystemExit(0)
+        return job
+
     def close(self, status: str | None = None) -> None:
         global _current
         with self._lock:
