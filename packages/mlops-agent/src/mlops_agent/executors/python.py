@@ -17,8 +17,14 @@ _JOB_PATH = "/venv/bin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 def wheels_digest(wheels_dir: Path | None) -> str:
     if wheels_dir is None or not Path(wheels_dir).is_dir():
         return ""
-    entries = sorted((p.name, p.stat().st_size) for p in Path(wheels_dir).iterdir() if p.is_file())
-    return hashlib.sha256(repr(entries).encode()).hexdigest()[:12]
+    digest = hashlib.sha256()
+    for path in sorted(p for p in Path(wheels_dir).iterdir() if p.is_file()):
+        digest.update(path.name.encode() + b"\0")
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1 << 20), b""):
+                digest.update(chunk)
+        digest.update(b"\0")
+    return digest.hexdigest()[:12]
 
 
 def venv_volume_name(python: str, requirements_text: str, client_spec: str, extra: str = "") -> str:

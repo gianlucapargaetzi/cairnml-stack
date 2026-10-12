@@ -8,7 +8,8 @@ services:
       MLOPS_AGENT_HOME: ${MLOPS_AGENT_HOME:-/var/lib/mlops-agent}
       MLOPS_AGENT_SERVER_URL: ${MLOPS_SERVER_URL}
       MLOPS_AGENT_JOB_SERVER_URL: ${MLOPS_SERVER_URL}
-      MLOPS_AGENT_JOB_NETWORK: mlops
+      # Job containers join only mlops-jobs (shared with the server), never mlops.
+      MLOPS_AGENT_JOB_NETWORK: mlops-jobs
       MLOPS_AGENT_ENROLL_TOKEN: ${MLOPS_AGENT_ENROLL_TOKEN:-}
       MLOPS_AGENT_NAME: ${MLOPS_AGENT_NAME:-local-agent}
       MLOPS_AGENT_WHEELS_DIR: ${MLOPS_AGENT_HOME:-/var/lib/mlops-agent}/wheels
@@ -24,3 +25,7 @@ networks:
   mlops:
     name: mlops
     external: true
+  # Compose-managed. The same definition is in server/compose.yaml, so both files share it.
+  # Job containers reach only the server on this network; Postgres, MinIO and Keycloak are on mlops.
+  mlops-jobs:
+    name: mlops-jobs

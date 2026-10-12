@@ -8,8 +8,9 @@ services:
     volumes:
       - nas-data:/data
     ports:
+      # S3 API on the LAN (agents and clients need it); console on loopback only.
       - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9001:9001"
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 5s

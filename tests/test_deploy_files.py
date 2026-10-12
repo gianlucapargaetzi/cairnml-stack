@@ -1,3 +1,4 @@
+import json
 import re
 from pathlib import Path
 
@@ -59,15 +60,40 @@ def test_public_urls_use_role_hostnames_not_localhost():
             assert re.search(r"://mlops-(server|idp|nas)[:/]", line), line
 
 
-def test_realm_has_device_flow_client_and_admin_role():
-    import json
-
-    realm = json.loads((DEPLOY / "idp" / "realm-mlops.json").read_text())
+def test_realm_has_device_flow_client_and_admin_role_but_no_users():
+    text = (DEPLOY / "idp" / "realm-mlops.json").read_text()
+    realm = json.loads(text)
     client = next(c for c in realm["clients"] if c["clientId"] == "mlops-cli")
     assert (
         client["publicClient"] is True
         and client["attributes"]["oauth2.device.authorization.grant.enabled"] == "true"
     )
     assert any(r["name"] == "mlops-admin" for r in realm["roles"]["realm"])
-    admin = next(u for u in realm["users"] if u["username"] == "admin")
-    assert "mlops-admin" in admin["realmRoles"]
+    # users (and their passwords) are created by bootstrap.sh, never committed
+    assert not realm.get("users")
+    assert "credentials" not in text
+
+
+def test_minio_console_is_bound_to_loopback_only():
+    ports = _compose("nas")["services"]["mlops-nas"]["ports"]
+    assert "127.0.0.1:9001:9001" in ports
+    assert not any(str(p).endswith(":9001") and not str(p).startswith("127.0.0.1:") for p in ports)
+
+
+def test_job_containers_do_not_join_the_shared_network():
+    agent = _compose("agent")
+    assert (
+        agent["services"]["mlops-agent"]["environment"]["MLOPS_AGENT_JOB_NETWORK"] == "mlops-jobs"
+    )
+    assert agent["services"]["mlops-agent"]["networks"] == ["mlops"]
+    assert agent["networks"]["mlops-jobs"] == {"name": "mlops-jobs"}
+    server = _compose("server")
+    assert "mlops-jobs" in server["services"]["mlops-server"]["networks"]
+    assert server["networks"]["mlops-jobs"] == {"name": "mlops-jobs"}
+    # Postgres, MinIO and Keycloak never join the job network
+    for role, name in (("server", "mlops-postgres"), ("nas", "mlops-nas"), ("idp", "mlops-idp")):
+        assert "mlops-jobs" not in _compose(role)["services"][name]["networks"], name
+
+
+def test_nas_init_does_not_swallow_failures():
+    assert "|| true" not in (DEPLOY / "nas" / "init.sh").read_text()

@@ -50,10 +50,44 @@ if [ ! -f secrets/github-app.pem ]; then
 fi
 
 docker compose -f compose.yaml up -d --build mlops-idp mlops-nas mlops-nas-init mlops-postgres mlops-server
+
+# The realm ships without users. Create the realm admin once, with a generated password that is
+# printed here and never written to a tracked file. Runs inside the idp container with kcadm.
+KC_USER_SETUP='
+set -e
+K=/opt/keycloak/bin/kcadm.sh
+ok=0
+for _ in $(seq 1 90); do
+  if $K config credentials --server http://localhost:8080 --realm master \
+       --user "$KC_MASTER_USER" --password "$KC_MASTER_PW" >/dev/null 2>&1; then ok=1; break; fi
+  sleep 2
+done
+[ "$ok" = 1 ] || { echo "keycloak did not become ready" >&2; exit 1; }
+if $K get users -r mlops -q username=admin --fields username | grep -q "\"username\""; then
+  echo exists; exit 0
+fi
+$K create users -r mlops -s username=admin -s enabled=true -s emailVerified=true \
+  -s email=admin@example.test -s firstName=Admin -s lastName=User >/dev/null
+$K add-roles -r mlops --uusername admin --rolename mlops-admin
+$K set-password -r mlops --username admin --new-password "$ADMIN_PW"
+echo created
+'
+admin_pw=$(openssl rand -hex 12)
+admin_state=$(docker compose -f compose.yaml exec -T \
+  -e KC_MASTER_USER="$KC_ADMIN" -e KC_MASTER_PW="$KC_ADMIN_PASSWORD" -e ADMIN_PW="$admin_pw" \
+  mlops-idp sh -c "$KC_USER_SETUP" | tail -n 1)
+if [ "$admin_state" = created ]; then
+  echo "Keycloak realm user 'admin' (role mlops-admin) created."
+  echo "Its password, shown once and not stored by this script:"
+  echo "  $admin_pw"
+else
+  echo "Keycloak realm user 'admin' already exists; password unchanged."
+fi
+
 echo "waiting for the server..."
 for _ in $(seq 1 60); do
   curl -fsS "${MLOPS_SERVER_URL}/api/v1/healthz" >/dev/null 2>&1 && { echo "server is up"; break; }
   sleep 2
 done
-echo "next: enroll an admin (docs/runbook.md), create a project, create an agent token, then:"
+echo "next: sign in as admin (device login), create a project, create an agent token, then:"
 echo "  docker compose -f compose.yaml up -d mlops-agent   (from deploy/)"

@@ -41,9 +41,13 @@ services:
       - "8000:8000"
     networks:
       - mlops
+      # Job containers reach the server here; they are not on mlops.
+      - mlops-jobs
 volumes:
   pgdata:
 networks:
   mlops:
     name: mlops
     external: true
+  mlops-jobs:
+    name: mlops-jobs
