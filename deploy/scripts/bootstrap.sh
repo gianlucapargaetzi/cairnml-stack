@@ -26,7 +26,7 @@ mkdir -p secrets
 
 if [ ! -f .env ]; then
   cp .env.example .env
-  for name in KC_ADMIN_PASSWORD MINIO_ROOT_PASSWORD MLOPS_S3_SECRET_KEY POSTGRES_PASSWORD; do
+  for name in KC_ADMIN_PASSWORD MINIO_ROOT_PASSWORD MLOPS_S3_SECRET_KEY POSTGRES_PASSWORD IDP_SYNC_SECRET; do
     sed -i "s|^${name}=.*|${name}=$(openssl rand -hex 16)|" .env
   done
   agent_home="$HOME/.local/share/mlops-agent"

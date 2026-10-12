@@ -33,6 +33,8 @@ services:
       MLOPS_S3_ENDPOINT: ${MLOPS_NAS_URL}
       MLOPS_S3_ACCESS_KEY: ${MLOPS_S3_ACCESS_KEY}
       MLOPS_S3_SECRET_KEY: ${MLOPS_S3_SECRET_KEY}
+      MLOPS_IDP_SYNC_CLIENT_SECRET: ${IDP_SYNC_SECRET}
+      MLOPS_IDP_SYNC_INTERVAL: ${IDP_SYNC_INTERVAL:-60}
     volumes:
       # The whole secrets directory is mounted read-only: github-app.pem may not exist yet, and
       # the server only reads it when GITHUB_APP_ID is set.

@@ -8,6 +8,7 @@ services:
       KC_HOSTNAME: http://mlops-idp:8080
       KC_HOSTNAME_STRICT: "false"
       KC_HTTP_ENABLED: "true"
+      MLOPS_IDP_SYNC_SECRET: ${IDP_SYNC_SECRET:?set IDP_SYNC_SECRET in deploy/.env}
     volumes:
       - ./realm-mlops.json:/opt/keycloak/data/import/realm-mlops.json:ro
       - idp-data:/opt/keycloak/data/h2

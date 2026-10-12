@@ -15,6 +15,45 @@
       "serviceAccountsEnabled": false,
       "fullScopeAllowed": true,
       "attributes": { "oauth2.device.authorization.grant.enabled": "true" }
+    },
+    {
+      "clientId": "mlops-web",
+      "name": "mlops web dashboard",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": true,
+      "redirectUris": ["http://mlops-server:8000/ui/auth/callback"],
+      "webOrigins": ["http://mlops-server:8000"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://mlops-server:8000/ui/*"
+      }
+    },
+    {
+      "clientId": "mlops-server",
+      "name": "mlops server (user directory sync, read-only)",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "${MLOPS_IDP_SYNC_SECRET}",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true
+    }
+  ],
+  "users": [
+    {
+      "username": "carol", "enabled": true, "emailVerified": true,
+      "email": "carol@example.test", "firstName": "Carol", "lastName": "Lifecycle"
+    },
+    {
+      "username": "service-account-mlops-server", "enabled": true,
+      "serviceAccountClientId": "mlops-server",
+      "clientRoles": { "realm-management": ["view-users", "query-users"] }
     }
   ]
 }

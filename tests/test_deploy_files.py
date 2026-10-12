@@ -69,8 +69,8 @@ def test_realm_has_device_flow_client_and_admin_role_but_no_users():
         and client["attributes"]["oauth2.device.authorization.grant.enabled"] == "true"
     )
     assert any(r["name"] == "mlops-admin" for r in realm["roles"]["realm"])
-    # users (and their passwords) are created by bootstrap.sh, never committed
-    assert not realm.get("users")
+    # users may be listed, but no passwords or credentials are ever committed:
+    # the admin is created by bootstrap.sh, other passwords are set by the operator
     assert "credentials" not in text
 
 
@@ -97,3 +97,27 @@ def test_job_containers_do_not_join_the_shared_network():
 
 def test_nas_init_does_not_swallow_failures():
     assert "|| true" not in (DEPLOY / "nas" / "init.sh").read_text()
+
+
+def test_realm_has_the_web_client_and_a_read_only_service_account():
+    realm = json.loads((DEPLOY / "idp" / "realm-mlops.json").read_text())
+    clients = {c["clientId"]: c for c in realm["clients"]}
+    web = clients["mlops-web"]
+    assert web["publicClient"] is True and web["standardFlowEnabled"] is True
+    assert web["directAccessGrantsEnabled"] is False
+    assert web["attributes"]["pkce.code.challenge.method"] == "S256"
+    assert web["redirectUris"] == ["http://mlops-server:8000/ui/auth/callback"]
+    sync = clients["mlops-server"]
+    assert sync["publicClient"] is False and sync["serviceAccountsEnabled"] is True
+    assert sync["standardFlowEnabled"] is False and sync["secret"] == "${MLOPS_IDP_SYNC_SECRET}"
+    account = next(u for u in realm["users"] if u.get("serviceAccountClientId") == "mlops-server")
+    assert sorted(account["clientRoles"]["realm-management"]) == ["query-users", "view-users"]
+    assert any(u["username"] == "carol" for u in realm["users"])
+
+
+def test_idp_sync_settings_reach_the_server_and_the_realm_import():
+    server_env = _compose("server")["services"]["mlops-server"]["environment"]
+    assert server_env["MLOPS_IDP_SYNC_CLIENT_SECRET"]
+    assert "MLOPS_IDP_SYNC_SECRET" in _compose("idp")["services"]["mlops-idp"]["environment"]
+    env = (DEPLOY / ".env.example").read_text()
+    assert "IDP_SYNC_SECRET=" in env and "IDP_SYNC_INTERVAL=" in env
