@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     run_token_ttl: int = 86400
     agent_timeout: int = 90
     reaper_interval: int = 30
+    auto_migrate: bool = True
 
     oidc_issuer: str
     oidc_client_id: str = "mlops-cli"

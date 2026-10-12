@@ -54,7 +54,12 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
-        Base.metadata.create_all(engine)
+        if settings.auto_migrate:
+            from mlops_server.migrate import upgrade
+
+            upgrade(settings.database_url)
+        else:
+            Base.metadata.create_all(engine)
         reaper = None
         if settings.reaper_interval > 0:
             from mlops_server.services.reaper import ReaperThread
