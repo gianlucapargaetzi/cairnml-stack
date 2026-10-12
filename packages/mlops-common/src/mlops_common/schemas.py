@@ -290,9 +290,15 @@ class PythonRuntime(BaseModel):
     @field_validator("requirements")
     @classmethod
     def _requirements(cls, value: list[str]) -> list[str]:
-        # an entry starting with "-" would reach pip as an option (e.g. --index-url, -r)
+        # pip strips each line and splits on Unicode line separators before parsing options,
+        # so an entry must be exactly one stripped line and no token may look like a pip option
         for entry in value:
-            if entry.startswith("-") or "\n" in entry or "\r" in entry or "\x00" in entry:
+            if (
+                entry != entry.strip()
+                or len(entry.splitlines()) != 1
+                or "\x00" in entry
+                or any(token.startswith("-") for token in entry.split())
+            ):
                 raise ValueError("requirements entries must be package specifiers")
         return value
 

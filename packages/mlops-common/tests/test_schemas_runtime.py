@@ -16,7 +16,20 @@ def test_safe_requirements_file_is_accepted():
     assert runtime.requirements_file == "reqs/dev.txt"
 
 
-@pytest.mark.parametrize("entry", ["-r /etc/passwd", "--index-url http://x", "-e .", "numpy\nrich"])
+@pytest.mark.parametrize(
+    "entry",
+    [
+        "-r /etc/passwd",
+        "--index-url http://x",
+        "-e .",
+        "numpy\nrich",
+        " -e .",
+        "numpy\x0b-e .",
+        "numpy -r x",
+        "numpy \u2028-e .",
+        "numpy\x1c--index-url x",
+    ],
+)
 def test_requirements_entries_cannot_be_pip_options_or_multiline(entry):
     with pytest.raises(ValidationError):
         PythonRuntime(requirements=[entry], command=["python", "x.py"])
@@ -25,3 +38,11 @@ def test_requirements_entries_cannot_be_pip_options_or_multiline(entry):
 def test_plain_requirement_specifiers_are_accepted():
     runtime = PythonRuntime(requirements=["numpy==1.26.4", "torch>=2"], command=["python", "x.py"])
     assert runtime.requirements == ["numpy==1.26.4", "torch>=2"]
+
+
+def test_requirements_entries_allow_specifier_spaces():
+    runtime = PythonRuntime(
+        requirements=["numpy >= 1.0", "pkg[a, b]", "x ; python_version < '3.12'"],
+        command=["python", "x.py"],
+    )
+    assert len(runtime.requirements) == 3
