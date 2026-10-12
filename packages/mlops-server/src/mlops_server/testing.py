@@ -240,6 +240,7 @@ class StubGitHub:
         self.heads: dict[tuple[str, str], str] = {}
         self.inaccessible: set[str] = set()
         self.token_calls: list[str] = []
+        self.calls: list[tuple[str, str]] = []  # (method, repo) for every read
         self._repos: dict[str, dict] = {}
 
     def _check(self, repo: str) -> None:
@@ -286,13 +287,16 @@ class StubGitHub:
         return self.heads.get((repo, ref))
 
     def get_default_branch(self, repo: str) -> str:
+        self.calls.append(("default_branch", repo))
         return self._repo(repo)["default"]
 
     def list_branches(self, repo: str, limit: int = 20) -> list[BranchInfo]:
+        self.calls.append(("branches", repo))
         branches = list(self._repo(repo)["branches"].items())[:limit]
         return [BranchInfo(name, sha) for name, sha in branches]
 
     def list_commits(self, repo: str, ref: str, limit: int = 50) -> list[CommitInfo]:
+        self.calls.append(("commits", repo))
         data = self._repo(repo)
         queue, seen, out = [data["branches"].get(ref, ref)], set(), []
         while queue and len(out) < limit:

@@ -11,10 +11,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from mlops_server.ids import new_id
-from mlops_server.models import Project, ProjectMember, ProjectRepo, User
+from mlops_server.models import Experiment, Project, ProjectMember, ProjectRepo, Task, User
 from mlops_server.security.deps import READERS, Principal, get_session, require
 from mlops_server.services import access, audit
 from mlops_server.services.github import GitHubError, RepoNotAccessible, valid_repo
+from mlops_server.services.repo_graph import build_graph
+from mlops_server.services.tasks import DEFAULT_TASK
 
 router = APIRouter()
 
@@ -257,3 +259,55 @@ def repo_file_history(
         lambda: github.list_path_commits(repo, path, ref),
     )
     return [dataclasses.asdict(c) for c in commits]
+
+
+@router.get("/projects/graph")
+def repo_graph(
+    request: Request,
+    project: str,
+    repo: str,
+    principal: Annotated[Principal, Depends(require(*READERS))],
+    session: Annotated[Session, Depends(get_session)],
+    limit: Annotated[int, Query(ge=10, le=200)] = 60,
+    refresh: bool = False,
+) -> dict:
+    proj = access.ensure_member(session, principal, project)
+    access.ensure_linked(session, proj, repo)
+    github = request.app.state.github
+    if github is None:
+        raise HTTPException(503, "GitHub is not configured")
+    cache = request.app.state.cache
+    if refresh:
+        cache.clear()
+    try:
+        graph = cache.get_or_set(("graph", repo, limit), lambda: build_graph(github, repo, limit))
+    except RepoNotAccessible:
+        raise HTTPException(404, "GitHub App is not installed on this repository") from None
+    except GitHubError:
+        raise HTTPException(502, "GitHub request failed") from None
+    # Experiment annotations depend on the project, not the cache key, so they are read per request.
+    shown = {c["sha"] for c in graph["commits"]}
+    runs: dict[str, list[dict]] = {}
+    query = (
+        select(Experiment, Task.name)
+        .outerjoin(Task, Task.id == Experiment.task_id)
+        .where(Experiment.project_id == proj.id)
+        .order_by(Experiment.created_at.desc(), Experiment.id.desc())
+        .limit(2000)
+    )
+    for exp, task_name in session.execute(query):
+        git = exp.git or {}
+        commit = git.get("commit")
+        if git.get("repo") != repo or commit not in shown:
+            continue
+        bucket = runs.setdefault(commit, [])
+        if len(bucket) < 20:
+            bucket.append(
+                {
+                    "id": exp.id,
+                    "name": exp.name,
+                    "status": exp.status,
+                    "task": task_name or DEFAULT_TASK,
+                }
+            )
+    return {**graph, "experiments": runs}
