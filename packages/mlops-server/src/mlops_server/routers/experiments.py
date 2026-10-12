@@ -11,7 +11,7 @@ from mlops_common.schemas import (
     ExperimentPatch,
 )
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from mlops_server.ids import new_id
 from mlops_server.models import Experiment, Project, ProjectMember, User
@@ -38,8 +38,13 @@ def experiment_out(session: Session, exp: Experiment) -> ExperimentOut:
 
 
 def apply_status(exp: Experiment, status: str) -> None:
-    """Shared by the PATCH endpoint and the job lifecycle (Task 18)."""
-    if exp.status in TERMINAL_STATUSES and status != exp.status:
+    """Shared by the PATCH endpoint and the job lifecycle (Task 18).
+
+    Locks the row and re-reads it, so concurrent status changes serialise. The caller
+    must commit; the lock is held until then.
+    """
+    object_session(exp).refresh(exp, with_for_update=True)
+    if exp.status in TERMINAL_STATUSES:
         raise HTTPException(409, f"experiment already {exp.status}")
     now = datetime.now(UTC)
     if status == "running" and exp.started_at is None:
