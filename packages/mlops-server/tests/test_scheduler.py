@@ -88,3 +88,19 @@ def test_heartbeat_updates_last_seen_and_requests_cancellation(
     assert set(body["cancel_job_ids"]) == {job["id"], "job_unknown"}
     with app.state.session_factory() as s:
         assert s.get(Agent, agent.agent_id).last_seen is not None
+
+
+def test_jobs_beyond_the_first_page_are_still_offered(server, make_agent, dev, new_job):
+    small = make_agent(cpu=4)
+    for _ in range(60):
+        new_job(dev.http, resources={"cpu": 8})  # never fit this agent
+    fitting = new_job(dev.http, resources={"cpu": 1})  # queued behind 60 blockers
+    assert _poll(small).json()["job_id"] == fitting["id"]
+
+
+def test_first_fitting_job_in_fifo_order_is_chosen(server, make_agent, dev, new_job):
+    agent = make_agent(cpu=8)
+    first = new_job(dev.http, resources={"cpu": 2})
+    second = new_job(dev.http, resources={"cpu": 2})
+    assert _poll(agent).json()["job_id"] == first["id"]
+    assert _poll(agent).json()["job_id"] == second["id"]
