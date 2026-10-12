@@ -4,9 +4,9 @@ Environment:
   MLOPS_E2E=1                   enable the suite (without it every e2e test skips)
   MLOPS_E2E_SERVER              server URL (default http://mlops-server:8000)
   MLOPS_E2E_ISSUER              Keycloak realm URL (default http://mlops-idp:8080/realms/mlops)
-  MLOPS_E2E_PASSWORD_<USER>     password of the realm user <USER> (ADMIN, DEV, EVE). The brief's
-                                plan used the username as password; no password is stored in the
-                                repository. A test whose user has no password here is skipped.
+  MLOPS_E2E_PASSWORD_<USER>     password of the realm user <USER> (ADMIN, DEV, EVE, CAROL).
+                                No password is stored in the repository. A test whose user has
+                                no password here is skipped.
   MLOPS_E2E_GITHUB_REPO         owner/name; with MLOPS_E2E_GITHUB_REPO_URL it enables
                                 test_reproduce.py (see docs/e2e-test-repo.md)
 
@@ -264,3 +264,48 @@ def agent_ready(admin, stack):
         )
     _wait_for(heartbeat_recent, timeout=180, message="an enrolled agent with a recent heartbeat")
     return True
+
+
+class KeycloakAdmin:
+    """Enables or disables realm users in Keycloak, the way an operator would in the IdP."""
+
+    def __init__(self, headers: dict) -> None:
+        self.headers = headers
+
+    def _user_id(self, username: str) -> str:
+        users = httpx.get(
+            f"{KEYCLOAK}/admin/realms/mlops/users",
+            params={"username": username, "exact": "true"},
+            headers=self.headers,
+        ).json()
+        return users[0]["id"]
+
+    def set_enabled(self, username: str, enabled: bool) -> None:
+        user_id = self._user_id(username)
+        body = httpx.get(
+            f"{KEYCLOAK}/admin/realms/mlops/users/{user_id}", headers=self.headers
+        ).json()
+        body["enabled"] = enabled
+        httpx.put(
+            f"{KEYCLOAK}/admin/realms/mlops/users/{user_id}", json=body, headers=self.headers
+        ).raise_for_status()
+
+
+@pytest.fixture(scope="session")
+def keycloak_admin(stack):
+    token = httpx.post(
+        f"{KEYCLOAK}/realms/master/protocol/openid-connect/token",
+        data={
+            "grant_type": "password",
+            "client_id": "admin-cli",
+            "username": stack.get("KC_ADMIN", "kcadmin"),
+            "password": stack["KC_ADMIN_PASSWORD"],
+        },
+    ).json()["access_token"]
+    return KeycloakAdmin({"Authorization": f"Bearer {token}"})
+
+
+@pytest.fixture(scope="session")
+def password_for():
+    """Password lookup for browser logins (MLOPS_E2E_PASSWORD_<USER>); no literal in the repo."""
+    return user_password
