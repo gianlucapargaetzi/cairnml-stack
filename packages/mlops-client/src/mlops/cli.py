@@ -13,14 +13,21 @@ from mlops_common.schemas import TERMINAL_STATUSES
 
 from mlops import runtime
 from mlops.config import NotEnrolled
+from mlops.data import dvc_command
 from mlops.dispatch import DispatchError, dispatch_experiment, server_detail
 from mlops.enroll import enroll as do_enroll
 from mlops.enroll import whoami as do_whoami
 from mlops.idp import LoginFailed
+from mlops.repo import find_project, init_repo
+from mlops.sync import sync_all
 
 app = typer.Typer(help="mlops client", no_args_is_help=True)
 job_app = typer.Typer(help="inspect and cancel jobs", no_args_is_help=True)
+repo_app = typer.Typer(help="project repository setup", no_args_is_help=True)
+data_app = typer.Typer(help="DVC data helpers using temporary credentials", no_args_is_help=True)
 app.add_typer(job_app, name="job")
+app.add_typer(repo_app, name="repo")
+app.add_typer(data_app, name="data")
 
 
 def _fail(message: str) -> None:
@@ -177,3 +184,55 @@ def logs(
             if api.get_experiment(experiment_id)["status"] in TERMINAL_STATUSES:
                 return
             time.sleep(2)
+
+
+@repo_app.command("init")
+def repo_init(
+    project: str = typer.Option(..., help="Project slug, e.g. vision/seg"),
+) -> None:
+    """Write .mlops/project.yaml and configure the DVC remote for this repository."""
+    api = _api()
+    with _remote(api):
+        try:
+            info = init_repo(Path.cwd(), project, api)
+        except (ValueError, RuntimeError) as exc:
+            _fail(str(exc))
+    typer.echo(f"project {info['project']}: remote {info['remote_url']} ({info['endpoint']})")
+    typer.echo(f"GitHub App: {info['github_app']}")
+
+
+def _data(action: str, targets: list[str]) -> None:
+    api = _api()
+    with _remote(api):
+        try:
+            project = find_project(Path.cwd())
+            dvc_command(api, project, action, targets, Path.cwd())
+        except (ValueError, RuntimeError) as exc:
+            _fail(str(exc))
+    typer.echo(f"dvc {action} done")
+
+
+@data_app.command("pull")
+def data_pull(targets: list[str] = typer.Argument(None)) -> None:  # noqa: B008
+    """Pull DVC data with temporary storage credentials."""
+    _data("pull", targets or [])
+
+
+@data_app.command("push")
+def data_push(targets: list[str] = typer.Argument(None)) -> None:  # noqa: B008
+    """Push DVC data with temporary storage credentials."""
+    _data("push", targets or [])
+
+
+@app.command()
+def sync() -> None:
+    """Upload runs that were recorded while the server was unreachable."""
+    api = _api()
+    failed: list[str] = []
+    with _remote(api):
+        synced = sync_all(api, failed=failed)
+    for failure in failed:
+        typer.echo(f"error: {failure}", err=True)
+    typer.echo(f"synced {len(synced)} experiment(s)")
+    if failed:
+        _fail(f"{len(failed)} run(s) not synced; their spool is kept, run `mlops sync` again")

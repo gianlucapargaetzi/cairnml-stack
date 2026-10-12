@@ -31,11 +31,12 @@ def _send_event(api, experiment_id: str, kind: str, payload: dict) -> None:
         raise ValueError(f"unknown event kind {kind!r}")
 
 
-def replay(spool: Spool, api, experiment_id: str) -> int:
+def replay(spool: Spool, api, experiment_id: str, keep_rejected: bool = False) -> int:
     """Send spooled events in order. Returns the number the server accepted.
 
     Stops at the first transient failure and keeps the unsent tail. Artifact events
-    are kept for `mlops sync`, in their original position.
+    are kept for `mlops sync`, in their original position. A server rejection drops the
+    event, unless keep_rejected is set (sync keeps it so the failure stays visible).
     """
     pending = spool.events()
     sent = 0
@@ -50,6 +51,10 @@ def replay(spool: Spool, api, experiment_id: str) -> int:
             if _is_transient(exc):
                 spool.rewrite(kept + pending[index:])
                 return sent
+            if keep_rejected:
+                log.warning("server rejected a %s event: %s", event["kind"], exc)
+                kept.append(event)
+                continue
             log.warning("dropping %s event that the server rejected: %s", event["kind"], exc)
             continue
         sent += 1
