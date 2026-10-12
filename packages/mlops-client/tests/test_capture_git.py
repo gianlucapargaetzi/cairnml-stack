@@ -88,3 +88,57 @@ def test_remote_credentials_are_not_captured(tmp_path):
     assert state.remote_url == "https://github.com/owner/name.git"
     assert state.repo == "owner/name"
     assert "s3cret" not in repr(state)
+
+
+@pytest.mark.parametrize(
+    "remote",
+    [
+        "HTTPS://user:pw@github.com/owner/name.git",
+        "https://user:p/w@github.com/owner/name.git",
+        "https://user:p@ss@github.com/owner/name.git",
+    ],
+)
+def test_all_url_forms_lose_credentials(tmp_path, remote):
+    work, _ = make_repo(tmp_path)
+    git("remote", "set-url", "origin", remote, cwd=work)
+    state = capture_git(work)
+    assert state.remote_url == "HTTPS://github.com/owner/name.git".replace(
+        "HTTPS", remote.split("://")[0]
+    )
+    assert state.repo == "owner/name"
+    assert "pw" not in repr(state) and "p/w" not in repr(state) and "ss" not in repr(state)
+
+
+def test_parse_repo_slug_never_returns_a_password_fragment():
+    assert parse_repo_slug("https://user:p/w@host/o/n") == "o/n"
+    assert parse_repo_slug("https://user:p/w@host/x") is None
+    assert parse_repo_slug("https://user:p/w@host") is None
+
+
+def test_patch_is_plain_text_when_git_colour_is_forced(tmp_path):
+    work, _ = make_repo(tmp_path)
+    git("config", "color.ui", "always", cwd=work)
+    (work / "train.py").write_text("print(2)\n")
+    patch = build_patch(work)
+    assert b"\x1b[" not in patch
+    fresh = tmp_path / "fresh"
+    git("clone", "-q", str(tmp_path / "origin" / "owner" / "name.git"), str(fresh), cwd=tmp_path)
+    subprocess.run(["git", "apply", "-"], cwd=fresh, input=patch, check=True)
+    assert (fresh / "train.py").read_text() == "print(2)\n"
+
+
+def test_is_pushed_rejects_option_like_and_non_hex_values(tmp_path, monkeypatch):
+    work, _ = make_repo(tmp_path)
+    import mlops.capture.git as module
+
+    def fail(*args, **kwargs):
+        raise AssertionError("git must not run for an invalid commit")
+
+    monkeypatch.setattr(module, "_out", fail)
+    for value in ["-r", "--all", "HEAD", "abc", "A" * 40, "g" * 40, ""]:
+        assert is_pushed(work, value) is False
+
+
+def test_capture_git_on_a_file_path_returns_none(tmp_path):
+    work, _ = make_repo(tmp_path, {"src/a.py": "x = 1\n"})
+    assert capture_git(work / "src" / "a.py") is None
