@@ -198,3 +198,14 @@ def test_search_reports_the_step_and_index_ranges_the_sliders_read(lab):
     used_steps = sorted({item["step"] for item in items})
     assert ranges["record_range_used"] == [used_steps[0], used_steps[-1] + 1]
     assert ranges["index_range_used"] == [0, 1]
+
+
+def test_run_info_lists_the_sequences_of_each_kind(lab):
+    """The run detail page builds its menus from these lists: one entry per name and context."""
+    _upload(lab["dev"], lab["run"], "pred", step=0)
+    _upload(lab["dev"], lab["run"], "pred", step=0, context={"subset": "val"})
+    info = lab["dev"].http.get(f"/api/v1/explorer/runs/{lab['run']}/info").json()
+    assert {"name": "pred", "context": {}} in info["traces"]["images"]
+    assert {"name": "pred", "context": {"subset": "val"}} in info["traces"]["images"]
+    assert info["traces"]["texts"] == []
+    assert "metric" in info["traces"]

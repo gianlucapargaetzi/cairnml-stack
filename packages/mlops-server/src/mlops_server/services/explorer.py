@@ -253,16 +253,30 @@ def _item_out(item: SequenceItem, blob_url) -> dict[str, Any]:
 
 
 def run_info(session: Session, run: Run) -> dict[str, Any]:
-    """The props and params of one run, and the list of its metric series (without points)."""
+    """The props and params of one run, the list of its metric series (without points), and the
+    sequences of each kind (name and context, without items)."""
     series = session.execute(
         select(MetricSeries.name, MetricSeries.context)
         .where(MetricSeries.run_id == run.id)
         .order_by(MetricSeries.name, MetricSeries.id)
     ).all()
+    traces: dict[str, list[dict[str, Any]]] = {
+        "metric": [{"name": name, "context": context} for name, context in series],
+    }
+    sequences = session.execute(
+        select(Sequence.kind, Sequence.name, Sequence.context)
+        .where(Sequence.run_id == run.id)
+        .order_by(Sequence.name, Sequence.id)
+    ).all()
+    for plural, singular in SEQUENCE_KINDS.items():
+        traces[plural] = [
+            {"name": name, "context": context} for kind, name, context in sequences
+            if kind == singular
+        ]
     return {
         "props": _props(session, [run])[run.id],
         "params": run.params,
-        "traces": {"metric": [{"name": name, "context": context} for name, context in series]},
+        "traces": traces,
         "artifacts": [],
     }
 
