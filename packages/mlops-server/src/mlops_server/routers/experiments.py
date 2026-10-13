@@ -93,6 +93,7 @@ def list_experiments(
     principal: Annotated[Principal, Depends(require(*READERS))],
     session: Annotated[Session, Depends(get_session)],
     project: str | None = None,
+    task: str | None = None,
     status: str | None = None,
     q: str | None = None,
     sort: str = Query("created_at", pattern="^(created_at|name|status)$"),
@@ -104,6 +105,8 @@ def list_experiments(
     if project:
         ids = [access.ensure_member(session, principal, project).id]
     query = select(Experiment).where(Experiment.project_id.in_(ids))
+    if task:
+        query = query.join(Task, Task.id == Experiment.task_id).where(Task.name == task)
     if status:
         query = query.where(Experiment.status == status)
     if q:
