@@ -31,6 +31,9 @@ ACCEPTED = [
     "any(t.name == 'fast' for t in run.tags) and run.name == 'x'",
     "metric.name == 'loss' and metric.context.subset == 'val'",
     "metric.name in ['loss', 'acc']",
+    "images.name == 'pred' and images.context.subset == 'val'",
+    "audios.name.startswith('clip') and run.name == 'x'",
+    "texts.name in ['log', 'notes']",
     "",
 ]
 
@@ -41,7 +44,6 @@ REFUSED = {
     "lambda: 1": "not allowed",
     "run.name == 'a' if True else 'b'": "not allowed",
     "metric.last > 0.5": "not supported yet",
-    "images.name == 'x'": "not supported yet",
     "run.tags == 'x'": "inside any",
     "any(t.name in 'x' for t in run.tags)": "list of strings",
     "1 < run.hparams.lr < 3": "chained",
@@ -64,7 +66,9 @@ REFUSED = {
 @pytest.mark.parametrize("text", ACCEPTED)
 def test_valid_filters_compile(text):
     compiled = compile_filter(text)
-    assert text == "" or compiled.run is not None or compiled.metric is not None
+    assert text == "" or any(
+        part is not None for part in (compiled.run, compiled.metric)
+    ) or bool(compiled.sequences)
 
 
 @pytest.mark.parametrize("text", list(REFUSED))
@@ -88,6 +92,12 @@ def test_startswith_is_escaped_for_like():
     compiled = compile_filter("run.name.startswith('50%_')")
     sql = str(select(Run.id).where(compiled.run).compile(dialect=postgresql.dialect()))
     assert "ESCAPE" in sql
+
+
+def test_sequence_clauses_are_kept_apart_by_kind():
+    compiled = compile_filter("images.name == 'pred' and audios.name == 'clip' and run.name == 'x'")
+    assert set(compiled.sequences) == {"image", "audio"}
+    assert compiled.run is not None and compiled.metric is None
 
 
 def test_run_and_metric_clauses_split_under_and():

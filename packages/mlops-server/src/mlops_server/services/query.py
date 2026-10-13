@@ -14,20 +14,24 @@ Run and metric clauses cannot be joined by `or` or `not`, because they filter di
 from __future__ import annotations
 
 import ast
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from mlops_common.schemas import TERMINAL_STATUSES
 from sqlalchemy import Float, and_, case, cast, false, func, not_, or_, select, true
 from sqlalchemy.sql.elements import ColumnElement
 
-from mlops_server.models import Experiment, MetricSeries, Project, Run, RunTag, Tag
+from mlops_server.models import Experiment, MetricSeries, Project, Run, RunTag, Sequence, Tag
 
 MAX_LENGTH = 2000
 DEFAULT_EXPERIMENT = "general"
 RUN_NAMESPACE = "run"
 METRIC_NAMESPACE = "metric"
-SEQUENCE_NAMESPACES = {"images", "audios", "texts", "figures", "distributions"}
+# A sequence namespace is the plural the UI uses; the kind is the singular stored in the database.
+SEQUENCE_KINDS = {
+    "images": "image", "audios": "audio", "texts": "text",
+    "figures": "figure", "distributions": "distribution",
+}
 # Fields of a run that are not parameters. Any other `run.<key>` reads the run's params.
 RUN_FIELDS = {"name", "hash", "id", "experiment", "project", "active", "archived", "creation_time"}
 # Operators allowed per kind of value.
@@ -47,10 +51,12 @@ class FilterError(ValueError):
 
 @dataclass(frozen=True)
 class Compiled:
-    """SQL for the two row kinds a filter can select: runs, and metric series."""
+    """SQL for the row kinds a filter can select: runs, metric series, and sequences by kind.
+    Each sequence clause already requires its kind, so a clause cannot match another kind."""
 
     run: ColumnElement | None = None
     metric: ColumnElement | None = None
+    sequences: dict[str, ColumnElement] = field(default_factory=dict)
 
 
 def compile_filter(text: str | None) -> Compiled:
@@ -63,13 +69,22 @@ def compile_filter(text: str | None) -> Compiled:
     except (SyntaxError, RecursionError, ValueError):
         raise FilterError("the filter is not a valid expression") from None
     run_parts, metric_parts = [], []
+    sequence_parts: dict[str, list[ColumnElement]] = {}
     for part in _top_level_and(tree):
         namespace = _namespace(part)
         expr = _Translator(namespace).boolean(part)
-        (run_parts if namespace == RUN_NAMESPACE else metric_parts).append(expr)
+        if namespace == RUN_NAMESPACE:
+            run_parts.append(expr)
+        elif namespace == METRIC_NAMESPACE:
+            metric_parts.append(expr)
+        else:
+            sequence_parts.setdefault(SEQUENCE_KINDS[namespace], []).append(expr)
     return Compiled(
         run=and_(*run_parts) if run_parts else None,
         metric=and_(*metric_parts) if metric_parts else None,
+        sequences={
+            kind: and_(Sequence.kind == kind, *parts) for kind, parts in sequence_parts.items()
+        },
     )
 
 
@@ -123,9 +138,9 @@ def _leaf_namespace(node: ast.expr) -> str:
         return RUN_NAMESPACE
     if head == METRIC_NAMESPACE:
         return METRIC_NAMESPACE
-    if head in SEQUENCE_NAMESPACES:
-        raise FilterError(f"{head}.* filters are not supported yet (sequences arrive in Phase 5)")
-    raise FilterError(f"unknown name {head!r}; use run.* or metric.*")
+    if head in SEQUENCE_KINDS:
+        return head
+    raise FilterError(f"unknown name {head!r}; use run.*, metric.* or images.*")
 
 
 def _path(node: ast.expr) -> list[str]:
@@ -239,6 +254,8 @@ class _Translator:
         head, rest = path[0], path[1:]
         if self.namespace == METRIC_NAMESPACE:
             return self.metric_field(rest, op, value)
+        if self.namespace in SEQUENCE_KINDS:
+            return self.sequence_field(rest, op, value)
         if head != RUN_NAMESPACE or not rest:
             raise FilterError(f"{'.'.join(path)} is not a run field")
         key = rest[0]
@@ -254,6 +271,8 @@ class _Translator:
         """The text a startswith() reads: a run text field, a parameter, or a metric name."""
         if self.namespace == METRIC_NAMESPACE or path[0] == METRIC_NAMESPACE:
             return _metric_text_column(path[1:])
+        if path[0] in SEQUENCE_KINDS:
+            return _sequence_text_column(path[0], path[1:])
         if path[0] != RUN_NAMESPACE or len(path) < 2:
             raise FilterError(f"{'.'.join(path)} is not a text field")
         if path[1] in _RUN_TEXT_COLUMNS and len(path) == 2:
@@ -303,6 +322,14 @@ class _Translator:
             isinstance(v, str) for v in value
         ))):
             raise FilterError("metric names and contexts compare with strings")
+        return _text_compare(column, op, value)
+
+    def sequence_field(self, rest: list[str], op: type, value: Any) -> ColumnElement:
+        column = _sequence_text_column(self.namespace, rest)
+        if not (isinstance(value, str) or (isinstance(value, list) and all(
+            isinstance(v, str) for v in value
+        ))):
+            raise FilterError(f"{self.namespace} names and contexts compare with strings")
         return _text_compare(column, op, value)
 
 
@@ -359,6 +386,14 @@ _RUN_TEXT_COLUMNS = {
     ),
     "project": lambda: select(Project.slug).where(Project.id == Run.project_id).scalar_subquery(),
 }
+
+
+def _sequence_text_column(namespace: str, rest: list[str]) -> ColumnElement:
+    if rest == ["name"]:
+        return Sequence.name
+    if len(rest) == 2 and rest[0] == "context":
+        return Sequence.context[rest[1]].astext
+    raise FilterError(f"{namespace}.{'.'.join(rest)} is not a {namespace} field")
 
 
 def _metric_text_column(rest: list[str]) -> ColumnElement:
