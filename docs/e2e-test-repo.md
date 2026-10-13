@@ -21,6 +21,10 @@ print(f"bias={bias} steps={args.steps}")
 
 `bias.txt`: the single line `0`. `requirements.txt`: empty file.
 
+For the dataset test in `tests/e2e/test_tabs.py` also add `data/sample.dvc` (a DVC pointer, for
+example from `dvc add` on a small CSV) and `data/sample.card.md` (a dataset card). The repository is
+linked with `--role data`, so the dataset is listed as `data/sample`.
+
 Export before running the suite:
 
 ```bash

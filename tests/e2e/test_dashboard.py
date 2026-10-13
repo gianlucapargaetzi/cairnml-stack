@@ -38,23 +38,6 @@ def runs(dev, project, tmp_path_factory):
 
 
 @pytest.fixture
-def login(password_for):
-    """Logs a realm user in through the IdP login page. The password comes from the environment."""
-
-    def _login(page, username="dev"):
-        password = password_for(username)
-        page.goto(BASE)
-        page.wait_for_url(re.compile(r"/realms/mlops/"))
-        page.fill("#username", username)
-        page.fill("#password", password)
-        page.click("#kc-login")
-        page.wait_for_url(re.compile(r"/ui/"))
-        expect(page.locator("#user")).to_have_text(username)
-
-    return _login
-
-
-@pytest.fixture
 def logged_in(page, direct_grants, runs, login):
     login(page)
     return page
@@ -109,7 +92,7 @@ def test_comparing_runs_shows_differences(logged_in, runs):
     expect(page.locator("td.best").first).to_be_visible()
 
 
-def test_jobs_and_agents_pages(logged_in, dev, project, agent_ready, tmp_path, wait_for):
+def test_jobs_and_resources_pages(logged_in, dev, project, tmp_path):
     spec = tmp_path / "dash-job.yaml"
     spec.write_text(
         "name: dash-job\nproject: e2e/demo\nruntime:\n  type: image\n  image: alpine:3.20\n"
@@ -117,12 +100,13 @@ def test_jobs_and_agents_pages(logged_in, dev, project, agent_ready, tmp_path, w
     )
     dev.run("dispatch", "--file", str(spec))
     page = logged_in
+    # The Jobs tab shows the job under Running, Scheduled or Finished depending on its state;
+    # the row itself is covered by test_tabs.py. The agents moved to the Resources tab.
     page.goto(BASE + "#/jobs")
-    expect(page.get_by_role("link", name="dash-job").first).to_be_visible(timeout=20000)
-    page.goto(BASE + "#/agents")
-    expect(page.locator("span.status-running", has_text="online").first).to_be_visible(
-        timeout=30000
-    )
+    expect(page.get_by_role("heading", name="Jobs")).to_be_visible()
+    page.goto(BASE + "#/resources")
+    expect(page.locator(".agent-card").first).to_be_visible(timeout=20000)
+    expect(page.locator("span.dot.on").first).to_be_visible(timeout=30000)
 
 
 def test_admin_page_is_for_admins_only(page, direct_grants, runs, login):

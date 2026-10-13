@@ -18,6 +18,7 @@ the `mlops` CLI has no `admin` subcommands.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 import time
@@ -309,3 +310,44 @@ def keycloak_admin(stack):
 def password_for():
     """Password lookup for browser logins (MLOPS_E2E_PASSWORD_<USER>); no literal in the repo."""
     return user_password
+
+
+@pytest.fixture
+def login(password_for):
+    """Logs a realm user in through the IdP login page. The password comes from the environment."""
+    from playwright.sync_api import expect  # noqa: PLC0415  (the ui group is optional)
+
+    ui_base = SERVER.rstrip("/") + "/ui/"
+
+    def _login(page, username="dev"):
+        password = password_for(username)
+        page.goto(ui_base)
+        page.wait_for_url(re.compile(r"/realms/mlops/"))
+        page.fill("#username", username)
+        page.fill("#password", password)
+        page.click("#kc-login")
+        page.wait_for_url(re.compile(r"/ui/"))
+        expect(page.locator("#user")).to_have_text(username)
+
+    return _login
+
+
+@pytest.fixture(scope="session")
+def dispatch_image():
+    """Returns dispatch_image(dev, command, name, queue="default"). It dispatches a one-command
+    image job through the real CLI and returns the job id."""
+
+    def _dispatch(dev, command, name, queue="default"):
+        folder = dev.directory / "specs"
+        folder.mkdir(exist_ok=True)
+        spec = folder / f"{name}.yaml"
+        spec.write_text(
+            f"name: {name}\nproject: {PROJECT}\nqueue: {queue}\ntask: testing\n"
+            "runtime:\n  type: image\n  image: alpine:3.20\n  entrypoint: [/bin/sh, -c]\n"
+            f"  command: ['{command}']\nresources: {{cpu: 1, memory_gb: 0.5}}\n"
+            "params: {lr: 0.1}\n"
+        )
+        out = dev.run("dispatch", "--file", str(spec)).stdout
+        return next(w for w in out.split() if w.startswith("job_"))
+
+    return _dispatch
