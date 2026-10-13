@@ -45,9 +45,15 @@ function createAPIRequestWrapper<ResponseDataType>(
                 if (typeof exceptionHandler === 'function') {
                   exceptionHandler(body);
                 }
+                // The status travels with the error, so a page can tell a 403 from a failure.
                 reject(
-                  new Error(
-                    String(body.detail ?? body.message ?? response.statusText),
+                  Object.assign(
+                    new Error(
+                      String(
+                        body.detail ?? body.message ?? response.statusText,
+                      ),
+                    ),
+                    { status: response.status },
                   ),
                 );
                 return;

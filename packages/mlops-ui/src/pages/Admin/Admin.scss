@@ -1,0 +1,40 @@
+.Admin {
+  padding: 16px;
+
+  h1 {
+    font-size: 20px;
+    margin: 0 0 8px;
+  }
+
+  h2 {
+    font-size: 15px;
+    margin: 20px 0 6px;
+  }
+
+  &__table {
+    width: 100%;
+    border-collapse: collapse;
+
+    th,
+    td {
+      text-align: left;
+      padding: 6px 8px;
+      border-bottom: 1px solid #e3e8ef;
+      font-size: 13px;
+    }
+  }
+
+  &__mono {
+    font-family: monospace;
+    font-size: 12px;
+  }
+
+  &__muted {
+    color: #5b6676;
+    font-size: 13px;
+  }
+
+  &__error {
+    color: #b42318;
+  }
+}

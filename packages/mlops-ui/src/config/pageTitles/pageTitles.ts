@@ -12,6 +12,7 @@ const pageTitles = {
   TAGS: 'Tags',
   JOBS: 'Jobs',
   RESOURCES: 'Resources',
+  ADMIN: 'Administration',
   RUN_DETAIL: '',
   EXPERIMENT: '',
   FIGURES_EXPLORER_NEW: 'New Figures',
