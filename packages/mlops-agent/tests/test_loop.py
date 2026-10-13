@@ -80,7 +80,7 @@ def test_run_forever_stops_cleanly_and_survives_poll_errors(tmp_path):
                 raise RuntimeError("network down")
             return None
 
-        def heartbeat(self, running, capabilities=None):
+        def heartbeat(self, running, capabilities=None, usage=None):
             return []
 
     api, stop = FlakyApi(), threading.Event()
@@ -95,3 +95,29 @@ def test_run_forever_stops_cleanly_and_survives_poll_errors(tmp_path):
     stop.set()
     thread.join(10)
     assert api.calls >= 3 and not thread.is_alive()
+
+
+def test_heartbeat_includes_usage_and_survives_a_failing_sampler(
+    server, enroll_client, make_agent, tmp_path
+):
+    from mlops_agent.api import AgentApi
+    from mlops_common.schemas import AgentUsage
+
+    agent = make_agent()
+    sent = []
+    api = AgentApi(agent.http)
+    original = api.heartbeat
+    def recording(running, capabilities=None, usage=None):
+        sent.append(usage)
+        return original(running, capabilities, usage)
+
+    api.heartbeat = recording
+    good = lambda: AgentUsage(cpu_percent=10, mem_used_gb=1, mem_total_gb=2)  # noqa: E731
+    AgentLoop(api, FakeRunner(), AgentSettings(home=tmp_path), usage_fn=good).heartbeat_once()
+    assert sent[-1].cpu_percent == 10
+
+    def broken():
+        raise RuntimeError("psutil exploded")
+
+    AgentLoop(api, FakeRunner(), AgentSettings(home=tmp_path), usage_fn=broken).heartbeat_once()
+    assert sent[-1] is None

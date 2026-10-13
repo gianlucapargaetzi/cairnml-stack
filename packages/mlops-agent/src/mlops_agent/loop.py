@@ -9,6 +9,7 @@ import time
 from mlops_agent.api import AgentApi
 from mlops_agent.config import AgentSettings
 from mlops_agent.runner import JobRunner
+from mlops_agent.usage import sample_usage
 
 log = logging.getLogger("mlops_agent")
 
@@ -21,10 +22,17 @@ def _backoff(failures: int) -> float:
 
 
 class AgentLoop:
-    def __init__(self, api: AgentApi, runner: JobRunner, settings: AgentSettings) -> None:
+    def __init__(
+        self,
+        api: AgentApi,
+        runner: JobRunner,
+        settings: AgentSettings,
+        usage_fn=sample_usage,
+    ) -> None:
         self._api = api
         self._runner = runner
         self._settings = settings
+        self._usage_fn = usage_fn
         self._threads: dict[str, threading.Thread] = {}
         self._lock = threading.Lock()
         self._sleep = time.sleep
@@ -52,7 +60,12 @@ class AgentLoop:
         return True
 
     def heartbeat_once(self) -> None:
-        for job_id in self._api.heartbeat(self.running_ids()):
+        try:
+            usage = self._usage_fn()
+        except Exception:
+            log.warning("could not sample usage", exc_info=True)
+            usage = None
+        for job_id in self._api.heartbeat(self.running_ids(), None, usage):
             self._runner.cancel(job_id)
 
     def run_forever(self, stop: threading.Event) -> None:

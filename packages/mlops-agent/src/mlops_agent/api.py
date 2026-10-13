@@ -6,6 +6,7 @@ import httpx
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from mlops_common.http import KeyAuth, make_client
 from mlops_common.schemas import (
+    AgentUsage,
     Capabilities,
     HeartbeatResponse,
     JobAssignment,
@@ -37,11 +38,16 @@ class AgentApi:
         return response
 
     def heartbeat(
-        self, running_job_ids: list[str], capabilities: Capabilities | None = None
+        self,
+        running_job_ids: list[str],
+        capabilities: Capabilities | None = None,
+        usage: AgentUsage | None = None,
     ) -> list[str]:
         body: dict[str, Any] = {"running_job_ids": running_job_ids}
         if capabilities is not None:
             body["capabilities"] = capabilities.model_dump()
+        if usage is not None:
+            body["usage"] = usage.model_dump()
         response = self._post("/api/v1/agents/heartbeat", body)
         return HeartbeatResponse.model_validate(response.json()).cancel_job_ids
 

@@ -70,6 +70,8 @@ class Agent(Base):
     created_at: Mapped[datetime] = mapped_column(_TS, default=utcnow)
     revoked_at: Mapped[datetime | None] = mapped_column(_TS, nullable=True)
     last_seen: Mapped[datetime | None] = mapped_column(_TS, nullable=True)
+    usage: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    usage_at: Mapped[datetime | None] = mapped_column(_TS, nullable=True)
 
 
 class EnrollmentToken(Base):

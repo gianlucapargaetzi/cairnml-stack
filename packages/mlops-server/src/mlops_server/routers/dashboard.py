@@ -12,7 +12,7 @@ from mlops_server.models import Agent, Experiment, Job, Project, ProjectRepo, Ta
 from mlops_server.routers.experiments import experiment_out
 from mlops_server.routers.tasks import load_task, task_out
 from mlops_server.security.deps import READERS, Principal, get_session, require
-from mlops_server.services import access
+from mlops_server.services import access, resources
 from mlops_server.services.task_stats import last_values, task_stats
 
 router = APIRouter()
@@ -224,3 +224,14 @@ def task_summary(
         "stats": stats,
         "experiments": rows,
     }
+
+
+@router.get("/resources")
+def get_resources(
+    request: Request,
+    principal: Annotated[Principal, Depends(require(*READERS))],
+    session: Annotated[Session, Depends(get_session)],
+) -> dict:
+    # Visible to every authenticated reader: counts and names only, never key material.
+    agents = resources.agents_status(session, request.app.state.settings.agent_timeout)
+    return {"agents": agents, "queues": resources.queue_stats(session, agents)}

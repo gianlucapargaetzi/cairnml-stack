@@ -429,9 +429,24 @@ class JobAssignment(BaseModel):
     spec: JobSpec
 
 
+class GpuUsage(BaseModel):
+    index: int
+    util_percent: float
+    mem_used_gb: float
+    mem_total_gb: float
+
+
+class AgentUsage(BaseModel):
+    cpu_percent: float
+    mem_used_gb: float
+    mem_total_gb: float
+    gpus: list[GpuUsage] = []
+
+
 class HeartbeatRequest(BaseModel):
     running_job_ids: list[str] = []
     capabilities: Capabilities | None = None
+    usage: AgentUsage | None = None
 
 
 class HeartbeatResponse(BaseModel):
