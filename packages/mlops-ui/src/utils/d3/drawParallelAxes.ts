@@ -55,6 +55,9 @@ function drawParallelAxes({
       dimensions[keyOfDimension];
     const first = 0;
     const last = keysOfDimensions.length - 1;
+    // With one dimension there are no gaps to share the width between; dividing by 0 would make
+    // the foreignObject widths Infinity.
+    const gap = plotBoxRef.current.width / Math.max(last, 1);
 
     const tmpYScale = getAxisScale({
       domainData,
@@ -62,8 +65,8 @@ function drawParallelAxes({
       rangeData: [height - margin.top - margin.bottom, 0],
     });
     yScale[keyOfDimension] = tmpYScale;
-    const tickWidth = i === first ? 40 : plotBoxRef.current.width / last - 20;
-    const titleWidth = plotBoxRef.current.width / last;
+    const tickWidth = i === first ? 40 : gap - 20;
+    const titleWidth = gap;
 
     const yAxis = getFormattedYAxis(tmpYScale);
     const axes = axesNodeRef.current

@@ -25,10 +25,6 @@ const Scatters = React.lazy(
       /* webpackChunkName: "scatters" */ 'pages/Scatters/ScattersContainer'
     ),
 );
-const MetricsExplorer = React.lazy(
-  () => import(/* webpackChunkName: "metrics_v2" */ 'pages/MetricsExplorer'),
-);
-
 export interface IRoute {
   path: PathEnum;
   component:
@@ -94,15 +90,6 @@ const routes: { [key: string]: any } = {
     displayName: 'Run Detail',
     isExact: false,
     title: pageTitlesEnum.RUN_DETAIL,
-  },
-  METRICS_EXPLORER: {
-    path: PathEnum.Metrics_Explorer,
-    component: MetricsExplorer,
-    showInSidebar: false,
-    icon: 'metrics',
-    displayName: 'Metrics_v2',
-    isExact: true,
-    title: pageTitlesEnum.METRICS_EXPLORER_V2,
   },
 };
 

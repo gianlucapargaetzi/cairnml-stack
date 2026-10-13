@@ -1,7 +1,4 @@
-import { getAPIHost } from 'config/config';
-
-import ENDPOINTS from 'services/api/endpoints';
-import NetworkService from 'services/NetworkService';
+import projectsService from 'services/api/projects/projectsService';
 
 import {
   GetParamsQueryOptions,
@@ -9,21 +6,23 @@ import {
   GetProjectContributionsResult,
 } from './types';
 
-const api = new NetworkService(`${getAPIHost()}${ENDPOINTS.PROJECTS.BASE}`);
-
 /**
  * function getParams
  * this call is used for i.e. autosuggestions etc.
+ * The explorer API has no /projects/params route: the params and metric names come from the
+ * explorer listing of every project the user can read. The sequence list is not needed, since
+ * every project's listing is read.
  * @param {GetParamsQueryOptions} queryParams
  */
 async function getParams(
   queryParams: GetParamsQueryOptions,
 ): Promise<GetParamsResult> {
-  return (
-    await api.makeAPIGetRequest(ENDPOINTS.PROJECTS.GET_PARAMS, {
-      query_params: queryParams,
-    })
-  ).body;
+  const { params, metric, images } = await projectsService
+    .getProjectParams()
+    .call();
+  return queryParams.exclude_params
+    ? { metric, images }
+    : { params, metric, images };
 }
 
 /**
