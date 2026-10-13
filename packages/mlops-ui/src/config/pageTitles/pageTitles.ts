@@ -10,6 +10,7 @@ const pageTitles = {
   TEXT_EXPLORER: 'Text Explorer',
   BOOKMARKS: 'Bookmarks',
   TAGS: 'Tags',
+  JOBS: 'Jobs',
   RUN_DETAIL: '',
   EXPERIMENT: '',
   FIGURES_EXPLORER_NEW: 'New Figures',

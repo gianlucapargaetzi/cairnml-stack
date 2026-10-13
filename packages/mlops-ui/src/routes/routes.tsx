@@ -19,6 +19,9 @@ const Params = React.lazy(
 const Dashboard = React.lazy(
   () => import(/* webpackChunkName: "dashboard" */ 'pages/Dashboard/Dashboard'),
 );
+const Jobs = React.lazy(
+  () => import(/* webpackChunkName: "jobs" */ 'pages/Jobs/Jobs'),
+);
 const ImagesExplore = React.lazy(
   () =>
     import(
@@ -88,6 +91,15 @@ const routes: { [key: string]: any } = {
     icon: 'scatterplot',
     isExact: true,
     title: pageTitlesEnum.SCATTERS_EXPLORER,
+  },
+  JOBS: {
+    path: PathEnum.Jobs,
+    component: Jobs,
+    showInSidebar: true,
+    displayName: 'Jobs',
+    icon: 'runs',
+    isExact: true,
+    title: pageTitlesEnum.JOBS,
   },
   IMAGES: {
     path: PathEnum.Images_Explore,

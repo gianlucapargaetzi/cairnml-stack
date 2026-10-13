@@ -6,6 +6,7 @@ enum PathEnum {
   Params = '/params',
   Params_Id = '/params/:appId',
   Tags = '/tags',
+  Jobs = '/jobs',
   Bookmarks = '/bookmarks',
   Run_Detail = '/runs/:runHash',
   Experiment = '/experiments/:experimentId',
