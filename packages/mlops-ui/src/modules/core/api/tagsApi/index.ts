@@ -1,5 +1,6 @@
 import { getAPIHost } from 'config/config';
 
+import tagsService from 'services/api/tags/tagsService';
 import ENDPOINTS from 'services/api/endpoints';
 import NetworkService from 'services/NetworkService';
 
@@ -19,7 +20,8 @@ const api = new NetworkService(`${getAPIHost()}${ENDPOINTS.TAGS.BASE}`);
  * @returns {Promise<ITagData[]>}
  */
 async function fetchTagsList(): Promise<ITagData[]> {
-  return (await api.makeAPIGetRequest(ENDPOINTS.TAGS.GET)).body;
+  // Tags come from the projects the user can read (see services/api/tags/tagsService).
+  return tagsService.getTags().call();
 }
 
 /**

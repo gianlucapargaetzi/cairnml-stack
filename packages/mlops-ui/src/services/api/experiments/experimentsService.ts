@@ -5,7 +5,7 @@ import { IApiRequest } from 'types/services/services';
 import API from '../api';
 
 const endpoints = {
-  EXPERIMENTS: 'experiments',
+  EXPERIMENTS: 'v1/experiments',
   GET_EXPERIMENT_BY_ID: (id: string) => `experiments/${id}`,
   UPDATE_EXPERIMENT_BY_ID: (id: string) => `experiments/${id}`,
   DELETE_EXPERIMENT_BY_ID: (id: string) => `experiments/${id}`,

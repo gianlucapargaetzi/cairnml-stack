@@ -11,7 +11,6 @@ import ProjectStatistics from './components/ProjectStatistics';
 import useProjectContributions from './components/ProjectContributions/useProjectContributions';
 import ActiveRunsTable from './components/ActiveRunsTable/ActiveRunsTable';
 import QuickStart from './components/QuickStart';
-import AimIntegrations from './components/AimIntegrations';
 
 import './Dashboard.scss';
 
@@ -51,7 +50,6 @@ function Dashboard(): React.FunctionComponentElement<React.ReactNode> {
               <DashboardContributionsFeed />
             </>
           )}
-          {!isLoading && !totalRunsCount && <AimIntegrations />}
         </div>
       </section>
     </ErrorBoundary>

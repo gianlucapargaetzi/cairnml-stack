@@ -19,19 +19,29 @@
 - Metrics explorer: `metric.name == 'loss'` draws both loss curves and the run table.
 - Params and Scatters pages load without errors (not exercised with a query).
 
+## Verified in a browser since the last update
+
+- Run detail: Overview (params, information, creator, insights), Metrics (loss card), Logs (seeded lines), Notes (one note per run, saved in the run's `notes` field).
+- Dashboard home: loads with no errors. Quick start shows the MLOps SDK; the Aim integrations panel is removed.
+
+## Built and checked in the build
+
+- Bundle host guard (`tasks/check-bundle-hosts.js`) runs in `build:server` and in the Docker build. Documentation and library strings are on a list; a new host fails the build.
+- Docker image `deploy/server/Dockerfile` builds with a node:24 stage; the image contains the explorer under `mlops_server/ui/next`.
+- Logo and favicon are from `assets/MLOpsFlow_Logo.jpeg` (sidebar logo on a light tile).
+- Deploy test checks the Dockerfile stage and the guard.
+
 ## Known broken or not verified
 
-- Run detail: the header loads, but the Overview stays on a spinner. The info response has the fields the model reads; the cause is not yet found.
-- Run detail tabs (metrics, logs, messages) are not verified. Logs use the existing run logs endpoint, adapted to line records.
-- Dashboard home: not verified (Aim onboarding cards are still there, with "MLOps Flow" wording).
+- Params explorer: a query runs without error, but results need parameters selected through the "Run Params" dialog, which is not tested yet.
+- Scatters: loads; not tested with a query.
+- Run detail Messages, System, Distributions, Images, Audios, Texts tabs: sequence or system data (Phases 5 and 6).
 - Sequence data (images, audios, texts, figures, distributions) and metric alignment: explicit "not supported yet" errors until Phase 5.
 - Pinned sequences and the activity feed read as empty.
 - Deleting runs and attaching tags from the explorer: explicit "not supported yet" errors.
 
 ## Not done
 
-- Bundle scan for third-party hosts. The built JavaScript still contains URLs from map, gravatar and docs libraries. The Phase 7 browser test must confirm nothing is requested at runtime.
-- CSP `connect-src` for presigned S3 URLs.
-- Docker node build stage in `deploy/server/Dockerfile`.
-- Logo and favicon from `assets/` (the fork still shows Aim's logo).
+- CSP `connect-src` for presigned S3 URLs: needed once the fork fetches sequence blobs (Phase 5).
+- Browser test that no runtime request leaves the origin (Phase 7).
 - Browser checks of every route, and the Playwright suite (Phase 7).

@@ -7,11 +7,11 @@ import { IApiRequest } from 'types/services/services';
 import API from '../api';
 
 const endpoints = {
-  DASHBOARD: 'dashboards',
+  DASHBOARD: 'dashboards', // not served: dashboards are dropped
 };
 
 function fetchDashboardsList(): IApiRequest<any> {
-  return API.get(endpoints.DASHBOARD);
+  return { call: () => Promise.resolve([]), abort: () => undefined };
 }
 
 function fetchDashboard(id: string): IApiRequest<any> {

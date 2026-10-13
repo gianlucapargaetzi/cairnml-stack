@@ -127,3 +127,11 @@ def test_idp_sync_settings_reach_the_server_and_the_realm_import():
     assert "MLOPS_IDP_SYNC_SECRET" in _compose("idp")["services"]["mlops-idp"]["environment"]
     env = (DEPLOY / ".env.example").read_text()
     assert "IDP_SYNC_SECRET=" in env and "IDP_SYNC_INTERVAL=" in env
+
+
+def test_the_server_image_builds_the_explorer_with_the_bundle_guard():
+    dockerfile = (DEPLOY / "server" / "Dockerfile").read_text()
+    assert "FROM node:24 AS ui-builder" in dockerfile
+    assert "node tasks/check-bundle-hosts.js build" in dockerfile
+    assert "COPY --from=ui-builder /build/build" in dockerfile
+    assert (DEPLOY.parent / "packages" / "mlops-ui" / "tasks" / "check-bundle-hosts.js").is_file()

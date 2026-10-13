@@ -1,5 +1,6 @@
 import { getAPIHost } from 'config/config';
 
+import experimentsService from 'services/api/experiments/experimentsService';
 import ENDPOINTS from 'services/api/endpoints';
 import NetworkService, { RequestInstance } from 'services/NetworkService';
 
@@ -19,7 +20,8 @@ const api = new NetworkService(`${getAPIHost()}${ENDPOINTS.EXPERIMENTS.BASE}`);
  * @returns {Promise<IExperimentData[]>}
  */
 async function getExperiments(): Promise<IExperimentData[]> {
-  return (await api.makeAPIGetRequest(ENDPOINTS.EXPERIMENTS.GET)).body;
+  // Experiments come from the MLOps Flow experiments API (/api/v1/experiments).
+  return experimentsService.getExperimentsData().call();
 }
 
 /**

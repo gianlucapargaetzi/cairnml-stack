@@ -164,8 +164,17 @@ class NetworkService {
           }
 
           if (response.status >= 400) {
-            return await this.checkCredentials(response, url, () =>
-              this.request(url, options),
+            // The body was read above; reject with its message without reading it again.
+            if (response.status === 401) {
+              redirectToSignIn();
+            }
+            const payload = body as { detail?: unknown; message?: string };
+            return reject(
+              new Error(
+                String(
+                  payload?.detail ?? payload?.message ?? response.statusText,
+                ),
+              ),
             );
           }
 
@@ -295,17 +304,6 @@ class NetworkService {
     } catch (error) {
       throw error;
     }
-  }
-
-  public async checkCredentials<T>(
-    response: Response,
-    endpoint: string,
-    refetch: () => Promise<T>,
-  ): Promise<T> {
-    if (response.status === 401) {
-      redirectToSignIn();
-    }
-    return this.parseResponse<T>(response);
   }
 }
 

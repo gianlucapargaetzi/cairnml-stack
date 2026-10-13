@@ -1,11 +1,7 @@
 import * as React from 'react';
 
-import { Link } from '@material-ui/core';
-
 import { Text } from 'components/kit';
 import CodeBlock from 'components/CodeBlock/CodeBlock';
-
-import { DOCUMENTATIONS } from 'config/references';
 
 import './QuickStart.scss';
 
@@ -31,10 +27,11 @@ function QuickStart() {
           Integrate MLOps Flow with your code
         </Text>
         <CodeBlock
-          code={`from aim import Run
+          code={`import mlops
 
-# Initialize a new run
-run = Run()
+# Start a run in an experiment of a project
+run = mlops.init(project="vision/segmentation", name="baseline",
+                 experiment="training")
 
 # Log run parameters
 run["hparams"] = {
@@ -47,25 +44,6 @@ for i in range(10):
     run.track(i, name='loss', step=i, context={ "subset":"train" })
     run.track(i, name='acc', step=i, context={ "subset":"train" })`}
         />
-        <Text
-          component='p'
-          size={14}
-          weight={500}
-          tint={100}
-          className='QuickStart__section__text'
-        >
-          See the full list of supported trackable objects(e.g. images, text,
-          etc){' '}
-          <Link
-            target='_blank'
-            href={DOCUMENTATIONS.SUPPORTED_TYPES}
-            rel='noreferrer'
-            className='QuickStart__section__text__link'
-          >
-            here
-          </Link>
-          .
-        </Text>
       </div>
     </div>
   );

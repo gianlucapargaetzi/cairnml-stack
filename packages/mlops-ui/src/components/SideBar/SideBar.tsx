@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 
 import { Drawer } from '@material-ui/core';
 
-import logoImg from 'assets/logo.svg';
+import logoImg from 'assets/logo.png';
 
 import { Icon, Text } from 'components/kit';
 import { IconName } from 'components/kit/Icon';

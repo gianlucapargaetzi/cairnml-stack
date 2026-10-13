@@ -12,8 +12,9 @@ const api = new NetworkService(`${getAPIHost()}${ENDPOINTS.DASHBOARDS.BASE}`);
  * this call is used for fetching dashboards list.
  * @returns {Promise<IDashboardData[]>}
  */
+// Dashboards are not part of MLOps Flow (the explorer keeps bookmarks instead).
 async function fetchDashboardsList(): Promise<IDashboardData[]> {
-  return (await api.makeAPIGetRequest(ENDPOINTS.DASHBOARDS.GET)).body;
+  return [];
 }
 
 /**

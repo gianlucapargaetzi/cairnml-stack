@@ -7,29 +7,48 @@ import { IApiRequest } from 'types/services/services';
 
 import API from '../api';
 
-const endpoints = {
-  GET_NOTES_LIST: (run_id: string): string => `runs/${run_id}/note`,
-  CREATE_NOTE: (run_id: string): string => `runs/${run_id}/note`,
-  GET_SINGLE_NOTE: (run_id: string, note_id: number): string =>
-    `runs/${run_id}/note/${note_id}`,
-  UPDATE_NOTE: (run_id: string, note_id: number): string =>
-    `runs/${run_id}/note/${note_id}`,
-  DELETE_NOTE: (run_id: string, note_id: number): string =>
-    `runs/${run_id}/note/${note_id}`,
-};
+// A run has one note: the `notes` field of the run (/api/v1/runs/{id}). The fork's notes list
+// therefore holds at most one entry, with id 0.
+const NOTE_ID = 0;
+
+function runPath(runId: string) {
+  return `v1/runs/${runId}`;
+}
+
+function toNote(run: any, name = 'Note'): INote {
+  return {
+    id: NOTE_ID,
+    name,
+    content: run.notes ?? '',
+    created_at: run.created_at,
+  };
+}
+
+function mapped<T, R>(
+  request: IApiRequest<T>,
+  fn: (value: T) => R,
+): IApiRequest<R> {
+  return {
+    call: async (detail?: any) => fn(await request.call(detail)),
+    abort: request.abort,
+  };
+}
 
 function getNotes(runId: string): IApiRequest<INotesList> {
-  return API.get(endpoints.GET_NOTES_LIST(runId));
+  return mapped(API.get<any>(runPath(runId)), (run: any) =>
+    run.notes ? [toNote(run)] : [],
+  );
 }
 
 function createNote(runId: string, reqBody: INoteReqBody): IApiRequest<INote> {
-  return API.post(endpoints.CREATE_NOTE(runId), reqBody, {
-    headers: { 'Content-type': 'application/json' },
-  });
+  return mapped(
+    API.patch<any>(runPath(runId), { notes: reqBody.content }),
+    (run) => toNote(run, reqBody.name),
+  );
 }
 
 function getSingleNote(runId: string, noteId: number): IApiRequest<INote> {
-  return API.get(endpoints.GET_SINGLE_NOTE(runId, noteId));
+  return mapped(API.get<any>(runPath(runId)), (run: any) => toNote(run));
 }
 
 function updateNote(
@@ -37,13 +56,16 @@ function updateNote(
   noteId: number,
   reqBody: INoteReqBody,
 ): IApiRequest<any> {
-  return API.put(endpoints.UPDATE_NOTE(runId, noteId), reqBody, {
-    headers: { 'Content-type': 'application/json' },
-  });
+  return mapped(
+    API.patch<any>(runPath(runId), { notes: reqBody.content }),
+    (run) => toNote(run, reqBody.name),
+  );
 }
 
 function deleteNote(runId: string, noteId: number): IApiRequest<any> {
-  return API.delete(endpoints.DELETE_NOTE(runId, noteId));
+  return mapped(API.patch<any>(runPath(runId), { notes: null }), () => ({
+    deleted: NOTE_ID,
+  }));
 }
 
 const notesService = {

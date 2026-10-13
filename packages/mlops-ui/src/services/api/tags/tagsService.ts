@@ -1,59 +1,65 @@
+import { IApiRequest } from 'types/services/services';
+
 import API from '../api';
 
 const endpoints = {
-  GET_TAGS: 'tags',
-  GET_TAG: 'tags/',
-  CREATE_TAG: 'tags',
-  UPDATE_TAG: 'tags/',
-  GET_TAG_RUNS: (id: string) => `tags/${id}/runs`,
+  PROJECTS: 'v1/projects',
+  PROJECT_TAGS: (projectId: string) => `v1/explorer/projects/${projectId}/tags`,
 };
 
-function getTags() {
-  return API.get(endpoints.GET_TAGS);
+// The tags of every project the user can read, in one list. Each tag keeps its project id.
+// Creating, renaming, archiving and deleting tags arrive with the project pages (Phase 6).
+function getTags(): IApiRequest<any[]> {
+  const requests: IApiRequest<any>[] = [];
+  return {
+    call: async (detail?: any) => {
+      const list = API.get<any[]>(endpoints.PROJECTS);
+      requests.push(list);
+      const projects = await list.call(detail);
+      const lists = await Promise.all(
+        projects.map((project) => {
+          const request = API.get<any[]>(endpoints.PROJECT_TAGS(project.id));
+          requests.push(request);
+          return request.call(detail);
+        }),
+      );
+      return lists
+        .flat()
+        .map((tag) => ({ ...tag, run_count: 0, archived: false }));
+    },
+    abort: () => requests.forEach((request) => request.abort()),
+  };
+}
+
+function unsupported(what: string): IApiRequest<never> {
+  return {
+    call: () => Promise.reject(new Error(`${what} is not supported yet.`)),
+    abort: () => undefined,
+  };
 }
 
 function getTagRuns(id: string) {
-  return API.get(endpoints.GET_TAG_RUNS(id));
+  return unsupported(`Listing the runs of tag ${id}`);
 }
 
 function createTag(body: object) {
-  return API.post(endpoints.GET_TAGS, body, {
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
+  return unsupported('Creating tags');
 }
 
 function updateTag(body: object, id: string) {
-  return API.put(endpoints.UPDATE_TAG + id, body, {
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
+  return unsupported(`Changing tag ${id}`);
 }
 
 function getTagById(id: string) {
-  return API.get(endpoints.GET_TAG + id);
+  return unsupported(`Reading tag ${id}`);
 }
 
 function hideTag(id: string, archived: boolean) {
-  return API.put(
-    endpoints.GET_TAG + id,
-    { archived },
-    {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    },
-  );
+  return unsupported(`Archiving tag ${id}`);
 }
 
 function deleteTag(id: string) {
-  return API.delete(endpoints.GET_TAG + id, {
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
+  return unsupported(`Deleting tag ${id}`);
 }
 
 const tagsService = {

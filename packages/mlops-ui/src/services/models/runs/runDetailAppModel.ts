@@ -80,18 +80,28 @@ function getRunInfo(runHash: string): IApiRequest<void> {
   return {
     call: async () => {
       model.setState({ isRunInfoLoading: true });
-      const data = await getRunsInfoRequestRef.call((detail: any) => {
-        exceptionHandler({ detail, model });
-      });
-      model.setState({
-        runParams: data.params,
-        runTraces: data.traces,
-        runInfo: data.props,
-        runArtifacts: data.artifacts,
-        experimentId: data.props.experiment.id,
-        isRunInfoLoading: false,
-      });
-      return data;
+      try {
+        const data = await getRunsInfoRequestRef.call((detail: any) => {
+          exceptionHandler({ detail, model });
+        });
+        model.setState({
+          runParams: data.params,
+          runTraces: data.traces,
+          runInfo: data.props,
+          runArtifacts: data.artifacts,
+          experimentId: data.props.experiment.id,
+          isRunInfoLoading: false,
+        });
+        return data;
+      } catch (ex: Error | any) {
+        // A failed or aborted info request must not leave the page loading.
+        if (ex?.name !== 'AbortError') {
+          // eslint-disable-next-line no-console
+          console.error('Run info could not be loaded:', ex);
+        }
+        model.setState({ isRunInfoLoading: false });
+        throw ex;
+      }
     },
     abort: getRunsInfoRequestRef.abort,
   };

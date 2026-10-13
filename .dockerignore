@@ -8,3 +8,7 @@ deploy/secrets
 deploy/wheels
 tests
 docs
+**/node_modules
+packages/mlops-ui/build
+packages/mlops-ui/public/vs
+packages/mlops-server/src/mlops_server/ui/next
