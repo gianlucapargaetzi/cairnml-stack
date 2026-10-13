@@ -52,6 +52,57 @@ The total number of matching runs is in the `X-Total-Count` header.
 
 Only `search/metric` accepts `metric.*` clauses. `search/run` refuses them with HTTP 400.
 
+## Sequences
+
+`GET /runs/search/{kind}` returns the runs that have a sequence of the kind, for `kind` = `images`, `audios`, `texts`, `figures` or `distributions`. It takes the same query parameters as search, plus:
+
+| Name | Default | Meaning |
+|---|---|---|
+| `record_range` | none | `low:high`, a closed range of steps. |
+| `record_density` | 50 | 1 to 500 steps to sample, evenly spaced, first and last included. |
+| `index_range` | none | `low:high`, a closed range of indices within a step. |
+| `index_density` | 5 | 1 to 50 indices to sample per step. |
+
+Each run lists its sequences with their sampled items:
+
+```json
+{
+  "runs": {
+    "run_3f9a...": {
+      "props": {"name": "fast", "...": "..."},
+      "params": {"lr": 0.1},
+      "ranges": {"record_range_total": [0, 10], "index_range_total": [0, 3],
+                 "record_range_used": [0, 10], "index_range_used": [0, 2]},
+      "sequences": [
+        {"name": "prediction", "context": {}, "count": 30,
+         "items": [
+           {"step": 0, "idx": 0, "epoch": null, "ts": 1.0, "caption": "epoch 0",
+            "format": "png", "width": 96, "height": 64,
+            "blob_uri": "https://storage/...presigned..."}
+         ]}
+      ]
+    }
+  },
+  "progress": [1, 1]
+}
+```
+
+- Image and audio items carry `blob_uri`, a presigned GET valid for one hour. The browser reads the bytes from it, not through the server. The storage bucket must allow GET from the UI origin (CORS).
+- Text items carry `text`; figure and distribution items carry `data` (the Plotly figure, or `{bin_counts, bin_range}`).
+- The `ranges` are `[low, high + 1]` pairs for the step and index sliders. `total` covers every matching item; `used` covers the items in this response.
+- A clause for another kind (for example `audios.name` on the images search) or a `metric.*` clause is refused with HTTP 400.
+
+Sequence clauses in the filter language: `images.name`, `images.context.<key>` (and the same for `audios`, `texts`, `figures`, `distributions`).
+
+Writes go through the run API, not the explorer:
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/api/v1/runs/{run_id}/sequences/presign` | Body `{kind: image or audio, name, context, step, idx, format}`. Returns `{upload_url, key, expires_in}`. The key is `<project>/<run>/<kind>/<name>/[ctx-<hash>/]<step>_<idx>.<format>`. |
+| POST | `/api/v1/runs/{run_id}/sequences` | Body `{items: [...]}`, at most 500. Registers items. A binary item must name the key its presign call returned. An item whose (sequence, step, idx) is stored already is skipped, so a retry is harmless. Returns `{accepted: n}`. |
+
+Limits: names at most 200 characters and safe as a path (no `..`, no empty parts); captions at most 2000 characters; text at most 64 000 characters; figure and distribution JSON at most 256 KB; a distribution has at most 10 000 bins.
+
 ## Filter language
 
 A filter is a Python-style expression. It is parsed with `ast`, checked against a whitelist, and translated to SQL. It is never executed. Values reach the database as bound parameters.
@@ -88,7 +139,7 @@ Refused with HTTP 400, each with a reason:
 - Chained comparisons (`1 < run.x < 3`), and comparisons whose left side is not a field.
 - Run and metric clauses joined by `or` or `not`. Join them with `and`.
 - `metric.last`, which is not supported yet.
-- `images.*`, `audios.*`, `texts.*`, `figures.*`, `distributions.*`, which arrive in Phase 5.
+- A sequence clause on a search of another kind, and `metric.*` clauses on `search/run`.
 
 ## Endpoints
 
@@ -125,7 +176,7 @@ The source is Aim UI 3.29.1 (the `main.js` bundle in the aim-ui package). The ta
 | `runs/search/metric/align` | Deferred. Aligning traces on a shared x axis is chart work for the Phase 4 fork. |
 | `runs/{id}/info` | Implemented: `GET /explorer/runs/{id}/info`. |
 | `runs/{id}/logs` | Existing: `GET /api/v1/runs/{id}/logs`. |
-| `runs/{id}/metric/get-batch`, `runs/{id}/{kind}/get-batch`, `get-step` | Deferred to Phase 4 (metric detail page) and Phase 5 (sequences). |
+| `runs/{id}/metric/get-batch`, `runs/{id}/{kind}/get-batch`, `get-step` | Metric detail: deferred. Sequences: replaced by `blob_uri` in the search. |
 | `runs/{id}` (edit) | Existing: `PATCH /api/v1/runs/{id}`. |
 | `runs/archive-batch?archive=` | Implemented: `POST /explorer/runs/archive?archive=`. |
 | `runs/delete-batch`, delete run | Not implemented. Deleting a run must also remove its artifacts and sequence blobs, which needs a decision first. |
@@ -137,9 +188,9 @@ The source is Aim UI 3.29.1 (the `main.js` bundle in the aim-ui package). The ta
 | `projects` | Existing: `GET /api/v1/projects`. Now includes the project `id`. |
 | `projects/activity` | Deferred. |
 | `projects/params` | Implemented: `GET /explorer/projects/{id}/params`. |
-| `projects/pinned-sequences` | Deferred to Phase 5. |
+| `projects/pinned-sequences` | Deferred. Pinning needs a table; it belongs with the project pages (Phase 6). |
 | `tags` (CRUD) | Implemented: `/explorer/projects/{id}/tags` and `/explorer/tags/{id}`. |
 | `bookmarks` | Implemented: `/explorer/bookmarks`. |
 | `dashboards`, `boards`, `reports` | Dropped. The plan removes them from the UI (they need Pyodide and server-side app storage). |
 | GitHub release notes, `auth/refresh` | Dropped. The fork uses browser sessions instead of tokens. |
-| `images`, `audios`, `texts`, `figures`, `distributions` search and get-batch | Phase 5. |
+| `images`, `audios`, `texts`, `figures`, `distributions` search | Implemented: `GET /explorer/runs/search/{kind}`. Blobs are read through presigned URLs, so there is no get-batch. |

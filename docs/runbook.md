@@ -447,6 +447,20 @@ An agent that has sent no usage shows "No usage reported yet." Check, in order:
 
 Without `nvidia-smi` (no NVIDIA driver) the agent reports no GPUs and the GPU rows are left out; this is not an error.
 
+## 19a. Images and audio in the explorer
+
+The explorer reads image and audio bytes from presigned URLs on the storage server (`MLOPS_S3_ENDPOINT`), not through the MLOps server. Two things must hold:
+
+- The address in `MLOPS_S3_ENDPOINT` must be reachable from the browser, because the presigned URL names that host. A name that resolves only inside the compose network (such as `mlops-nas`) will not load in a browser.
+- The artifacts bucket must allow GET from the UI origin. Without a CORS rule, the browser refuses the fetch and the explorer shows empty image boxes. Example, with the storage admin tools (replace the origin with the UI's address):
+
+  ```json
+  {"CORSRules": [{"AllowedOrigins": ["https://mlops.example.org"],
+                  "AllowedMethods": ["GET"], "AllowedHeaders": ["*"], "MaxAgeSeconds": 600}]}
+  ```
+
+The server's explorer policy admits the storage origin for `img-src` and `connect-src`. If the storage address changes, the server must be restarted so the policy picks it up.
+
 ## 20. Troubleshooting
 
 Server errors quoted here are the exact messages.
