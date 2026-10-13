@@ -191,3 +191,42 @@ export function buildProjectTree(projects) {
     .sort((a, b) => (b.children.length > 0) - (a.children.length > 0) || a.name.localeCompare(b.name));
   return convert(root);
 }
+
+// Parameter keys whose values differ between rows, most varied first, ties alphabetical.
+// A key missing from a row counts as its own value, so a late-added parameter still shows.
+export function varyingKeys(rows, limit = 5) {
+  if (rows.length < 2) return [];
+  const keys = [...new Set(rows.flatMap((r) => Object.keys(r.params || {})))];
+  return keys
+    .map((key) => {
+      const seen = new Set(rows.map((r) => (r.params && key in r.params ? JSON.stringify(r.params[key]) : "\u0000missing")));
+      return { key, count: seen.size };
+    })
+    .filter((k) => k.count > 1)
+    .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key))
+    .slice(0, limit)
+    .map((k) => k.key);
+}
+
+// The id of the row with the best non-null primary value. "max" picks the largest, anything else the smallest.
+export function bestId(rows, direction) {
+  const valued = rows.filter((r) => typeof r.primary_value === "number");
+  if (!valued.length) return null;
+  const better = direction === "max"
+    ? (a, b) => (b.primary_value > a.primary_value ? b : a)
+    : (a, b) => (b.primary_value < a.primary_value ? b : a);
+  return valued.reduce(better).id;
+}
+
+// Sorts a copy by one field. "asc" and "min" ascend, anything else descends. Missing values go last in both orders.
+export function sortRows(rows, by, direction) {
+  const sign = direction === "asc" || direction === "min" ? 1 : -1;
+  const missing = (v) => v === null || v === undefined;
+  return [...rows].sort((a, b) => {
+    const x = a[by];
+    const y = b[by];
+    if (missing(x)) return missing(y) ? 0 : 1;
+    if (missing(y)) return -1;
+    return (x < y ? -1 : x > y ? 1 : 0) * sign;
+  });
+}

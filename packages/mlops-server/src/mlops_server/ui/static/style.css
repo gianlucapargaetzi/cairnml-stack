@@ -78,3 +78,7 @@ svg.graph { width: 100%; height: 100%; cursor: grab; touch-action: none; }
 @media (max-width: 800px) {
   .graph-panel { grid-template-columns: 1fr; }
 }
+.task-settings { margin: 8px 0 16px; }
+.task-settings form { display: grid; gap: 10px; max-width: 640px; }
+.task-settings label { display: flex; flex-direction: column; gap: 2px; }
+.task-settings textarea { font: inherit; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); color: var(--fg); }
