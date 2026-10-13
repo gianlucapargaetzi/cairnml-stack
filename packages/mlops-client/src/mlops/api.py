@@ -113,6 +113,22 @@ class ApiClient:
             self._http.post(f"/api/v1/runs/{run_id}/artifacts/presign", json={"name": name})
         )
 
+    def presign_sequence(
+        self, run_id: str, kind: str, name: str, step: int, idx: int, fmt: str, context: dict
+    ) -> dict:
+        return self._json(
+            self._http.post(
+                f"/api/v1/runs/{run_id}/sequences/presign",
+                json={"kind": kind, "name": name, "step": step, "idx": idx, "format": fmt,
+                      "context": context},
+            )
+        )
+
+    def post_sequences(self, run_id: str, items: list[dict]) -> dict:
+        return self._json(
+            self._http.post(f"/api/v1/runs/{run_id}/sequences", json={"items": items})
+        )
+
     def register_artifact(
         self,
         run_id: str,

@@ -25,7 +25,7 @@ import httpx
 from mlops import transfer
 from mlops.config import spool_root
 from mlops.spool import Spool
-from mlops.uplink import replay
+from mlops.uplink import BLOB_KINDS, replay
 
 log = logging.getLogger("mlops")
 
@@ -49,7 +49,8 @@ def _artifact_error(exc: Exception) -> str:
 
 def _sync_artifacts(
     api, spool: Spool, directory: Path, meta: dict, run_id: str, put
-) -> None:
+) -> dict:
+    """Registers the spooled artifacts not yet registered. Returns the meta as written."""
     done = set(meta.get("artifacts_registered", []))
     errors: list[str] = []
     ordinal = -1
@@ -79,6 +80,39 @@ def _sync_artifacts(
         _write_meta(directory, meta)
     if errors:
         raise RuntimeError("; ".join(errors))
+    return meta
+
+
+def _sync_sequence_blobs(
+    api, spool: Spool, directory: Path, meta: dict, run_id: str, put
+) -> dict:
+    """Uploads and registers the spooled image and audio items, once each, in spool order."""
+    done = set(meta.get("sequence_blobs_registered", []))
+    errors: list[str] = []
+    ordinal = -1
+    for event in spool.events():
+        if event["kind"] != "sequence_blob":
+            continue
+        ordinal += 1
+        if ordinal in done:
+            continue
+        item = dict(event["payload"]["item"])
+        try:
+            presigned = api.presign_sequence(
+                run_id, item["kind"], item["name"], item["step"], item["idx"], item["format"],
+                item["context"],
+            )
+            put(presigned["upload_url"], spool.file_path(event["payload"]["file"]))
+            api.post_sequences(run_id, [{**item, "blob_key": presigned["key"]}])
+        except Exception as exc:
+            errors.append(f"{item['kind']} {item['name']}: {_artifact_error(exc)}")
+            continue
+        done.add(ordinal)
+        meta = {**meta, "sequence_blobs_registered": sorted(done)}
+        _write_meta(directory, meta)
+    if errors:
+        raise RuntimeError("; ".join(errors))
+    return meta
 
 
 def _sync_one(api, directory: Path, put) -> str:
@@ -97,10 +131,11 @@ def _sync_one(api, directory: Path, put) -> str:
         _write_meta(directory, meta)  # before any replay, so a retry reuses this run
 
     replay(spool, api, run_id, keep_rejected=True)
-    undelivered = sum(1 for event in spool.events() if event["kind"] != "artifact")
+    undelivered = sum(1 for event in spool.events() if event["kind"] not in BLOB_KINDS)
     if undelivered:
         raise RuntimeError(f"{undelivered} event(s) not delivered; the spool is kept")
-    _sync_artifacts(api, spool, directory, meta, run_id, put)
+    meta = _sync_artifacts(api, spool, directory, meta, run_id, put)
+    _sync_sequence_blobs(api, spool, directory, meta, run_id, put)
     return run_id
 
 

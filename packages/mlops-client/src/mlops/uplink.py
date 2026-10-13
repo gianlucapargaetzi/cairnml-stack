@@ -12,6 +12,8 @@ from mlops.spool import Spool
 
 log = logging.getLogger("mlops")
 _TRANSIENT = (httpx.TransportError, OSError)
+# Events whose bytes are uploaded by `mlops sync`, in their original order.
+BLOB_KINDS = ("artifact", "sequence_blob")
 
 
 def _is_transient(exc: Exception) -> bool:
@@ -27,6 +29,8 @@ def _send_event(api, run_id: str, kind: str, payload: dict) -> None:
         api.post_logs(run_id, payload["stream"], payload["seq"], payload["lines"])
     elif kind == "patch":
         api.patch_run(run_id, **payload["fields"])
+    elif kind == "sequence":
+        api.post_sequences(run_id, [payload["item"]])
     else:
         raise ValueError(f"unknown event kind {kind!r}")
 
@@ -42,7 +46,7 @@ def replay(spool: Spool, api, run_id: str, keep_rejected: bool = False) -> int:
     sent = 0
     kept: list[dict] = []
     for index, event in enumerate(pending):
-        if event["kind"] == "artifact":
+        if event["kind"] in BLOB_KINDS:
             kept.append(event)  # handled by `mlops sync`
             continue
         try:
@@ -101,6 +105,11 @@ class Uplink:
                 "name": name, "value": float(value), "step": step, "epoch": epoch,
                 "context": context or {}, "ts": ts or time.time(),
             })
+
+    def sequence(self, item: dict) -> None:
+        """A text, figure or distribution item. It is sent at once, or spooled when the server
+        cannot be reached."""
+        self._deliver("sequence", {"item": item}, direct=True)
 
     def log(self, stream: str, text: str) -> None:
         with self._lock:

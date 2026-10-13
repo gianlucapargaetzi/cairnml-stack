@@ -9,12 +9,13 @@ import os
 import shutil
 import sys
 import threading
+import time
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
-from mlops_common.schemas import DatasetRef, MetricContext
+from mlops_common.schemas import DatasetRef, MetricContext, SequenceItemIn
 from pydantic import TypeAdapter, ValidationError
 
 from mlops import runtime
@@ -29,6 +30,14 @@ from mlops.capture.env import (
 from mlops.capture.git import GitState, build_patch, capture_git
 from mlops.capture.script import find_script, relative_cwd
 from mlops.config import spool_root
+from mlops.sequences import (
+    checked_name,
+    encode_audio,
+    encode_distribution,
+    encode_figure,
+    encode_image,
+    encode_text,
+)
 from mlops.spool import Spool
 from mlops.stdio import TeeStream
 from mlops.uplink import Uplink
@@ -84,6 +93,7 @@ class Run:
         self._uplink = Uplink(self._api, None if mode == "offline" else run_id, spool)
         self._datasets: list[DatasetRef] = []
         self._overrides: dict = {}
+        self._steps: dict[tuple[str, str, str], int] = {}  # next auto step per sequence
         self._failed = False
         self._interrupted = False
         self._closed = False
@@ -132,6 +142,104 @@ class Run:
     def log_metrics(self, values: dict, step: int | None = None) -> None:
         for name, value in values.items():
             self.track(value, name, step=step)
+
+    # ----- sequences: images, audio, text, figures and distributions -----
+    def log_image(
+        self, name: str, image, step: int | None = None, *, caption: str | None = None,
+        context: dict | None = None, idx: int = 0,
+    ) -> None:
+        """Log one image: PNG, JPEG, GIF or WEBP bytes, the path of such a file, or a PIL image.
+        Without a step, the images of one name and context are numbered 0, 1, 2, ..."""
+        data, fmt, width, height = encode_image(image)
+        self._log_blob(
+            "image", name, data, fmt, step, context, idx=idx, caption=caption,
+            width=width, height=height,
+        )
+
+    def log_audio(
+        self, name: str, audio, step: int | None = None, *, caption: str | None = None,
+        context: dict | None = None, idx: int = 0,
+    ) -> None:
+        """Log one audio clip: WAV, MP3, OGG or FLAC bytes, or the path of such a file."""
+        data, fmt = encode_audio(audio)
+        self._log_blob("audio", name, data, fmt, step, context, idx=idx, caption=caption)
+
+    def log_text(
+        self, name: str, text: str, step: int | None = None, *, context: dict | None = None
+    ) -> None:
+        self._log_inline("text", name, step, context, text=encode_text(text))
+
+    def log_figure(
+        self, name: str, figure, step: int | None = None, *, context: dict | None = None
+    ) -> None:
+        """Log a Plotly figure (an object with to_plotly_json(), or its dict)."""
+        self._log_inline("figure", name, step, context, data=encode_figure(figure))
+
+    def log_distribution(
+        self, name: str, values, step: int | None = None, *, context: dict | None = None
+    ) -> None:
+        """Log a distribution: numbers (counted into 64 bins) or {bin_counts, bin_range}."""
+        self._log_inline("distribution", name, step, context, data=encode_distribution(values))
+
+    def _sequence_item(
+        self, kind: str, name: str, step: int | None, context: dict | None, *, idx: int = 0,
+        caption: str | None = None, fmt: str | None = None, width: int | None = None,
+        height: int | None = None, text: str | None = None, data=None,
+    ) -> dict:
+        name = checked_name(name)
+        ctx = _checked_context(context) or {}
+        if step is None:
+            key = (kind, name, json.dumps(ctx, sort_keys=True))
+            step = self._steps.get(key, 0)
+            self._steps[key] = step + 1
+        item = {
+            "kind": kind, "name": name, "context": ctx, "step": step, "idx": idx,
+            "epoch": None, "ts": time.time(), "caption": caption, "format": fmt,
+            "width": width, "height": height, "blob_key": None, "text": text, "data": data,
+        }
+        # Refuse here, in user code, what the server would refuse with a 422.
+        SequenceItemIn.model_validate(item)
+        return item
+
+    def _log_inline(
+        self, kind: str, name: str, step: int | None, context: dict | None, *,
+        text: str | None = None, data=None,
+    ) -> None:
+        item = self._sequence_item(kind, name, step, context, text=text, data=data)
+        self._uplink.sequence(item)
+
+    def _log_blob(
+        self, kind: str, name: str, data: bytes, fmt: str, step: int | None,
+        context: dict | None, *, idx: int = 0, caption: str | None = None,
+        width: int | None = None, height: int | None = None,
+    ) -> None:
+        from mlops import transfer
+
+        item = self._sequence_item(
+            kind, name, step, context, idx=idx, caption=caption, fmt=fmt, width=width,
+            height=height,
+        )
+        try:
+            if self._api is None:
+                raise httpx.ConnectError("offline")
+            presigned = self._api.presign_sequence(
+                self.id, kind, item["name"], item["step"], idx, fmt, item["context"]
+            )
+            transfer.put_file(presigned["upload_url"], data)
+            self._api.post_sequences(self.id, [{**item, "blob_key": presigned["key"]}])
+        except Exception as exc:
+            if not _transient(exc):
+                log.warning("%s %s was rejected: %s", kind, name, exc)
+                return
+            self._spill_sequence_blob(item, data)
+
+    def _spill_sequence_blob(self, item: dict, data: bytes) -> None:
+        try:
+            file_name = f"seq-{uuid.uuid4().hex}.{item['format']}"
+            self._spool.file_path(file_name).write_bytes(data)
+            self._spool.append("sequence_blob", {"file": file_name, "item": item})
+        except (OSError, TypeError, ValueError) as exc:
+            log.warning("could not spool a sequence blob, dropping it: %s", exc)
 
     def log_params(self, params: dict) -> None:
         self._patch(params=redact_mapping(json.loads(json.dumps(params, default=str))))
