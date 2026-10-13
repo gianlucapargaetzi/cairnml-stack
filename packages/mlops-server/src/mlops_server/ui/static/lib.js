@@ -271,3 +271,21 @@ export function buildOverrides(original, form) {
   if (Object.keys(env).length) out.env = env;
   return out;
 }
+
+// Width of a usage bar in percent. A missing or zero total gives 0, and the result stays within 0 to 100.
+export function barPercent(used, total) {
+  if (typeof used !== "number" || typeof total !== "number" || total <= 0) return 0;
+  return Math.max(0, Math.min(100, (used / total) * 100));
+}
+
+// "6 / 8 cpu" style text. A missing used value shows a dash.
+export function usageLabel(used, total, unit) {
+  const shown = typeof used === "number" ? String(Math.round(used * 10) / 10) : "–";
+  return `${shown} / ${total} ${unit}`;
+}
+
+// "stuck" when jobs wait and no online agent serves the queue, "busy" when jobs wait, else "idle".
+export function queueState(queue) {
+  if (queue.queued > 0 && queue.agents === 0) return "stuck";
+  return queue.queued > 0 ? "busy" : "idle";
+}
