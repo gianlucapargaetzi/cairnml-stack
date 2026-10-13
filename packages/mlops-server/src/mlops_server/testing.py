@@ -239,6 +239,7 @@ class StubGitHub:
         self.commits: set[tuple[str, str]] = set()
         self.heads: dict[tuple[str, str], str] = {}
         self.inaccessible: set[str] = set()
+        self.truncated: set[str] = set()  # repos whose tree listing GitHub would cut short
         self.token_calls: list[str] = []
         self.calls: list[tuple[str, str]] = []  # (method, repo) for every read
         self._repos: dict[str, dict] = {}
@@ -309,7 +310,7 @@ class StubGitHub:
         return out
 
     def list_tree(self, repo: str, ref: str) -> tuple[list[str], bool]:
-        return sorted(self._repo(repo)["files"]), False
+        return sorted(self._repo(repo)["files"]), repo in self.truncated
 
     def read_file(self, repo: str, path: str, ref: str, max_bytes: int = 200_000) -> str | None:
         files = self._repo(repo)["files"]

@@ -200,3 +200,65 @@ def test_unsafe_path_segments_and_refs_are_rejected_before_github(lab):
         assert http.get("/api/v1/datasets/detail", params={**base, "path": path}).status_code == 422
     assert http.get("/api/v1/datasets/detail", params={**base, "ref": "a b"}).status_code == 422
     assert lab["gh"].calls == []
+
+
+def test_non_string_yaml_keys_are_kept_as_text_and_listed(lab):
+    card = "---\ntitle: Keys\ntrue: 1\n~: 2\n2026-01-01: 3\n---\nbody"
+    parsed = parse_card(card)
+    assert parsed.error is None and parsed.title == "Keys" and parsed.warnings == []
+    assert parsed.extra == {"True": 1, "None": 2, "2026-01-01": 3}
+    lab["gh"].set_file("org/data", "data/keys.dvc", DVC)
+    lab["gh"].set_file("org/data", "data/keys.card.md", card)
+    rows = lab["dev"].http.get("/api/v1/datasets", params={"project": "vision/seg"})
+    assert rows.status_code == 200
+    assert next(r for r in rows.json() if r["path"] == "data/keys")["title"] == "Keys"
+
+
+BILLION_LAUGHS = (
+    "---\n"
+    + "a0: &a0 [x, x, x, x, x, x, x, x, x]\n"
+    + "".join(f"a{i}: &a{i} [{', '.join([f'*a{i - 1}'] * 9)}]\n" for i in range(1, 7))
+    + "---\nbody"
+)
+
+
+def test_alias_amplification_is_refused(lab):
+    card = parse_card(BILLION_LAUGHS)
+    assert card.error is not None and card.extra == {}
+    lab["gh"].set_file("org/data", "data/bomb.dvc", DVC)
+    lab["gh"].set_file("org/data", "data/bomb.card.md", BILLION_LAUGHS)
+    rows = lab["dev"].http.get("/api/v1/datasets", params={"project": "vision/seg"})
+    assert rows.status_code == 200
+    assert next(r for r in rows.json() if r["path"] == "data/bomb")["has_card"] is True
+
+
+def test_deep_nesting_and_large_front_matter_are_refused():
+    deep = "---\nx: " + "[" * 25 + "]" * 25 + "\n---\nbody"
+    assert parse_card(deep).error == "front matter is nested too deeply"
+    big = "---\nx: " + "a" * (65 * 1024) + "\n---\nbody"
+    assert parse_card(big).error.startswith("front matter is larger than 64 KB")
+    assert parse_card(big).extra == {}
+
+
+def test_a_truncated_tree_is_reported_in_the_warning_header(lab, stub_github):
+    stub_github.truncated.add("org/data")
+    response = lab["dev"].http.get("/api/v1/datasets", params={"project": "vision/seg"})
+    assert response.status_code == 200 and len(response.json()) == 2
+    assert "org/data (listing truncated by GitHub)" in response.headers["x-dataset-warnings"]
+
+
+def test_a_missing_dataset_is_not_cached(lab, app):
+    http = lab["dev"].http
+    base = {"project": "vision/seg", "repo": "org/data"}
+    before = len(app.state.dataset_cache)
+    for _ in range(2):
+        assert (
+            http.get("/api/v1/datasets/detail", params={**base, "path": "data/nope"}).status_code
+            == 404
+        )
+    assert len(app.state.dataset_cache) == before
+    assert (
+        http.get("/api/v1/datasets/detail", params={**base, "path": "data/train"}).status_code
+        == 200
+    )
+    assert len(app.state.dataset_cache) == before + 1

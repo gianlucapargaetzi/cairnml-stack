@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import json
 from typing import Any, Literal
 
 import yaml
@@ -51,6 +52,33 @@ class DatasetCardOut(BaseModel):
         return value
 
 
+MAX_FRONT_MATTER_BYTES = 64 * 1024
+MAX_CARD_JSON_BYTES = 256 * 1024
+MAX_NESTING = 20
+
+
+class _NoAliasLoader(yaml.SafeLoader):
+    """Safe loader that refuses YAML aliases, the way small input expands into huge data."""
+
+    def compose_node(self, parent, index):
+        if self.check_event(yaml.AliasEvent):
+            raise yaml.YAMLError("aliases are not allowed in dataset cards")
+        return super().compose_node(parent, index)
+
+
+def _plain(value: Any, depth: int = 0) -> Any:
+    """A JSON-compatible copy: string keys, dates and other scalars as text."""
+    if depth > MAX_NESTING:
+        raise ValueError("nested too deeply")
+    if isinstance(value, dict):
+        return {str(k): _plain(v, depth + 1) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_plain(v, depth + 1) for v in value]
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    return str(value)
+
+
 def front_matter(text: str) -> tuple[dict, str, str | None]:
     if not text.startswith("---"):
         return {}, text, None
@@ -58,12 +86,21 @@ def front_matter(text: str) -> tuple[dict, str, str | None]:
     if end == -1:
         return {}, text, "front matter is not closed"
     body = text[end + 4 :].lstrip("\n")
+    block = text[3:end]
+    if len(block.encode()) > MAX_FRONT_MATTER_BYTES:
+        return {}, body, f"front matter is larger than {MAX_FRONT_MATTER_BYTES // 1024} KB"
     try:
-        meta = yaml.safe_load(text[3:end]) or {}
-    except yaml.YAMLError as exc:
+        loaded = yaml.load(block, Loader=_NoAliasLoader) or {}
+    except (yaml.YAMLError, RecursionError) as exc:
         return {}, body, f"invalid YAML ({exc.__class__.__name__})"
-    if not isinstance(meta, dict):
+    if not isinstance(loaded, dict):
         return {}, body, "front matter must be a mapping"
+    try:
+        meta = _plain(loaded)
+    except ValueError:
+        return {}, body, "front matter is nested too deeply"
+    if len(json.dumps(meta)) > MAX_CARD_JSON_BYTES:
+        return {}, body, "front matter is too large once parsed"
     return meta, body, None
 
 
@@ -84,9 +121,8 @@ def parse_card(text: str) -> DatasetCardOut:
         except ValidationError as exc:
             bad = {str(e["loc"][0]) for e in exc.errors() if e["loc"]} & set(known)
             if not bad:
-                return DatasetCardOut(
-                    extra=extra, warnings=warnings + ["card could not be read"], body=body
-                )
+                # Last resort: keep the text and the warnings, drop everything structured.
+                return DatasetCardOut(warnings=[*warnings, "card could not be read"], body=body)
             for key in sorted(bad):
                 warnings.append(f"ignored invalid field {key!r}")
                 known.pop(key)
@@ -116,7 +152,12 @@ def parse_dvc(text: str | None) -> dict:
 
 
 def list_datasets(github, repo: str, ref: str) -> list[dict]:
-    paths, _truncated = github.list_tree(repo, ref)
+    return catalog(github, repo, ref)["entries"]
+
+
+def catalog(github, repo: str, ref: str) -> dict:
+    """The DVC datasets of one ref. `truncated` is True when GitHub cut the tree listing short."""
+    paths, truncated = github.list_tree(repo, ref)
     present = set(paths)
     entries = []
     dvc_paths = sorted(p for p in paths if p.endswith(".dvc") and not p.startswith(".dvc/"))
@@ -135,7 +176,7 @@ def list_datasets(github, repo: str, ref: str) -> list[dict]:
             card = parse_card(github.read_file(repo, path + CARD_SUFFIX, ref) or "")
             entry.update(type=card.type, license=card.license, title=card.title, tags=card.tags)
         entries.append(entry)
-    return entries
+    return {"entries": entries, "truncated": truncated}
 
 
 def _version(github, repo: str, dvc_path: str, commit: CommitInfo) -> dict:

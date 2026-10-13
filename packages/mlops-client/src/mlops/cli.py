@@ -15,7 +15,7 @@ from mlops_common.schemas import TERMINAL_STATUSES
 from mlops import runtime
 from mlops.config import NotEnrolled
 from mlops.data import dvc_command
-from mlops.dataset_card import parse_dvc_file, scaffold_card
+from mlops.dataset_card import check_dataset_path, parse_dvc_file, printable, write_card
 from mlops.dispatch import DispatchError, dispatch_experiment, server_detail
 from mlops.enroll import enroll as do_enroll
 from mlops.enroll import whoami as do_whoami
@@ -358,8 +358,9 @@ def dataset_ls(project: str = typer.Option(None, help="Only this project")) -> N
     for d in rows:
         card = "yes" if d["has_card"] else "no"
         typer.echo(
-            f"{d['project']:<24} {d['repo']:<24} {d['path']:<28} "
-            f"{d['type'] or '-':<10} {d['license'] or '-':<12} card={card}"
+            f"{printable(d['project']):<24} {printable(d['repo']):<24} "
+            f"{printable(d['path']):<28} {printable(d['type'] or '-'):<10} "
+            f"{printable(d['license'] or '-'):<12} card={card}"
         )
 
 
@@ -380,10 +381,11 @@ def dataset_show(
         detail = api.get_dataset(project, repo, path)
     card = detail["card"] or {}
     license_name = card.get("license") or "-"
-    typer.echo(f"{card.get('title') or path} ({card.get('type', '-')}, license {license_name})")
+    title = printable(card.get("title") or path)
+    typer.echo(f"{title} ({printable(card.get('type', '-'))}, license {printable(license_name)})")
     used = detail["used_by"]["count"]
-    typer.echo(f"hash {detail['dvc']['dvc_hash']}  used by {used} experiment(s)")
-    typer.echo(card.get("body") or f"No card yet: run `mlops dataset card init {path}`.")
+    typer.echo(f"hash {printable(detail['dvc']['dvc_hash'])}  used by {used} experiment(s)")
+    typer.echo(printable(card.get("body") or f"No card yet: run `mlops dataset card init {path}`."))
 
 
 @card_app.command("init")
@@ -397,16 +399,20 @@ def card_init(
     description: str = typer.Option(None, help="One-paragraph summary"),  # noqa: B008
 ) -> None:
     """Create PATH.card.md next to the .dvc file, from the DVC metadata. Nothing is uploaded."""
+    try:
+        check_dataset_path(path)
+    except ValueError as exc:
+        _fail(str(exc))
     dvc_file = Path(path + ".dvc")
     if not dvc_file.is_file():
         _fail(f"{path} is not tracked by DVC (no {dvc_file})")
-    target = Path(path + ".card.md")
-    if target.exists():
-        _fail(f"{target} already exists; edit it instead")
     info = parse_dvc_file(dvc_file.read_text())
-    target.write_text(
-        scaffold_card(path, info, title=title, license=license, type=type, description=description)
-    )
+    try:
+        target = write_card(
+            path, info, title=title, license=license, type=type, description=description
+        )
+    except FileExistsError:
+        _fail(f"{path}.card.md already exists; edit it instead")
     typer.echo(f"created {target}")
     typer.echo(f"next: edit it, then `git add {target} && git commit && git push`")
 

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from mlops_server.models import Experiment, Project, ProjectRepo, Task
 from mlops_server.security.deps import READERS, Principal, get_session, require
 from mlops_server.services import access
-from mlops_server.services.datasets import dataset_detail, list_datasets
+from mlops_server.services.datasets import catalog, dataset_detail
 from mlops_server.services.github import GitHubError, RepoNotAccessible, valid_repo
 from mlops_server.services.tasks import DEFAULT_TASK
 
@@ -32,8 +32,8 @@ def _github(request: Request):
     return request.app.state.github
 
 
-def _catalog(github, cache, repo: str, ref: str) -> list[dict]:
-    return cache.get_or_set(("catalog", repo, ref), lambda: list_datasets(github, repo, ref))
+def _catalog(github, cache, repo: str, ref: str) -> dict:
+    return cache.get_or_set(("catalog", repo, ref), lambda: catalog(github, repo, ref))
 
 
 def _default_branch(request: Request, repo: str) -> str:
@@ -74,11 +74,16 @@ def datasets(
         for link in links:
             try:
                 ref = _default_branch(request, link.repo)
-                entries = _catalog(github, cache, link.repo, ref)
+                listing = _catalog(github, cache, link.repo, ref)
             except (HTTPException, GitHubError):
                 warnings.add(link.repo)
                 continue
-            out += [{"project": proj.slug, "repo": link.repo, "ref": ref, **e} for e in entries]
+            if listing["truncated"]:
+                warnings.add(f"{link.repo} (listing truncated by GitHub)")
+            out += [
+                {"project": proj.slug, "repo": link.repo, "ref": ref, **e}
+                for e in listing["entries"]
+            ]
     if warnings:
         response.headers["X-Dataset-Warnings"] = ", ".join(sorted(warnings))
     return out
@@ -128,7 +133,9 @@ def detail(
     ref = ref or _default_branch(request, repo)
     try:
         body = cache.get_or_set(
-            ("detail", repo, path, ref), lambda: dataset_detail(github, repo, path, ref)
+            ("detail", repo, path, ref),
+            lambda: dataset_detail(github, repo, path, ref),
+            store_if=lambda value: value is not None,  # misses are not cached
         )
     except RepoNotAccessible:
         raise HTTPException(404, "GitHub App is not installed on this repository") from None

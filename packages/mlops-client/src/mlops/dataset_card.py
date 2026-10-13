@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import yaml
@@ -24,6 +25,17 @@ def parse_dvc_file(text: str) -> dict:
     }
 
 
+_CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
+
+
+def check_dataset_path(path: str | Path) -> str:
+    """A repository-relative dataset path without '..', empty or absolute segments."""
+    text = str(path)
+    if not text or text.startswith("/") or any(p in ("", "..") for p in text.split("/")):
+        raise ValueError(f"unsafe dataset path {text!r}")
+    return text
+
+
 def scaffold_card(
     path: str | Path,
     dvc_info: dict,
@@ -33,7 +45,7 @@ def scaffold_card(
     type: str = "other",
     description: str | None = None,
 ) -> str:
-    path = str(path)
+    path = check_dataset_path(path)
     title = title or path.rsplit("/", 1)[-1]
     meta: dict = {
         "title": title,
@@ -56,3 +68,17 @@ def scaffold_card(
         "(recorded when this card was created).\n\n"
         "## Intended use\n\n## Known issues\n"
     )
+
+
+def write_card(path: str | Path, dvc_info: dict, **fields) -> Path:
+    """Create PATH.card.md exclusively (mode "x"); FileExistsError when it is already there."""
+    text = scaffold_card(path, dvc_info, **fields)
+    target = Path(str(path) + ".card.md")
+    with open(target, "x", encoding="utf-8") as handle:
+        handle.write(text)
+    return target
+
+
+def printable(text: object) -> str:
+    """Card text safe for a terminal: control characters removed, newlines and tabs kept."""
+    return _CONTROL.sub("", str(text))
