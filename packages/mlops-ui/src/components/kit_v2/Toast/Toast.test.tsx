@@ -26,23 +26,22 @@ describe(`<ToastProvider>
 
   // test onClick event
   test('onClick event works properly', () => {
-    const onClick = jest.fn();
+    const onDelete = jest.fn();
+    const onUndo = jest.fn();
     const { getByTestId } = render(
       <ToastProvider>
         <Toast
           id={1}
           icon={<IconCheck />}
-          onDelete={() => {}}
-          onUndo={() => {}}
+          onDelete={onDelete}
+          onUndo={onUndo}
           message='AimOS is an easy-to-use modular observability for AI Systems. Extensible, scalable and modular.'
         />
       </ToastProvider>,
     );
-    const deleteButton = getByTestId('toast-delete');
-    const undoButton = getByTestId('toast-undo');
-    deleteButton.click();
-    expect(onClick).toHaveBeenCalled();
-    undoButton.click();
-    expect(onClick).toHaveBeenCalled();
+    getByTestId('delete-toast').click();
+    expect(onDelete).toHaveBeenCalledTimes(1);
+    getByTestId('undo-toast').click();
+    expect(onUndo).toHaveBeenCalledTimes(1);
   });
 });

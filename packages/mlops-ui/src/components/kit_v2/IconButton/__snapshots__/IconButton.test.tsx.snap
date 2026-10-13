@@ -3,12 +3,17 @@
 exports[`<IconButton icon="search" /> Renders Correctly 1`] = `
 <DocumentFragment>
   <button
-    class="AimUi-c-sFyLx AimUi-c-sFyLx-fDXBFo-size-sm AimUi-c-sFyLx-ihtltCK-css"
+    class="aim-ui-c-fFhfnw aim-ui-c-fFhfnw-fDXBFo-size-sm aim-ui-c-fFhfnw-ikEDrex-css"
     data-testid="icon-button"
   >
-    <i
-      class="Icon__container icon-search "
-    />
+    <div
+      class="aim-ui-c-inGMmN aim-ui-c-inGMmN-iPJLV-css Icon"
+      data-testid="icon"
+    >
+      <i
+        class="aim-ui-c-dOCGJv aim-ui-c-dOCGJv-geMoFh-size-md"
+      />
+    </div>
   </button>
 </DocumentFragment>
 `;

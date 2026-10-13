@@ -1,0 +1,68 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`<ToastProvider>
+             <Toast
+                id={1}
+                icon={<IconCheck />}
+                message='Aim is an open-source, self-hosted ML experiment tracking tool'
+               />
+           </ToastProvider> Renders Correctly 1`] = `
+<DocumentFragment>
+  <div
+    aria-label="Notifications (F8)"
+    role="region"
+    style=""
+    tabindex="-1"
+  >
+    <span
+      aria-hidden="true"
+      style="position: fixed; border: 0px; width: 1px; height: 1px; padding: 0px; margin: -1px; overflow: hidden; clip: rect(0px, 0px, 0px, 0px); white-space: nowrap; word-wrap: normal;"
+      tabindex="0"
+    />
+    <ol
+      class="aim-ui-c-djYNOp aim-ui-c-djYNOp-lerouB-placement-bottomRight ToastViewport"
+      tabindex="-1"
+    >
+      <li
+        aria-atomic="true"
+        aria-live="off"
+        class="aim-ui-c-gbzSVw aim-ui-c-gbzSVw-jbqQyv-status-danger ToastRoot"
+        data-radix-collection-item=""
+        data-state="open"
+        data-swipe-direction="right"
+        role="status"
+        style="user-select: none;"
+        tabindex="0"
+      >
+        <span
+          class="aim-ui-c-fwLXun aim-ui-c-fwLXun-iCWAjt-css"
+        >
+          <div
+            class="aim-ui-c-inGMmN aim-ui-c-inGMmN-ifjEkWJ-css"
+            data-testid="icon"
+          >
+            <i
+              class="aim-ui-c-dOCGJv aim-ui-c-dOCGJv-kupcZn-size-lg"
+            >
+              &lt;svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-check" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"&gt;
+  &lt;path stroke="none" d="M0 0h24v24H0z" fill="none"/&gt;
+  &lt;path d="M5 12l5 5l10 -10" /&gt;
+&lt;/svg&gt;
+            </i>
+          </div>
+        </span>
+        <div
+          class="aim-ui-c-cFjXjN"
+        >
+          AimOS is an easy-to-use modular observability for AI Systems. Extensible, scalable and modular.
+        </div>
+      </li>
+    </ol>
+    <span
+      aria-hidden="true"
+      style="position: fixed; border: 0px; width: 1px; height: 1px; padding: 0px; margin: -1px; overflow: hidden; clip: rect(0px, 0px, 0px, 0px); white-space: nowrap; word-wrap: normal;"
+      tabindex="0"
+    />
+  </div>
+</DocumentFragment>
+`;

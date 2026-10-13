@@ -55,7 +55,7 @@ for (const file of files(BUILD)) {
 if (found.size) {
   console.error('Unlisted external hosts in the bundle:');
   for (const [host, count] of found) console.error(`  ${host} (${count})`);
-  console.error('Decide whether each host is inert, then add it to tasks/check-bundle-hosts.js.');
+  console.error('Decide whether each host is inert, then add it to scripts/check-bundle-hosts.js.');
   process.exit(1);
 }
 console.log('Bundle hosts: all listed.');

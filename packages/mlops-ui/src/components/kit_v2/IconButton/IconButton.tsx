@@ -37,8 +37,8 @@ const IconButton = React.forwardRef<
   ): React.FunctionComponentElement<React.ReactNode> => {
     return (
       <Container
-        {...props}
         data-testid='icon-button'
+        {...props}
         css={{ ...getButtonStyles(color, variant, disabled), ...css }}
         size={size}
         variant={variant}

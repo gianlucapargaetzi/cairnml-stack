@@ -73,8 +73,8 @@
   },
   "scripts": {
     "start": "react-app-rewired --max_old_space_size=4096 start",
-    "build": "react-app-rewired --max_old_space_size=4096 build && gzipper c -i js,css,html ./build && node tasks/index-html-template-generator.js",
-    "build:server": "npm run build && node tasks/check-bundle-hosts.js build && rm -rf ../mlops-server/src/mlops_server/ui/next && cp -r build ../mlops-server/src/mlops_server/ui/next",
+    "build": "react-app-rewired --max_old_space_size=4096 build && gzipper c -i js,css,html ./build && node scripts/index-html-template-generator.js",
+    "build:server": "npm run build && node scripts/check-bundle-hosts.js build && rm -rf ../mlops-server/src/mlops_server/ui/next && cp -r build ../mlops-server/src/mlops_server/ui/next",
     "test": "react-app-rewired test ",
     "test:coverage": "react-app-rewired test --collectCoverage",
     "test:watch": "react-app-rewired test --watchAll",
@@ -83,11 +83,17 @@
     "format:fix": "eslint src/. --ext .js,.jsx,.ts,.tsx --quiet --fix",
     "preinstall": "rimraf public/vs",
     "postinstall": "cp -R node_modules/monaco-editor/min/vs public/vs",
-    "analyze-bundles": "node tasks/bundle-analyzer.js",
-    "crc-kit": "func() { node tasks/cli/index.js  create-component --name=\"$1\" --path=./src/components/kit/ --lint; }; func",
-    "crc": "func() { node tasks/cli/index.js  create-component --name=\"$1\" --path=./src/components/ --lint; }; func",
+    "analyze-bundles": "node scripts/bundle-analyzer.js",
+    "crc-kit": "func() { node scripts/cli/index.js  create-component --name=\"$1\" --path=./src/components/kit/ --lint; }; func",
+    "crc": "func() { node scripts/cli/index.js  create-component --name=\"$1\" --path=./src/components/ --lint; }; func",
     "storybook": "start-storybook -p 6006 -s public",
     "build-storybook": "build-storybook -s public"
+  },
+  "jest": {
+    "moduleNameMapper": {
+      "^lodash-es$": "lodash",
+      "^lodash-es/(.*)$": "lodash/$1"
+    }
   },
   "homepage": "/ui-next",
   "browserslist": {

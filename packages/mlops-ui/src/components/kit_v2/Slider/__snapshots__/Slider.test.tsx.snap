@@ -4,18 +4,18 @@ exports[`<Slider /> Change the defaultValue props 1`] = `
 <DocumentFragment>
   <span
     aria-disabled="false"
-    class="c-jNrgAO"
+    class="aim-ui-c-geRmAY"
     data-orientation="horizontal"
     data-testid="slider"
     dir="ltr"
     style="--radix-slider-thumb-transform: translateX(-50%);"
   >
     <span
-      class="c-jfCizU SliderTrack"
+      class="aim-ui-c-iXbCOP SliderTrack"
       data-orientation="horizontal"
     >
       <span
-        class="c-xqWKh SliderRange"
+        class="aim-ui-c-eSlHhy SliderRange"
         data-orientation="horizontal"
         style="left: 0%; right: 90%;"
       />
@@ -28,7 +28,7 @@ exports[`<Slider /> Change the defaultValue props 1`] = `
         aria-valuemax="100"
         aria-valuemin="0"
         aria-valuenow="10"
-        class="c-erhIZu SliderThumb"
+        class="aim-ui-c-Mpboy SliderThumb"
         data-orientation="horizontal"
         data-radix-collection-item=""
         role="slider"
@@ -36,7 +36,7 @@ exports[`<Slider /> Change the defaultValue props 1`] = `
         tabindex="0"
       >
         <span
-          class="c-jbSxsI SliderLabel"
+          class="aim-ui-c-gduPeg SliderLabel"
         >
           10
         </span>
@@ -50,18 +50,18 @@ exports[`<Slider /> Change the defaultValue props 2`] = `
 <DocumentFragment>
   <span
     aria-disabled="false"
-    class="c-jNrgAO"
+    class="aim-ui-c-geRmAY"
     data-orientation="horizontal"
     data-testid="slider"
     dir="ltr"
     style="--radix-slider-thumb-transform: translateX(-50%);"
   >
     <span
-      class="c-jfCizU SliderTrack"
+      class="aim-ui-c-iXbCOP SliderTrack"
       data-orientation="horizontal"
     >
       <span
-        class="c-xqWKh SliderRange"
+        class="aim-ui-c-eSlHhy SliderRange"
         data-orientation="horizontal"
         style="left: 0%; right: 90%;"
       />
@@ -74,7 +74,7 @@ exports[`<Slider /> Change the defaultValue props 2`] = `
         aria-valuemax="100"
         aria-valuemin="0"
         aria-valuenow="10"
-        class="c-erhIZu SliderThumb"
+        class="aim-ui-c-Mpboy SliderThumb"
         data-orientation="horizontal"
         data-radix-collection-item=""
         role="slider"
@@ -82,7 +82,7 @@ exports[`<Slider /> Change the defaultValue props 2`] = `
         tabindex="0"
       >
         <span
-          class="c-jbSxsI SliderLabel"
+          class="aim-ui-c-gduPeg SliderLabel"
         >
           10
         </span>
@@ -96,18 +96,18 @@ exports[`<Slider /> Change the min and max props 1`] = `
 <DocumentFragment>
   <span
     aria-disabled="false"
-    class="c-jNrgAO"
+    class="aim-ui-c-geRmAY"
     data-orientation="horizontal"
     data-testid="slider"
     dir="ltr"
     style="--radix-slider-thumb-transform: translateX(-50%);"
   >
     <span
-      class="c-jfCizU SliderTrack"
+      class="aim-ui-c-iXbCOP SliderTrack"
       data-orientation="horizontal"
     >
       <span
-        class="c-xqWKh SliderRange"
+        class="aim-ui-c-eSlHhy SliderRange"
         data-orientation="horizontal"
         style="left: 0%; right: 90%;"
       />
@@ -120,7 +120,7 @@ exports[`<Slider /> Change the min and max props 1`] = `
         aria-valuemax="100"
         aria-valuemin="0"
         aria-valuenow="10"
-        class="c-erhIZu SliderThumb"
+        class="aim-ui-c-Mpboy SliderThumb"
         data-orientation="horizontal"
         data-radix-collection-item=""
         role="slider"
@@ -128,7 +128,7 @@ exports[`<Slider /> Change the min and max props 1`] = `
         tabindex="0"
       >
         <span
-          class="c-jbSxsI SliderLabel"
+          class="aim-ui-c-gduPeg SliderLabel"
         >
           10
         </span>
@@ -142,18 +142,18 @@ exports[`<Slider /> Change the min and max props 2`] = `
 <DocumentFragment>
   <span
     aria-disabled="false"
-    class="c-jNrgAO"
+    class="aim-ui-c-geRmAY"
     data-orientation="horizontal"
     data-testid="slider"
     dir="ltr"
     style="--radix-slider-thumb-transform: translateX(-50%);"
   >
     <span
-      class="c-jfCizU SliderTrack"
+      class="aim-ui-c-iXbCOP SliderTrack"
       data-orientation="horizontal"
     >
       <span
-        class="c-xqWKh SliderRange"
+        class="aim-ui-c-eSlHhy SliderRange"
         data-orientation="horizontal"
         style="left: 0%; right: 90%;"
       />
@@ -166,7 +166,7 @@ exports[`<Slider /> Change the min and max props 2`] = `
         aria-valuemax="100"
         aria-valuemin="0"
         aria-valuenow="10"
-        class="c-erhIZu SliderThumb"
+        class="aim-ui-c-Mpboy SliderThumb"
         data-orientation="horizontal"
         data-radix-collection-item=""
         role="slider"
@@ -174,99 +174,7 @@ exports[`<Slider /> Change the min and max props 2`] = `
         tabindex="0"
       >
         <span
-          class="c-jbSxsI SliderLabel"
-        >
-          10
-        </span>
-      </span>
-    </span>
-  </span>
-</DocumentFragment>
-`;
-
-exports[`<Slider /> Change the onValueChange props 1`] = `
-<DocumentFragment>
-  <span
-    aria-disabled="false"
-    class="c-jNrgAO"
-    data-orientation="horizontal"
-    data-testid="slider"
-    dir="ltr"
-    style="--radix-slider-thumb-transform: translateX(-50%);"
-  >
-    <span
-      class="c-jfCizU SliderTrack"
-      data-orientation="horizontal"
-    >
-      <span
-        class="c-xqWKh SliderRange"
-        data-orientation="horizontal"
-        style="left: 0%; right: 90%;"
-      />
-    </span>
-    <span
-      style="transform: var(--radix-slider-thumb-transform); position: absolute; left: calc(10% + 0px);"
-    >
-      <span
-        aria-orientation="horizontal"
-        aria-valuemax="100"
-        aria-valuemin="0"
-        aria-valuenow="10"
-        class="c-erhIZu SliderThumb"
-        data-orientation="horizontal"
-        data-radix-collection-item=""
-        role="slider"
-        style=""
-        tabindex="0"
-      >
-        <span
-          class="c-jbSxsI SliderLabel"
-        >
-          10
-        </span>
-      </span>
-    </span>
-  </span>
-</DocumentFragment>
-`;
-
-exports[`<Slider /> Change the onValueChange props 2`] = `
-<DocumentFragment>
-  <span
-    aria-disabled="false"
-    class="c-jNrgAO"
-    data-orientation="horizontal"
-    data-testid="slider"
-    dir="ltr"
-    style="--radix-slider-thumb-transform: translateX(-50%);"
-  >
-    <span
-      class="c-jfCizU SliderTrack"
-      data-orientation="horizontal"
-    >
-      <span
-        class="c-xqWKh SliderRange"
-        data-orientation="horizontal"
-        style="left: 0%; right: 90%;"
-      />
-    </span>
-    <span
-      style="transform: var(--radix-slider-thumb-transform); position: absolute; left: calc(10% + 0px);"
-    >
-      <span
-        aria-orientation="horizontal"
-        aria-valuemax="100"
-        aria-valuemin="0"
-        aria-valuenow="10"
-        class="c-erhIZu SliderThumb"
-        data-orientation="horizontal"
-        data-radix-collection-item=""
-        role="slider"
-        style=""
-        tabindex="0"
-      >
-        <span
-          class="c-jbSxsI SliderLabel"
+          class="aim-ui-c-gduPeg SliderLabel"
         >
           10
         </span>
@@ -280,18 +188,18 @@ exports[`<Slider /> Change the value props 1`] = `
 <DocumentFragment>
   <span
     aria-disabled="false"
-    class="c-jNrgAO"
+    class="aim-ui-c-geRmAY"
     data-orientation="horizontal"
     data-testid="slider"
     dir="ltr"
     style="--radix-slider-thumb-transform: translateX(-50%);"
   >
     <span
-      class="c-jfCizU SliderTrack"
+      class="aim-ui-c-iXbCOP SliderTrack"
       data-orientation="horizontal"
     >
       <span
-        class="c-xqWKh SliderRange"
+        class="aim-ui-c-eSlHhy SliderRange"
         data-orientation="horizontal"
         style="left: 0%; right: 90%;"
       />
@@ -304,7 +212,7 @@ exports[`<Slider /> Change the value props 1`] = `
         aria-valuemax="100"
         aria-valuemin="0"
         aria-valuenow="10"
-        class="c-erhIZu SliderThumb"
+        class="aim-ui-c-Mpboy SliderThumb"
         data-orientation="horizontal"
         data-radix-collection-item=""
         role="slider"
@@ -312,7 +220,7 @@ exports[`<Slider /> Change the value props 1`] = `
         tabindex="0"
       >
         <span
-          class="c-jbSxsI SliderLabel"
+          class="aim-ui-c-gduPeg SliderLabel"
         >
           10
         </span>
@@ -326,18 +234,18 @@ exports[`<Slider /> Change the value props 2`] = `
 <DocumentFragment>
   <span
     aria-disabled="false"
-    class="c-jNrgAO"
+    class="aim-ui-c-geRmAY"
     data-orientation="horizontal"
     data-testid="slider"
     dir="ltr"
     style="--radix-slider-thumb-transform: translateX(-50%);"
   >
     <span
-      class="c-jfCizU SliderTrack"
+      class="aim-ui-c-iXbCOP SliderTrack"
       data-orientation="horizontal"
     >
       <span
-        class="c-xqWKh SliderRange"
+        class="aim-ui-c-eSlHhy SliderRange"
         data-orientation="horizontal"
         style="left: 0%; right: 90%;"
       />
@@ -350,7 +258,7 @@ exports[`<Slider /> Change the value props 2`] = `
         aria-valuemax="100"
         aria-valuemin="0"
         aria-valuenow="10"
-        class="c-erhIZu SliderThumb"
+        class="aim-ui-c-Mpboy SliderThumb"
         data-orientation="horizontal"
         data-radix-collection-item=""
         role="slider"
@@ -358,7 +266,7 @@ exports[`<Slider /> Change the value props 2`] = `
         tabindex="0"
       >
         <span
-          class="c-jbSxsI SliderLabel"
+          class="aim-ui-c-gduPeg SliderLabel"
         >
           10
         </span>
@@ -372,18 +280,18 @@ exports[`<Slider /> Render the marks props 1`] = `
 <DocumentFragment>
   <span
     aria-disabled="false"
-    class="c-jNrgAO"
+    class="aim-ui-c-geRmAY"
     data-orientation="horizontal"
     data-testid="slider"
     dir="ltr"
     style="--radix-slider-thumb-transform: translateX(-50%);"
   >
     <span
-      class="c-jfCizU SliderTrack"
+      class="aim-ui-c-iXbCOP SliderTrack"
       data-orientation="horizontal"
     >
       <span
-        class="c-xqWKh SliderRange"
+        class="aim-ui-c-eSlHhy SliderRange"
         data-orientation="horizontal"
         style="left: 0%; right: 90%;"
       />
@@ -396,7 +304,7 @@ exports[`<Slider /> Render the marks props 1`] = `
         aria-valuemax="100"
         aria-valuemin="0"
         aria-valuenow="10"
-        class="c-erhIZu SliderThumb"
+        class="aim-ui-c-Mpboy SliderThumb"
         data-orientation="horizontal"
         data-radix-collection-item=""
         role="slider"
@@ -404,7 +312,7 @@ exports[`<Slider /> Render the marks props 1`] = `
         tabindex="0"
       >
         <span
-          class="c-jbSxsI SliderLabel"
+          class="aim-ui-c-gduPeg SliderLabel"
         >
           10
         </span>
@@ -418,18 +326,18 @@ exports[`<Slider /> Render the marks props 2`] = `
 <DocumentFragment>
   <span
     aria-disabled="false"
-    class="c-jNrgAO"
+    class="aim-ui-c-geRmAY"
     data-orientation="horizontal"
     data-testid="slider"
     dir="ltr"
     style="--radix-slider-thumb-transform: translateX(-50%);"
   >
     <span
-      class="c-jfCizU SliderTrack"
+      class="aim-ui-c-iXbCOP SliderTrack"
       data-orientation="horizontal"
     >
       <span
-        class="c-xqWKh SliderRange"
+        class="aim-ui-c-eSlHhy SliderRange"
         data-orientation="horizontal"
         style="left: 0%; right: 90%;"
       />
@@ -442,7 +350,7 @@ exports[`<Slider /> Render the marks props 2`] = `
         aria-valuemax="100"
         aria-valuemin="0"
         aria-valuenow="10"
-        class="c-erhIZu SliderThumb"
+        class="aim-ui-c-Mpboy SliderThumb"
         data-orientation="horizontal"
         data-radix-collection-item=""
         role="slider"
@@ -450,34 +358,34 @@ exports[`<Slider /> Render the marks props 2`] = `
         tabindex="0"
       >
         <span
-          class="c-jbSxsI SliderLabel"
+          class="aim-ui-c-gduPeg SliderLabel"
         >
           10
         </span>
       </span>
     </span>
     <span
-      class="c-lmDkHl c-lmDkHl-iwHen-css"
+      class="aim-ui-c-hSRhEy aim-ui-c-hSRhEy-iwHen-css"
       data-active="true"
     >
       <span
-        class="c-iuedIb c-iuedIb-ijPcYZy-css"
+        class="aim-ui-c-PJLV aim-ui-c-PJLV-iiVKXYV-css"
       />
     </span>
     <span
-      class="c-lmDkHl c-lmDkHl-ibdNZrc-css"
+      class="aim-ui-c-hSRhEy aim-ui-c-hSRhEy-ibdNZrc-css"
       data-active="false"
     >
       <span
-        class="c-iuedIb c-iuedIb-ijPcYZy-css"
+        class="aim-ui-c-PJLV aim-ui-c-PJLV-iiVKXYV-css"
       />
     </span>
     <span
-      class="c-lmDkHl c-lmDkHl-igXDGmT-css"
+      class="aim-ui-c-hSRhEy aim-ui-c-hSRhEy-igXDGmT-css"
       data-active="false"
     >
       <span
-        class="c-iuedIb c-iuedIb-ijPcYZy-css"
+        class="aim-ui-c-PJLV aim-ui-c-PJLV-iiVKXYV-css"
       >
         50
       </span>
@@ -490,18 +398,18 @@ exports[`<Slider /> Renders Correctly 1`] = `
 <DocumentFragment>
   <span
     aria-disabled="false"
-    class="c-jNrgAO"
+    class="aim-ui-c-geRmAY"
     data-orientation="horizontal"
     data-testid="slider"
     dir="ltr"
     style="--radix-slider-thumb-transform: translateX(-50%);"
   >
     <span
-      class="c-jfCizU SliderTrack"
+      class="aim-ui-c-iXbCOP SliderTrack"
       data-orientation="horizontal"
     >
       <span
-        class="c-xqWKh SliderRange"
+        class="aim-ui-c-eSlHhy SliderRange"
         data-orientation="horizontal"
         style="left: 0%; right: 90%;"
       />
@@ -514,7 +422,7 @@ exports[`<Slider /> Renders Correctly 1`] = `
         aria-valuemax="100"
         aria-valuemin="0"
         aria-valuenow="10"
-        class="c-erhIZu SliderThumb"
+        class="aim-ui-c-Mpboy SliderThumb"
         data-orientation="horizontal"
         data-radix-collection-item=""
         role="slider"
@@ -522,7 +430,7 @@ exports[`<Slider /> Renders Correctly 1`] = `
         tabindex="0"
       >
         <span
-          class="c-jbSxsI SliderLabel"
+          class="aim-ui-c-gduPeg SliderLabel"
         >
           10
         </span>

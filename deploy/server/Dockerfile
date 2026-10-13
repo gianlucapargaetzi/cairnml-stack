@@ -3,7 +3,7 @@ FROM node:24 AS ui-builder
 ENV NODE_OPTIONS=--openssl-legacy-provider
 WORKDIR /build
 COPY packages/mlops-ui .
-RUN npm ci && npm run build && node tasks/check-bundle-hosts.js build
+RUN npm ci && npm run build && node scripts/check-bundle-hosts.js build
 
 FROM python:3.12-slim
 ENV PYTHONUNBUFFERED=1

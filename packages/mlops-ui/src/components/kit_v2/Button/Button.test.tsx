@@ -12,12 +12,12 @@ describe('<Button startIcon="search">Click</Button>', () => {
   // test onClick event
   test('onClick event works properly', () => {
     const onClick = jest.fn();
-    const { getByTestId } = render(
+    const { getByRole } = render(
       <Button leftIcon='search' onClick={onClick}>
         Click
       </Button>,
     );
-    const button = getByTestId('button');
+    const button = getByRole('button');
     button.click();
     expect(onClick).toHaveBeenCalled();
   });

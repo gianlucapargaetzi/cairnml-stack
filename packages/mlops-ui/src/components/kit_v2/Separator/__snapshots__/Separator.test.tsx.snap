@@ -3,7 +3,7 @@
 exports[`<Separator /> Renders Correctly 1`] = `
 <DocumentFragment>
   <div
-    class="aim-ui-c-gzAwqY aim-ui-c-gzAwqY-ifXICFP-css Separator"
+    class="aim-ui-c-cWDvJM aim-ui-c-cWDvJM-igCiGbb-css Separator"
     data-orientation="horizontal"
     data-testid="separator"
     role="separator"
