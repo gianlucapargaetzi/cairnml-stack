@@ -310,3 +310,29 @@ def test_metric_forms_run_against_the_database(lab):
                   "metric.context.subset == 'val'", "metric.name.startswith('lo')"]:
         response = _search(lab["dev"], path="/api/v1/explorer/runs/search/metric", q=query)
         assert response.status_code == 200, (query, response.text)
+
+
+def test_run_info_carries_the_system_params_and_the_artifacts(lab):
+    """The run detail overview reads the arguments, environment, packages, git state and the
+    artifacts of a run from run info. Artifacts are listed without their storage keys."""
+    dev = lab["dev"]
+    dev.http.patch(f"/api/v1/runs/{lab['fast']}", json={
+        "env": {"HOME": "/home/alice"},
+        "requirements": ["numpy==1.26.4", "torch"],
+        "git": {"repo": "vision/seg", "branch": "main", "commit": "a" * 40, "dirty": False},
+        "argv": ["train.py", "--epochs", "3"],
+    })
+    presigned = dev.http.post(f"/api/v1/runs/{lab['fast']}/artifacts/presign",
+                              json={"name": "model.pt"}).json()
+    dev.http.post(f"/api/v1/runs/{lab['fast']}/artifacts", json={
+        "name": "model.pt", "key": presigned["key"], "size": 12, "kind": "model", "meta": {}})
+    info = dev.http.get(f"/api/v1/explorer/runs/{lab['fast']}/info").json()
+    system = info["system"]
+    assert system["arguments"] == ["train.py", "--epochs", "3"]
+    assert system["env_variables"] == {"HOME": "/home/alice"}
+    assert system["packages"] == {"numpy": "1.26.4", "torch": ""}
+    assert system["git_info"]["branch"] == "main"
+    assert system["git_info"]["commit"]["hash"] == "a" * 40
+    (artifact,) = info["artifacts"]
+    assert artifact["name"] == "model.pt" and artifact["kind"] == "model"
+    assert artifact["size"] == 12 and "key" not in artifact and "id" in artifact

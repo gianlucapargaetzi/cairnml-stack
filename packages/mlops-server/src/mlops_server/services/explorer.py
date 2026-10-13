@@ -4,6 +4,7 @@ docs/explorer_api.md."""
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from mlops_common.schemas import TERMINAL_STATUSES
@@ -11,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from mlops_server.models import (
+    Artifact,
     Experiment,
     MetricPoint,
     MetricSeries,
@@ -273,11 +275,54 @@ def run_info(session: Session, run: Run) -> dict[str, Any]:
             {"name": name, "context": context} for kind, name, context in sequences
             if kind == singular
         ]
+    artifacts = session.scalars(
+        select(Artifact).where(Artifact.run_id == run.id).order_by(Artifact.created_at, Artifact.id)
+    ).all()
     return {
         "props": _props(session, [run])[run.id],
         "params": run.params,
         "traces": traces,
-        "artifacts": [],
+        "system": _system(run),
+        "artifacts": [
+            {"id": a.id, "run_id": run.id, "name": a.name, "kind": a.kind, "size": a.size}
+            for a in artifacts
+        ],
+    }
+
+
+def _system(run: Run) -> dict[str, Any]:
+    """What the run detail overview shows about how the run was started: its command line,
+    environment, packages and git state."""
+    return {
+        "arguments": list(run.argv or []),
+        "env_variables": run.env or {},
+        "packages": _packages(run.requirements or []),
+        "git_info": _git_info(run.git),
+    }
+
+
+def _packages(requirements: list[str]) -> dict[str, str]:
+    """name -> version for each requirement line such as numpy==1.26.4. A line without a pin
+    maps to an empty version."""
+    packages: dict[str, str] = {}
+    for line in requirements:
+        text = line.strip()
+        if not text or text.startswith("#"):
+            continue
+        name = re.split(r"[=<>~!@ ;\[]", text, maxsplit=1)[0]
+        rest = text[len(name):].strip()
+        packages[name] = "" if rest.startswith("@") else rest.lstrip("=<>~! ")
+    return packages
+
+
+def _git_info(git: dict[str, Any] | None) -> dict[str, Any]:
+    if not git:
+        return {}
+    return {
+        "repo": git.get("repo"),
+        "branch": git.get("branch"),
+        "dirty": bool(git.get("dirty")),
+        "commit": {"hash": git.get("commit"), "author": None, "timestamp": None},
     }
 
 
