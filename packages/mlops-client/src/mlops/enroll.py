@@ -8,7 +8,7 @@ from mlops_common.schemas import ClientEnrollRequest, ClientEnrollResponse, Publ
 
 from mlops.api import ApiClient
 from mlops.config import ClientConfig, key_path, load_config, save_config
-from mlops.idp import device_login
+from mlops.idp import device_login, end_idp_session
 
 
 def enroll(
@@ -17,11 +17,17 @@ def enroll(
     idp_token: str | None = None,
     *,
     login=device_login,
+    logout=end_idp_session,
     force: bool = False,
 ) -> ClientConfig:
-    if (load_config() or key_path().exists()) and not force:
+    already_enrolled = bool(load_config() or key_path().exists())
+    if already_enrolled and not force:
         raise RuntimeError("already enrolled; use --force to enroll again")
     meta = PublicConfig.model_validate(http.get("/api/v1/config").raise_for_status().json())
+    if idp_token is None and already_enrolled:
+        # The browser may still hold the previous user's IdP session, which would approve the
+        # login silently as that user. Log it out first so the next login asks for credentials.
+        logout(meta.oidc_issuer)
     token = idp_token or login(meta.oidc_issuer, meta.oidc_client_id)
     key = generate_private_key()
     response = http.post(

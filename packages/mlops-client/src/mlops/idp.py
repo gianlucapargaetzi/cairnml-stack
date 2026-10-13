@@ -10,6 +10,24 @@ class LoginFailed(Exception):
     pass
 
 
+def end_idp_session(
+    issuer: str,
+    *,
+    http: httpx.Client | None = None,
+    open_browser=webbrowser.open,
+) -> None:
+    """Open the IdP logout page so the next device login asks for a user again."""
+    client = http or httpx.Client(timeout=30.0)
+    meta = client.get(issuer.rstrip("/") + "/.well-known/openid-configuration").json()
+    url = meta.get("end_session_endpoint")
+    if not url:
+        return
+    try:
+        open_browser(url)
+    except Exception:  # best effort: the user can also log out in the browser by hand
+        pass
+
+
 def device_login(
     issuer: str,
     client_id: str,

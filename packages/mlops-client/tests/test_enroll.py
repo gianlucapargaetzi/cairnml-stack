@@ -184,3 +184,48 @@ def test_cli_whoami_reports_an_unreachable_server(cfg_env, monkeypatch):
     assert result.exit_code == 1
     assert "cannot reach http://mlops.example:8000" in result.output
     assert "Traceback" not in result.output
+
+
+def test_forced_browser_enrollment_logs_the_old_session_out_first(cfg_env, server, idp):
+    enroll(server, "a", idp_token=idp.token(username="alice"))
+    calls = []
+
+    def logout(issuer):
+        calls.append(("logout", issuer))
+
+    def login(issuer, client_id):
+        calls.append(("login", issuer))
+        return idp.token(username="bob")
+
+    enroll(server, "b", login=login, logout=logout, force=True)
+    assert [step for step, _ in calls] == ["logout", "login"]
+
+
+def test_first_enrollment_and_token_enrollment_do_not_log_out(cfg_env, server, idp):
+    def logout(issuer):
+        raise AssertionError("no logout expected")
+
+    enroll(server, "a", login=lambda i, c: idp.token(), logout=logout)
+    enroll(server, "b", idp_token=idp.token(), logout=logout, force=True)
+
+
+@respx.mock
+def test_end_idp_session_opens_the_logout_page():
+    from mlops.idp import end_idp_session
+
+    respx.get(f"{ISSUER}/.well-known/openid-configuration").respond(
+        200, json={"end_session_endpoint": f"{ISSUER}/logout"}
+    )
+    opened = []
+    end_idp_session(ISSUER, open_browser=opened.append)
+    assert opened == [f"{ISSUER}/logout"]
+
+
+@respx.mock
+def test_end_idp_session_without_endpoint_opens_nothing():
+    from mlops.idp import end_idp_session
+
+    respx.get(f"{ISSUER}/.well-known/openid-configuration").respond(200, json={})
+    opened = []
+    end_idp_session(ISSUER, open_browser=opened.append)
+    assert opened == []
