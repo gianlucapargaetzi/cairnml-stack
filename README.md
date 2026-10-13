@@ -33,6 +33,18 @@ This installs the `mlops` command for your user. Check it:
 mlops --help
 ```
 
+To install into a project's `.venv` with pip, straight from Git (the repository is not on PyPI). Install both packages from their subdirectories in one command. Add `@<branch>` before `#subdirectory=` to install a branch other than the default one:
+
+```bash
+cd my-project
+python3 -m venv .venv
+source .venv/bin/activate
+pip install \
+  "git+ssh://git@github.com/gianlucapargaetzi/mlops-framework.git#subdirectory=packages/mlops-common" \
+  "git+ssh://git@github.com/gianlucapargaetzi/mlops-framework.git#subdirectory=packages/mlops-client"
+mlops --help
+```
+
 To use the client in a script, add `mlops-client` to that project's dependencies, or install it with `uv pip install -e packages/mlops-client`.
 
 Enroll this machine once. A browser opens for the login:
