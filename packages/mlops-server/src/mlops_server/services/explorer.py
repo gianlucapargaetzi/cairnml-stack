@@ -295,6 +295,7 @@ def _system(run: Run) -> dict[str, Any]:
     environment, packages and git state."""
     return {
         "arguments": list(run.argv or []),
+        "datasets": [d for d in (run.datasets or [])],
         "env_variables": run.env or {},
         "packages": _packages(run.requirements or []),
         "git_info": _git_info(run.git),

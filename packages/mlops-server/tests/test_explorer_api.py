@@ -321,6 +321,7 @@ def test_run_info_carries_the_system_params_and_the_artifacts(lab):
         "requirements": ["numpy==1.26.4", "torch"],
         "git": {"repo": "vision/seg", "branch": "main", "commit": "a" * 40, "dirty": False},
         "argv": ["train.py", "--epochs", "3"],
+        "datasets": [{"path": "train.dvc", "repo": "lab/data", "dvc_hash": "abc123"}],
     })
     presigned = dev.http.post(f"/api/v1/runs/{lab['fast']}/artifacts/presign",
                               json={"name": "model.pt"}).json()
@@ -333,6 +334,9 @@ def test_run_info_carries_the_system_params_and_the_artifacts(lab):
     assert system["packages"] == {"numpy": "1.26.4", "torch": ""}
     assert system["git_info"]["branch"] == "main"
     assert system["git_info"]["commit"]["hash"] == "a" * 40
+    assert system["datasets"] == [
+        {"path": "train.dvc", "dvc_hash": "abc123", "repo": "lab/data"}
+    ]
     (artifact,) = info["artifacts"]
     assert artifact["name"] == "model.pt" and artifact["kind"] == "model"
     assert artifact["size"] == 12 and "key" not in artifact and "id" in artifact
