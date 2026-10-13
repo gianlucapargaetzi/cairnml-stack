@@ -1,6 +1,6 @@
 # Runbook
 
-From an empty machine to a reproduced experiment. Each step names the command to run. Commands are written as `mlops ...`; from the repository root run them as `uv run mlops ...` unless you activated `.venv`.
+From an empty machine to a reproduced experiment. Each step names the command to run. Commands are written as `mlops ...`. Install the command once with `uv tool install --editable ./packages/mlops-client --with-editable ./packages/mlops-common` (see the [README](../README.md#1-install-the-client)).
 
 **Status.** The steps below were checked against the command help (`--help`) and the source code. The live compose stack has not been run from this runbook yet. Every step that needs the running stack is marked *(not yet verified live)*. If a step fails, fix the runbook together with the code.
 
@@ -93,7 +93,7 @@ curl -fsS http://mlops-server:8000/api/v1/healthz
 ## 5. Enroll yourself *(not yet verified live)*
 
 ```
-uv run mlops enroll --server http://mlops-server:8000
+mlops enroll --server http://mlops-server:8000
 ```
 
 A browser opens for the IdP login. Sign in as `KC_ADMIN` with `KC_ADMIN_PASSWORD` from `deploy/.env` (or as your own user). The client generates a key, sends the public key to the server, and stores the key as `key.pem` under `~/.config/mlops/` (or `$MLOPS_CONFIG_DIR`). The private key never leaves this machine.
@@ -101,7 +101,7 @@ A browser opens for the IdP login. Sign in as `KC_ADMIN` with `KC_ADMIN_PASSWORD
 Then:
 
 ```
-uv run mlops whoami
+mlops whoami
 ```
 
 prints `client <id> (admin=True)` for the admin. It uses the key only and needs no login.
@@ -113,8 +113,8 @@ To enroll the same machine again, use `--force`.
 Run these as the admin, on the enrolled admin machine:
 
 ```
-uv run mlops admin project-create vision/seg
-uv run mlops admin project-add-member vision/seg dev
+mlops admin project-create vision/seg
+mlops admin project-add-member vision/seg dev
 ```
 
 `project-add-member` takes the Keycloak username. That user must have run `mlops enroll` once (step 5). `project-create` takes `--name` for a display name; the slug is the identifier.
@@ -124,7 +124,7 @@ uv run mlops admin project-add-member vision/seg dev
 The agent enrolls with a one-time token that only an admin can create. The token is printed alone, so it can be captured in a variable:
 
 ```
-TOKEN=$(uv run mlops admin agent-token --queue default)
+TOKEN=$(mlops admin agent-token --queue default)
 ```
 
 The token expires after 900 seconds (`--ttl` changes this). Put it in `deploy/.env`, and start the agent before it expires:
@@ -142,7 +142,7 @@ The agent container's entrypoint runs `mlops-agent enroll` on its first start, w
 Confirm the agent is registered:
 
 ```
-uv run mlops admin agents
+mlops admin agents
 ```
 
 The agent name is `MLOPS_AGENT_NAME` (default `local-agent`).
@@ -167,8 +167,8 @@ exp.close()
 Run it with plain Python: `python first_run.py`. The run is recorded on the server.
 
 ```
-uv run mlops ls --project vision/seg
-uv run mlops logs <experiment id>
+mlops ls --project vision/seg
+mlops logs <experiment id>
 ```
 
 `mlops ls` shows the experiment IDs. `mlops logs -f` follows a run that is still going.
@@ -178,12 +178,12 @@ uv run mlops logs <experiment id>
 Datasets are DVC-tracked paths in a Git repository. The framework stores only references. Inside a clone of the project's code repository (it needs at least one commit, and DVC installed with `pip install 'mlops-client[dvc]'`):
 
 ```
-uv run mlops repo init --project vision/seg
+mlops repo init --project vision/seg
 dvc add data/train
 git add .mlops data/train.dvc data/.gitignore .dvc
 git commit -m "add training data"
 git push
-uv run mlops data push data/train
+mlops data push data/train
 ```
 
 `repo init` writes `.mlops/project.yaml` and configures the DVC remote on the NAS, without credentials. `data push` and `data pull` get temporary storage credentials from the server. Commit the `.dvc` pointer and `.mlops/project.yaml`; never the data itself. To describe the dataset in the web UI, create its card (section 17). A data repository is linked to the project with `mlops repo link` (section 16).
@@ -200,7 +200,7 @@ Remote execution needs the code commit on GitHub, because the agent clones it. P
 
 ```
 git push
-uv run mlops dispatch <experiment id> --queue default
+mlops dispatch <experiment id> --queue default
 ```
 
 `--queue` must be a queue the agent serves (step 7 used `default`). Resource requests are `--cpu`, `--memory-gb`, `--gpu` and `--label`.
@@ -247,7 +247,7 @@ When the server is unreachable, the SDK keeps working:
 When the server is back, upload the spooled runs:
 
 ```
-uv run mlops sync
+mlops sync
 ```
 
 ## 12. Moving roles to their own machines *(not yet verified live)*
@@ -316,7 +316,7 @@ Users are managed in the IdP. The server follows the IdP through a directory syn
 3. Either wait up to one minute, or run this as an admin on an enrolled machine:
 
    ```
-   uv run mlops admin sync-users
+   mlops admin sync-users
    ```
 
    It prints the counts, for example `checked 4, disabled 1, re-enabled 0, roles changed 0, errors 0`.
@@ -333,7 +333,7 @@ Deleting a user in the IdP counts as disabling it.
 **Re-enable a user.** Switch **Enabled** on again. The next sync (or `sync-users`) makes the user active. The old client keys stay revoked, so the user must enroll a new key on each machine:
 
 ```
-uv run mlops enroll --server http://mlops-server:8000 --force
+mlops enroll --server http://mlops-server:8000 --force
 ```
 
 **Change roles.** Change the realm roles in the IdP. The next sync applies them; no re-enrollment is needed.
@@ -358,8 +358,8 @@ An experiment name is lower case: letters, digits, `.`, `_` and `-`, at most 64 
 Change an experiment after it exists:
 
 ```
-uv run mlops experiment ls --project vision/seg
-uv run mlops experiment set vision/seg training --metric score --direction max --kind training --description "Segmentation training"
+mlops experiment ls --project vision/seg
+mlops experiment set vision/seg training --metric score --direction max --kind training --description "Segmentation training"
 ```
 
 `--kind` is one of `training`, `data-preparation`, `augmentation`, `evaluation`, `testing`, `compilation`, `inference` or `other`. `experiment set` changes only the metric, direction, kind and description. The Projects tab shows the best runs of each experiment by its primary metric and direction. The web UI can make the same edit (section 13).
@@ -369,7 +369,7 @@ uv run mlops experiment set vision/seg training --metric score --direction max -
 `mlops repo init` (section 9) links the repository it runs in to the project as its code repository. A data repository, or any further code repository, is linked by hand:
 
 ```
-uv run mlops repo link --project vision/seg --repo org/seg-data --role data
+mlops repo link --project vision/seg --repo org/seg-data --role data
 ```
 
 `--role` is `code` or `data` (default `code`). The link is required. The commit graph of the Projects tab and the datasets of the Datasets tab are read only for repositories linked to the project; an unlinked repository is refused with `404 repository is not linked to this project`, even when the GitHub App is installed on it. The GitHub App must also be installed on the repository (step 3), otherwise linking answers `422 GitHub App is not installed on <repo>`.
@@ -382,7 +382,7 @@ Create the card after `dvc add`:
 
 ```
 dvc add data/train
-uv run mlops dataset card init data/train --title "Training images" --type images --license MIT
+mlops dataset card init data/train --title "Training images" --type images --license MIT
 ```
 
 `dataset card init` reads the hash, size and file count from the `.dvc` file, so the file must exist. It writes the card and uploads nothing. It refuses to overwrite an existing card. Edit the card, then commit it with the pointer:
@@ -391,7 +391,7 @@ uv run mlops dataset card init data/train --title "Training images" --type image
 git add data/train.dvc data/train.card.md data/.gitignore
 git commit -m "add training data and its card"
 git push
-uv run mlops data push data/train
+mlops data push data/train
 ```
 
 The front matter is the YAML block between the two `---` lines. These keys are read:
@@ -421,9 +421,9 @@ The Jobs tab lists scheduled (queued), running and finished jobs. Two actions ar
 The same two actions in the CLI:
 
 ```
-uv run mlops job show <job id>
-uv run mlops job cancel <job id>
-uv run mlops job reschedule <job id> --queue gpu-a100 --cpu 8 --param lr=0.01 --unset-param warmup
+mlops job show <job id>
+mlops job cancel <job id>
+mlops job reschedule <job id> --queue gpu-a100 --cpu 8 --param lr=0.01 --unset-param warmup
 ```
 
 `job reschedule` takes `--name`, `--queue`, `--cpu`, `--memory-gb`, `--gpu`, `--timeout` (seconds, at least 60), `--param KEY=VALUE` and `--unset-param KEY` (both repeatable). The CLI does not change labels or environment variables; use the web UI for those.
