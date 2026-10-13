@@ -25,6 +25,35 @@ For the dataset test in `tests/e2e/test_tabs.py` also add `data/sample.dvc` (a D
 example from `dvc add` on a small CSV) and `data/sample.card.md` (a dataset card). The repository is
 linked with `--role data`, so the dataset is listed as `data/sample`.
 
+`data/sample.dvc`: the `outs` entry carries the hash (`md5`), the size and the file count. The values
+below are placeholders; replace them with the ones `dvc add` writes for your file.
+
+```yaml
+outs:
+- md5: 0123456789abcdef0123456789abcdef
+  size: 2048
+  nfiles: 1
+  path: sample.csv
+```
+
+`data/sample.card.md`: the front matter gives the title, the type and the license; the text below it
+is the card body.
+
+```markdown
+---
+title: Sample tabular data
+type: tabular
+license: MIT
+version: "1"
+tags: [sample]
+owners: []
+---
+
+# Sample tabular data
+
+A small CSV file used by the end-to-end tests of the dataset tab.
+```
+
 Export before running the suite:
 
 ```bash

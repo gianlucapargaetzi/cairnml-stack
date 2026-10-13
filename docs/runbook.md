@@ -186,7 +186,7 @@ git push
 uv run mlops data push data/train
 ```
 
-`repo init` writes `.mlops/project.yaml` and configures the DVC remote on the NAS, without credentials. `data push` and `data pull` get temporary storage credentials from the server. Commit the `.dvc` pointer and `.mlops/project.yaml`; never the data itself.
+`repo init` writes `.mlops/project.yaml` and configures the DVC remote on the NAS, without credentials. `data push` and `data pull` get temporary storage credentials from the server. Commit the `.dvc` pointer and `.mlops/project.yaml`; never the data itself. To describe the dataset in the dashboard, create its card (section 17). A data repository is linked to the project with `mlops repo link` (section 16).
 
 In your script, register the dataset (the path is relative to the working directory, and it must be DVC-tracked inside the Git repository):
 
@@ -279,7 +279,7 @@ The dashboard (section 13) is served by the Server, so it moves with the server 
 
 ## 13. Dashboard *(not yet verified live)*
 
-The dashboard is a read-only web view served by the server. Open it in a browser:
+The dashboard is a web view served by the server. Open it in a browser:
 
 ```
 http://mlops-server:8000/ui/
@@ -287,16 +287,21 @@ http://mlops-server:8000/ui/
 
 The hosts entry from step 2 is enough. With no session, the page sends you to the Keycloak login. Log in with a realm user: the `admin` user from step 4, or any user you created there. There is no separate dashboard account. The session lasts 8 hours; **Log out** in the header ends it.
 
-What the pages show:
+The dashboard has four tabs, plus the overview at the front:
 
 - **Overview:** job counts by status, and projects with their run counts and last activity.
-- **Projects and jobs:** the projects you may see, and their jobs.
-- **Agents:** liveness and current load of each agent.
+- **Projects:** the projects you may see, as a tree by slug (`group/name`). A project page shows its tasks with their best results, the commit graph of the linked repository (click a commit to see the experiments that ran on it), the linked datasets and the containers used. Section 15 explains tasks.
+- **Datasets:** each dataset with its card (content, type, license, schema, splits), its DVC versions and the experiments that used it. Section 17 explains cards.
+- **Jobs:** scheduled, running and finished jobs. Cancel a job, or copy and reschedule it (section 18).
+- **Resources:** each agent with its allocated and actual load, and each queue with its waiting jobs (section 19).
+
+Also reachable from these pages:
+
 - **Experiments:** the list. Open one for metric charts, parameters, code and data versions, and live logs of a running job.
 - **Comparison:** in the experiment list, tick 2 to 10 experiments and press **Compare selected**. The comparison shows their metrics, parameters and environment side by side.
 - **Admin:** read-only lists of users and agents, for admins only.
 
-The dashboard cannot start or cancel jobs. Use the CLI for that (sections 8 and 10).
+The dashboard writes only three things: it cancels a job, copies and reschedules a job, and edits a task. It cannot start a brand-new job and cannot edit dataset cards. Use the CLI for those (sections 8, 10 and 17).
 
 The end-to-end browser tests (`tests/e2e`) log in as the realm users `admin`, `dev`, `eve` and `carol`. Their passwords are not in the repository: the tests read them from `MLOPS_E2E_PASSWORD_<USER>` in the environment, for example `MLOPS_E2E_PASSWORD_DEV`. Set those variables to the passwords you gave the users.
 
@@ -337,7 +342,112 @@ uv run mlops enroll --server http://mlops-server:8000 --force
 
 The window between a change in the IdP and its effect is at most one interval.
 
-## 15. Troubleshooting
+## 15. Projects, tasks and experiments *(not yet verified live)*
+
+A **project** has **tasks**: one aspect of the project, such as training, augmentation or evaluation. Each experiment belongs to one task. An experiment without a task belongs to the task `general`.
+
+Name the task when the run starts:
+
+```python
+exp = mlops.init(project="vision/seg", name="lr-0.1", task="training",
+                 primary_metric="score", direction="max")
+```
+
+A task name is lower case: letters, digits, `.`, `_` and `-`, at most 64 characters. `primary_metric` names the metric that ranks the experiments of the task, and `direction` is `min` or `max`. A job spec file takes the same name as its `task:` key.
+
+Change a task after it exists:
+
+```
+uv run mlops task ls --project vision/seg
+uv run mlops task set vision/seg training --metric score --direction max --kind training --description "Segmentation training"
+```
+
+`--kind` is one of `training`, `data-preparation`, `augmentation`, `evaluation`, `testing`, `compilation`, `inference` or `other`. `task set` changes only the metric, direction, kind and description. The Projects tab shows the best experiments of each task by its primary metric and direction. The dashboard can make the same edit (section 13).
+
+## 16. Link repositories *(not yet verified live)*
+
+`mlops repo init` (section 9) links the repository it runs in to the project as its code repository. A data repository, or any further code repository, is linked by hand:
+
+```
+uv run mlops repo link --project vision/seg --repo org/seg-data --role data
+```
+
+`--role` is `code` or `data` (default `code`). The link is required. The commit graph of the Projects tab and the datasets of the Datasets tab are read only for repositories linked to the project; an unlinked repository is refused with `404 repository is not linked to this project`, even when the GitHub App is installed on it. The GitHub App must also be installed on the repository (step 3), otherwise linking answers `422 GitHub App is not installed on <repo>`.
+
+## 17. Dataset cards *(not yet verified live)*
+
+A dataset is a DVC-tracked path in a linked repository, for example `data/train`. Its card is `data/train.card.md`, next to `data/train.dvc`. The card describes the dataset for people. It lives in Git, and the framework never stores its content.
+
+Create the card after `dvc add`:
+
+```
+dvc add data/train
+uv run mlops dataset card init data/train --title "Training images" --type images --license MIT
+```
+
+`dataset card init` reads the hash, size and file count from the `.dvc` file, so the file must exist. It writes the card and uploads nothing. It refuses to overwrite an existing card. Edit the card, then commit it with the pointer:
+
+```
+git add data/train.dvc data/train.card.md data/.gitignore
+git commit -m "add training data and its card"
+git push
+uv run mlops data push data/train
+```
+
+The front matter is the YAML block between the two `---` lines. These keys are read:
+
+| Key | Meaning |
+|---|---|
+| `title` | Heading of the dataset page |
+| `type` | One of `tabular`, `images`, `text`, `audio`, `video`, `timeseries`, `other` |
+| `license` | SPDX id or free text |
+| `version`, `tags`, `owners` | Version text, list of tags, list of owners |
+| `size_bytes` | Size in bytes; used only when the `.dvc` file has no size |
+| `source`, `created`, `rows` | Where the data came from, creation date, number of rows |
+| `columns` | Schema: a list of `name`, `type` and `description` |
+| `splits` | Map of split name to row count |
+
+The Markdown below the front matter is shown as the card text. A front matter that cannot be read is reported on the dataset page ("Card problem" or "Note"), and the rest of the page still shows.
+
+The dashboard shows the card on the Datasets tab, with its versions and the experiments that used the dataset. A dataset without a card shows `mlops dataset card init <path>`. The server reads cards through the GitHub App and caches dataset reads for 5 minutes, so a pushed card can take up to 5 minutes to appear. The CLI shows the same card with `mlops dataset show data/train --project vision/seg`.
+
+## 18. Controlling jobs from the dashboard *(not yet verified live)*
+
+The Jobs tab lists scheduled (queued), running and finished jobs. Two actions are offered:
+
+- **Cancel**, on a queued or running job. A running job shows *cancelling* until its agent has stopped it.
+- **Copy and reschedule**, on any job in any state. The form starts with the job's name, queue, CPU, memory, GPU, labels, timeout, parameters and environment. Change what is needed and press **Dispatch copy**. The copy is a new job; the original is not changed. The code commit, the data commit, the runtime and the command stay those of the original job.
+
+The same two actions in the CLI:
+
+```
+uv run mlops job show <job id>
+uv run mlops job cancel <job id>
+uv run mlops job reschedule <job id> --queue gpu-a100 --cpu 8 --param lr=0.01 --unset-param warmup
+```
+
+`job reschedule` takes `--name`, `--queue`, `--cpu`, `--memory-gb`, `--gpu`, `--timeout` (seconds, at least 60), `--param KEY=VALUE` and `--unset-param KEY` (both repeatable). The CLI does not change labels or environment variables; use the dashboard for those.
+
+A rescheduled copy needs its commit on GitHub. If it is not, the request fails with `422 commit not found on GitHub` (troubleshooting, section 20).
+
+## 19. Resources *(not yet verified live)*
+
+The Resources tab shows one card per agent and the queues:
+
+- **Allocated to jobs:** how much CPU, memory and GPU the agent's active jobs reserve, from their resource requests.
+- **Actually in use:** what the agent measured at its last heartbeat: CPU percent, memory used, and each GPU's utilisation and memory. The line shows when the sample was taken ("sampled N ago").
+- **Queues:** each queue with its waiting jobs and how long the oldest has waited.
+
+Allocated and actual load are different things on purpose. A job that reserves 8 CPUs but uses 1 shows 8 allocated and a low actual load.
+
+An agent that has sent no usage shows "No usage reported yet." Check, in order:
+
+1. The agent has only just started. Wait for one heartbeat.
+2. The agent log has `could not sample usage`. The sampler runs in the agent, and needs `psutil`, which is a dependency of the `mlops-agent` package and is installed in the agent image. Read the log with `docker compose -f deploy/compose.yaml logs mlops-agent`.
+
+Without `nvidia-smi` (no NVIDIA driver) the agent reports no GPUs and the GPU rows are left out; this is not an error.
+
+## 20. Troubleshooting
 
 Server errors quoted here are the exact messages.
 
@@ -358,3 +468,8 @@ Server errors quoted here are the exact messages.
 | Keycloak did not pick up the new realm | Keycloak imports the realm file only when its data volume is empty. Reset it: `docker compose -f deploy/compose.yaml down -v mlops-idp`, then `up -d mlops-idp`. This deletes all Keycloak users, including `admin`: run bootstrap.sh again for `admin`, and create the other users again. Users recreated in the IdP get new IDs; the server then disables the old rows at the next sync, so those people enroll again. |
 | Blank dashboard | Open the browser's developer console. The Content-Security-Policy forbids inline scripts, and the page loads its scripts only from `/ui/static/`. A Content-Security-Policy message there means the page was changed to use an inline script. An error from `/api/v1` usually means the session expired: log in again. |
 | A job's environment is stale or its packages are wrong | The job venv is cached in Docker volumes named `mlops-venv-*`. Stop running jobs, then remove them: `docker volume ls -q -f name=mlops-venv- \| xargs -r docker volume rm`. |
+| Projects tab: `Could not load the repository history: ...` | The repository is not linked to the project (`404 repository is not linked to this project`), or the GitHub App is not installed on it (`404 GitHub App is not installed on this repository`). Link it with `mlops repo link` (section 16) and install the App on it (step 3). `502 GitHub request failed` means GitHub could not be reached. |
+| Dataset page says "This dataset has no card yet" although the card was committed | The file must be named `<dataset path>.card.md` next to the `.dvc` file: `data/train.card.md` for the dataset `data/train`. Commit and push it, then wait up to 5 minutes for the cache (section 17). |
+| Jobs tab: `Could not cancel: missing or wrong CSRF token` (403) | The browser's copy of the session token is out of date, for example after logging in again in another tab. Reload the dashboard. `cross-origin request refused` (403) means the dashboard was opened under another address; open it at the server's own URL. A `401` sends you to the login page. |
+| Copy and reschedule answers `422 commit not found on GitHub: push it first (<repo>@<sha>)` | The job's commit is not on GitHub any more, for example after a force-push. Push the commit again, then copy the job. |
+| Resources tab: "No usage reported yet." | See section 19: the agent has not reported yet, or its log says `could not sample usage`. |

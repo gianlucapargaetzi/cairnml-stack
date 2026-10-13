@@ -32,7 +32,7 @@ Requirements: Docker with Compose v2.20+, `uv`, `openssl`, `git`.
 
 The GitHub App, the agent and the first tracked run are covered in the runbook.
 
-A read-only web dashboard runs on the server at `http://mlops-server:8000/ui/`. It shows overview, projects, jobs, agents and experiments (with metric charts, parameters, code and data versions and live logs), and it compares two to ten experiments side by side. Log in with a realm user through the same IdP login. Users are managed in the Keycloak console, and disabling a user there revokes their access within a minute. The runbook covers the dashboard (section 13) and the user lifecycle (section 14).
+A web dashboard runs on the server at `http://mlops-server:8000/ui/`. Its four tabs are **Projects** (tasks, repository graph and datasets), **Datasets** (dataset cards and versions), **Jobs** (scheduled, running and finished jobs, with cancel and copy-and-reschedule) and **Resources** (agents and queues, with allocated and actual load). Experiments (with metric charts, parameters, code and data versions and live logs) can be compared two to ten at a time. The dashboard writes only three things: it cancels a job, reschedules a job, and edits a task. Log in with a realm user through the same IdP login. Users are managed in the Keycloak console, and disabling a user there revokes their access within a minute. The runbook covers the dashboard (section 13), the user lifecycle (section 14), and projects and tasks, repository links, dataset cards, job control and resources (sections 15 to 19).
 
 ## Tests
 
@@ -47,3 +47,5 @@ The end-to-end suite needs the stack from the quick start and the settings descr
 ## Documentation
 
 - [docs/runbook.md](docs/runbook.md): from an empty machine to a reproduced experiment, moving roles to their own machines, and troubleshooting.
+- [docs/glossary.md](docs/glossary.md): the terms used in the code, the CLI, the dashboard and the documentation, with one meaning each.
+- Planned features that are not built yet are listed in `ROADMAP.md`, which is kept with the design documents outside this repository (next to ARCHITECTURE.md).
