@@ -17,15 +17,23 @@ from mlops_server.models import (
     Project,
     Run,
     RunTag,
+    Sequence,
+    SequenceItem,
     Tag,
     User,
 )
 from mlops_server.security.deps import Principal
 from mlops_server.services import access
 from mlops_server.services.metrics import sample_ranks
-from mlops_server.services.query import DEFAULT_EXPERIMENT, FilterError, compile_filter
+from mlops_server.services.query import (
+    DEFAULT_EXPERIMENT,
+    SEQUENCE_KINDS,
+    FilterError,
+    compile_filter,
+)
 
 MAX_TRACES_PER_RUN = 50
+MAX_SEQUENCES_PER_RUN = 50
 MAX_PARAM_RUNS = 1000  # runs scanned to list a project's parameters
 
 
@@ -42,6 +50,11 @@ def search(
 ) -> tuple[dict[str, Any], int]:
     """Runs matching `query`, each with its props, params and sampled traces, and the total."""
     compiled = compile_filter(query)
+    if compiled.sequences:
+        kind = next(iter(compiled.sequences))
+        raise FilterError(
+            f"{_plural(kind)}.* filters belong to /api/v1/explorer/runs/search/{_plural(kind)}"
+        )
     if compiled.metric is not None and not metric_search:
         raise FilterError("metric.* filters belong to /api/v1/explorer/runs/search/metric")
     ids = access.accessible_project_ids(session, principal)
@@ -69,6 +82,174 @@ def search(
         for run in runs
     }
     return {"runs": body, "progress": [len(body), len(body)]}, total
+
+
+def search_sequences(
+    session: Session,
+    principal: Principal,
+    *,
+    kind: str,
+    query: str | None,
+    project: str | None,
+    limit: int,
+    offset: int,
+    record_range: tuple[int, int] | None,
+    record_density: int,
+    index_range: tuple[int, int] | None,
+    index_density: int,
+    blob_url,
+) -> tuple[dict[str, Any], int]:
+    """Runs with at least one sequence of `kind` that matches `query`, each with its sequences'
+    sampled items. `blob_url(key)` gives a presigned GET for a stored blob, or None."""
+    compiled = compile_filter(query)
+    if compiled.metric is not None:
+        raise FilterError("metric.* filters belong to /api/v1/explorer/runs/search/metric")
+    for other in compiled.sequences:
+        if other != kind:
+            raise FilterError(
+                f"{_plural(other)}.* filters belong to "
+                f"/api/v1/explorer/runs/search/{_plural(other)}"
+            )
+    ids = access.accessible_project_ids(session, principal)
+    if project is not None:
+        project_id = session.scalar(select(Project.id).where(Project.slug == project))
+        ids = [project_id] if project_id in ids else []
+    sequence_clause = compiled.sequences.get(kind, Sequence.kind == kind)
+    conditions = [
+        Run.project_id.in_(ids), Run.id.in_(select(Sequence.run_id).where(sequence_clause)),
+    ]
+    if compiled.run is not None:
+        conditions.append(compiled.run)
+    total = session.scalar(select(func.count()).select_from(Run).where(*conditions))
+    runs = session.scalars(
+        select(Run).where(*conditions)
+        .order_by(Run.created_at.desc(), Run.id.desc())
+        .limit(limit).offset(offset)
+    ).all()
+    props = _props(session, runs)
+    body = {
+        run.id: {
+            "props": props[run.id],
+            "params": run.params,
+            "sequences": _sequences(
+                session, run, kind, sequence_clause, record_range, record_density,
+                index_range, index_density, blob_url,
+            ),
+        }
+        for run in runs
+    }
+    ranges = _ranges(session, sequence_clause, conditions, body)
+    for run_body in body.values():
+        run_body["ranges"] = ranges
+    return {"runs": body, "progress": [len(body), len(body)]}, total
+
+
+def _ranges(session: Session, sequence_clause, conditions, body) -> dict[str, list[int]]:
+    """The step and index ranges the explorer's sliders read: `total` covers every matching item
+    of the search, `used` the items in this response. Each range is [low, high + 1]."""
+    low_step, high_step, low_idx, high_idx = session.execute(
+        select(
+            func.min(SequenceItem.step), func.max(SequenceItem.step),
+            func.min(SequenceItem.idx), func.max(SequenceItem.idx),
+        )
+        .join(Sequence, Sequence.id == SequenceItem.sequence_id)
+        .where(Sequence.run_id.in_(select(Run.id).where(*conditions)), sequence_clause)
+    ).one()
+    items = [item for run_body in body.values() for seq in run_body["sequences"]
+             for item in seq["items"]]
+    steps = [item["step"] for item in items if item["step"] is not None]
+    indices = [item["idx"] for item in items]
+    return {
+        "record_range_total": _closed_range(low_step, high_step),
+        "index_range_total": _closed_range(low_idx, high_idx),
+        "record_range_used": _closed_range(min(steps, default=None), max(steps, default=None)),
+        "index_range_used": _closed_range(min(indices, default=None), max(indices, default=None)),
+    }
+
+
+def _closed_range(low: int | None, high: int | None) -> list[int]:
+    if low is None or high is None:
+        return [0, 1]
+    return [low, high + 1]
+
+
+def _plural(kind: str) -> str:
+    return next(plural for plural, singular in SEQUENCE_KINDS.items() if singular == kind)
+
+
+def _sequences(
+    session: Session, run: Run, kind: str, clause, record_range, record_density,
+    index_range, index_density, blob_url,
+) -> list[dict[str, Any]]:
+    sequences = session.scalars(
+        select(Sequence).where(Sequence.run_id == run.id, Sequence.kind == kind, clause)
+        .order_by(Sequence.name, Sequence.id).limit(MAX_SEQUENCES_PER_RUN)
+    ).all()
+    return [
+        {
+            "name": sequence.name,
+            "context": sequence.context,
+            "count": session.scalar(
+                select(func.count()).select_from(SequenceItem)
+                .where(SequenceItem.sequence_id == sequence.id)
+            ),
+            "items": _sampled_items(
+                session, sequence.id, record_range, record_density, index_range,
+                index_density, blob_url,
+            ),
+        }
+        for sequence in sequences
+    ]
+
+
+def _sampled_items(
+    session: Session, sequence_id: int, record_range, record_density, index_range,
+    index_density, blob_url,
+) -> list[dict[str, Any]]:
+    """Items of the sampled steps, and at most `index_density` evenly spaced indices per step."""
+    steps = [
+        step for (step,) in session.execute(
+            select(SequenceItem.step).where(SequenceItem.sequence_id == sequence_id)
+            .distinct().order_by(SequenceItem.step)
+        )
+    ]
+    if record_range is not None:
+        low, high = record_range
+        steps = [step for step in steps if step is not None and low <= step <= high]
+    steps = [steps[rank - 1] for rank in sample_ranks(len(steps), record_density)] if steps else []
+    if not steps:
+        return []
+    query = select(SequenceItem).where(
+        SequenceItem.sequence_id == sequence_id, SequenceItem.step.in_(steps)
+    )
+    if index_range is not None:
+        query = query.where(SequenceItem.idx.between(*index_range))
+    rows = session.scalars(query.order_by(SequenceItem.step, SequenceItem.idx)).all()
+    by_step: dict[int | None, list[SequenceItem]] = {}
+    for row in rows:
+        by_step.setdefault(row.step, []).append(row)
+    out = []
+    for step in steps:
+        group = by_step.get(step, [])
+        ranks = sample_ranks(len(group), index_density) if group else []
+        picks = [group[rank - 1] for rank in ranks]
+        out.extend(_item_out(item, blob_url) for item in picks)
+    return out
+
+
+def _item_out(item: SequenceItem, blob_url) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "step": item.step, "idx": item.idx, "epoch": item.epoch, "ts": item.ts,
+        "caption": item.caption, "format": item.format, "width": item.width,
+        "height": item.height,
+    }
+    if item.blob_key is not None:
+        out["blob_uri"] = blob_url(item.blob_key) if blob_url else None
+    if item.text is not None:
+        out["text"] = item.text
+    if item.data is not None:
+        out["data"] = item.data
+    return out
 
 
 def run_info(session: Session, run: Run) -> dict[str, Any]:
@@ -195,10 +376,21 @@ def project_params(session: Session, project_id: str) -> dict[str, Any]:
         .distinct()
     ):
         metric.setdefault(name, set()).update(context.keys())
-    return {
+    listing: dict[str, Any] = {
         "params": sorted(paths),
         "metric": {name: sorted(keys) for name, keys in sorted(metric.items())},
     }
+    for plural, singular in SEQUENCE_KINDS.items():
+        names: dict[str, set[str]] = {}
+        for name, context in session.execute(
+            select(Sequence.name, Sequence.context)
+            .join(Run, Run.id == Sequence.run_id)
+            .where(Run.project_id == project_id, Sequence.kind == singular)
+            .distinct()
+        ):
+            names.setdefault(name, set()).update(context.keys())
+        listing[plural] = {name: sorted(keys) for name, keys in sorted(names.items())}
+    return listing
 
 
 def _paths(value: Any, prefix: str = "") -> list[str]:

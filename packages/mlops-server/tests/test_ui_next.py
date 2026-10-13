@@ -27,6 +27,13 @@ def test_the_index_is_served_with_the_explorer_csp(server, built):
     assert response.headers["Cache-Control"] == "no-store"
 
 
+def test_the_explorer_csp_admits_the_storage_origin_for_blobs(server, built):
+    """Images and audio are read from their presigned URLs, which live on the storage origin."""
+    csp = server.get("/ui-next/").headers["Content-Security-Policy"]
+    assert "img-src 'self' data: blob: http://mlops-nas:9000" in csp
+    assert "connect-src 'self' http://mlops-nas:9000" in csp
+
+
 def test_unknown_paths_get_the_app_shell_for_the_browser_router(server, built):
     response = server.get("/ui-next/runs/abc/detail")
     assert response.status_code == 200 and "MLOps Flow" in response.text

@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from contextlib import asynccontextmanager
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 from fastapi import FastAPI, Request
@@ -29,6 +30,7 @@ from mlops_server.routers import (
     projects,
     repos,
     runs,
+    sequences,
     telemetry,
     ui,
     web_auth,
@@ -55,11 +57,21 @@ async def _validation_error_handler(_request: Request, exc: RequestValidationErr
     return JSONResponse(status_code=422, content=content)
 
 
-EXPLORER_CSP = (
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
-    "img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; "
-    "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
-)
+def explorer_csp(storage_origin: str) -> str:
+    """The explorer's policy. Blobs (images, audio) are read from presigned URLs on the storage
+    origin, so that origin is allowed for images and for the fetch that loads them."""
+    return (
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+        f"img-src 'self' data: blob: {storage_origin}; font-src 'self' data:; "
+        "worker-src 'self' blob:; "
+        f"connect-src 'self' {storage_origin}; frame-ancestors 'none'; base-uri 'none'; "
+        "form-action 'self'"
+    )
+
+
+def _origin(url: str) -> str:
+    parts = urlsplit(url)
+    return f"{parts.scheme}://{parts.netloc}"
 
 
 def create_app(
@@ -141,12 +153,14 @@ def create_app(
     )
     for module in (
         meta, enroll, auth, admin, projects, runs, experiments, telemetry, artifacts, storage_api,
-        repos, jobs, agents, dashboard, datasets, explorer,
+        repos, jobs, agents, dashboard, datasets, explorer, sequences,
     ):
         app.include_router(module.router, prefix="/api/v1")
     app.include_router(web_auth.router)
     app.include_router(ui.router)
     app.mount("/ui/static", StaticFiles(directory=ui.STATIC), name="ui-static")
+
+    storage_csp = explorer_csp(_origin(settings.s3_endpoint))
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next):
@@ -159,7 +173,7 @@ def create_app(
             response.headers["Cache-Control"] = "no-store"
         if path.startswith("/ui-next"):
             # The explorer: no inline scripts, inline styles for its CSS-in-JS, blob workers.
-            response.headers["Content-Security-Policy"] = EXPLORER_CSP
+            response.headers["Content-Security-Policy"] = storage_csp
             if not path.startswith("/ui-next/static/"):
                 response.headers["Cache-Control"] = "no-store"
         elif path.startswith("/ui"):

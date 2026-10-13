@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
@@ -24,13 +24,16 @@ from mlops_server.services.explorer import (
     project_params,
     run_info,
     search,
+    search_sequences,
 )
-from mlops_server.services.query import FilterError
+from mlops_server.services.query import SEQUENCE_KINDS, FilterError
 
 router = APIRouter(prefix="/explorer")
 read_principal = require(*READERS)
 write_principal = require_writer("client")
 MAX_BATCH = 500
+PRESIGN_EXPIRES = 3600
+SequencePlural = Literal["images", "audios", "texts", "figures", "distributions"]
 MAX_BOOKMARK_STATE = 64_000  # bytes of JSON
 BookmarkKind = Literal[
     "runs", "metrics", "params", "scatters", "images", "audios", "texts", "figures", "distributions"
@@ -91,6 +94,52 @@ def search_metrics(
         session, principal, response, query=q, project=project, limit=limit, offset=offset,
         points=points, metric_search=True,
     )
+
+
+def _range(value: str | None, name: str) -> tuple[int, int] | None:
+    """A closed range such as "2:10"; None when absent."""
+    if value is None:
+        return None
+    try:
+        low, high = (int(part) for part in value.split(":"))
+    except ValueError:
+        raise HTTPException(422, f"{name} is two integers, low:high") from None
+    if low > high:
+        raise HTTPException(422, f"{name} must not be reversed")
+    return low, high
+
+
+@router.get("/runs/search/{kind}")
+def search_sequence_runs(
+    kind: SequencePlural,
+    request: Request,
+    response: Response,
+    principal: Annotated[Principal, Depends(read_principal)],
+    session: Annotated[Session, Depends(get_session)],
+    q: str | None = None,
+    project: str | None = None,
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    record_range: str | None = None,
+    record_density: int = Query(50, ge=1, le=500),
+    index_range: str | None = None,
+    index_density: int = Query(5, ge=1, le=50),
+):
+    """Runs with a sequence of this kind that match `q`. Each run lists its sequences with
+    sampled items. Image and audio items carry `blob_uri`, a presigned GET valid for an hour."""
+    storage = request.app.state.storage
+    blob_url = (lambda key: storage.presign_get(key, PRESIGN_EXPIRES)) if storage else None
+    try:
+        body, total = search_sequences(
+            session, principal, kind=SEQUENCE_KINDS[kind], query=q, project=project,
+            limit=limit, offset=offset, record_range=_range(record_range, "record_range"),
+            record_density=record_density, index_range=_range(index_range, "index_range"),
+            index_density=index_density, blob_url=blob_url,
+        )
+    except FilterError as error:
+        raise _bad_filter(error) from None
+    response.headers["X-Total-Count"] = str(total)
+    return body
 
 
 @router.get("/runs/active")

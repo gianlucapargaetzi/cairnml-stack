@@ -243,6 +243,7 @@ def test_project_params_lists_paths_and_metric_contexts(lab):
 EXPLORER_ROUTES = {
     ("GET", "/api/v1/explorer/runs/search"),
     ("GET", "/api/v1/explorer/runs/search/metric"),
+    ("GET", "/api/v1/explorer/runs/search/{kind}"),
     ("GET", "/api/v1/explorer/runs/active"),
     ("GET", "/api/v1/explorer/runs/{run_id}/info"),
     ("POST", "/api/v1/explorer/runs/archive"),

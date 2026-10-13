@@ -496,3 +496,51 @@ class GitTokenResponse(BaseModel):
 
 class ArtifactUrlRequest(BaseModel):
     key: str
+
+
+# Sequences: a stream of images, audio, text, figures or distributions per run and name. Binary
+# kinds (image, audio) upload their bytes first with a presigned PUT; the other kinds carry their
+# value in the registration itself. The limits keep one item and one batch bounded.
+SequenceKind = Literal["image", "audio", "text", "figure", "distribution"]
+BinaryKind = Literal["image", "audio"]
+MAX_SEQUENCE_CAPTION = 2000
+MAX_SEQUENCE_TEXT = 64_000
+MAX_SEQUENCE_DATA = 256_000  # bytes of JSON, for figure and distribution values
+MAX_SEQUENCE_INDEX = 10_000
+SequenceFormat = Annotated[str, StringConstraints(pattern=r"^[a-z0-9]{2,5}$")]
+
+
+class SequenceItemIn(BaseModel):
+    kind: SequenceKind
+    name: str = Field(min_length=1, max_length=200)
+    context: MetricContext = Field(default_factory=dict)
+    step: int | None = Field(default=None, ge=0)
+    idx: int = Field(default=0, ge=0, le=MAX_SEQUENCE_INDEX)
+    epoch: int | None = None
+    ts: float = Field(allow_inf_nan=False)
+    caption: str | None = Field(default=None, max_length=MAX_SEQUENCE_CAPTION)
+    format: SequenceFormat | None = None
+    width: int | None = Field(default=None, ge=0)
+    height: int | None = Field(default=None, ge=0)
+    blob_key: str | None = Field(default=None, max_length=600)
+    text: str | None = Field(default=None, max_length=MAX_SEQUENCE_TEXT)
+    data: Any | None = None
+
+
+class SequenceBatch(BaseModel):
+    items: list[SequenceItemIn] = Field(min_length=1, max_length=500)
+
+
+class SequencePresignRequest(BaseModel):
+    kind: BinaryKind
+    name: str = Field(min_length=1, max_length=200)
+    context: MetricContext = Field(default_factory=dict)
+    step: int | None = Field(default=None, ge=0)
+    idx: int = Field(default=0, ge=0, le=MAX_SEQUENCE_INDEX)
+    format: SequenceFormat
+
+
+class SequencePresignResponse(BaseModel):
+    upload_url: str
+    key: str
+    expires_in: int
