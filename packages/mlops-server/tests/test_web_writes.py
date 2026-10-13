@@ -140,10 +140,11 @@ def test_a_browser_can_dispatch_an_run_with_the_csrf_token(browser, lab, stub_gi
 def test_a_browser_session_can_tag_a_run_its_owner_started(
     browser, server, enroll_client, make_project
 ):
-    """A signed-in member can attach a tag to a run they own from the browser, with the CSRF token."""
+    """A signed-in member can tag a run they own from the browser, with the CSRF token."""
     dev = enroll_client("dev")
     make_project("vision/seg", members=["dev"])
-    run = dev.http.post("/api/v1/runs", json={"project": "vision/seg", "name": "tagged"}).json()["id"]
+    body = {"project": "vision/seg", "name": "tagged"}
+    run = dev.http.post("/api/v1/runs", json=body).json()["id"]
     browser.idp["username"] = "dev"
     me = login_browser(browser)
     headers = {"X-CSRF-Token": me["csrf"]}
