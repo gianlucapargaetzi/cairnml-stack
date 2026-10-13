@@ -14,6 +14,7 @@ const pageTitles = {
   RESOURCES: 'Resources',
   ADMIN: 'Administration',
   DATASETS: 'Datasets',
+  PROJECTS: 'Projects',
   RUN_DETAIL: '',
   EXPERIMENT: '',
   FIGURES_EXPLORER_NEW: 'New Figures',

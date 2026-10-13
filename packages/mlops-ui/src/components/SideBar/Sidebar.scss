@@ -22,8 +22,12 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    // Lets the navigation shrink, so a long list scrolls instead of being cut off.
+    min-height: 0;
     &__container {
       overflow: hidden auto;
+      flex: 1 1 auto;
+      min-height: 0;
     }
     &__item {
       display: flex;
