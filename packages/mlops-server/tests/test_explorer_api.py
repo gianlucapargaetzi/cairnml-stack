@@ -58,7 +58,7 @@ def test_search_returns_props_params_and_traces(lab):
     assert set(body) == {"runs", "progress"} and body["progress"] == [2, 2]
     fast = body["runs"][lab["fast"]]
     assert set(fast) == {"props", "params", "traces"}
-    assert fast["props"]["name"] == "fast" and fast["props"]["experiment"] == "training"
+    assert fast["props"]["name"] == "fast" and fast["props"]["experiment"]["name"] == "training"
     assert fast["props"]["project"] == "vision/seg" and fast["props"]["tags"] == []
     assert fast["params"]["lr"] == 0.1
     traces = {(t["name"], tuple(t["context"].items())): t for t in fast["traces"]}
@@ -99,7 +99,7 @@ def test_tag_filter_uses_the_run_tags(lab):
     dev.http.post(f"/api/v1/explorer/runs/{lab['fast']}/tags/{tag['id']}")
     matched = _search(dev, q="any(t.name in ['fast'] for t in run.tags)").json()["runs"]
     assert list(matched) == [lab["fast"]]
-    assert matched[lab["fast"]]["props"]["tags"] == ["fast"]
+    assert [t["name"] for t in matched[lab["fast"]]["props"]["tags"]] == ["fast"]
 
 
 def test_metric_clauses_belong_to_the_metric_search(lab):
@@ -172,7 +172,7 @@ def test_tags_are_created_attached_renamed_and_removed(lab):
     attached = dev.http.post(f"/api/v1/explorer/runs/{lab['slow']}/tags/{tag['id']}")
     assert attached.status_code == 200
     info = dev.http.get(f"/api/v1/explorer/runs/{lab['slow']}/info").json()
-    assert info["props"]["tags"] == ["baseline"]
+    assert [t["name"] for t in info["props"]["tags"]] == ["baseline"]
 
     renamed = dev.http.patch(f"/api/v1/explorer/tags/{tag['id']}", json={"name": "ref"})
     assert renamed.json()["name"] == "ref"

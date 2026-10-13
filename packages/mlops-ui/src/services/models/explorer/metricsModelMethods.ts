@@ -62,6 +62,7 @@ import {
 import { IApiRequest } from 'types/services/services';
 import { ITagInfo, ITagProps } from 'types/pages/tags/Tags';
 
+import { IExplorerSearch } from 'utils/explorer/explorerJson';
 import {
   aggregateGroupData,
   AggregationAreaMethods,
@@ -167,9 +168,7 @@ function getMetricsAppModelMethods(
     getConfig,
   } = initialApp;
   let metricsRequestRef: {
-    call: (
-      exceptionHandler: (detail: any) => void,
-    ) => Promise<ReadableStream<IRun<IMetricTrace>[]>>;
+    call: (exceptionHandler: (detail: any) => void) => Promise<IExplorerSearch>;
     abort: () => void;
   };
   let runsArchiveRef: {

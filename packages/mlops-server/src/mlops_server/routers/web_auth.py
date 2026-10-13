@@ -44,8 +44,23 @@ def _fail(status: int = 400) -> HTMLResponse:
     return HTMLResponse(_PAGE, status_code=status)
 
 
+NEXT_COOKIE = "mlops_next"
+ALLOWED_NEXT = ("/ui/", "/ui-next/")
+
+
+def _safe_next(value: str | None) -> str:
+    """Where to send the browser after sign-in. Only paths of this server's UIs are allowed."""
+    if value and value.startswith(ALLOWED_NEXT) and not value.startswith("//"):
+        return value
+    return "/ui/"
+
+
 @router.get("/login")
-def login(request: Request, session: Annotated[Session, Depends(get_session)]):
+def login(
+    request: Request,
+    session: Annotated[Session, Depends(get_session)],
+    next: str | None = None,
+):
     settings = request.app.state.settings
     state, nonce = secrets.token_urlsafe(24), secrets.token_urlsafe(24)
     verifier = secrets.token_urlsafe(48)
@@ -66,6 +81,8 @@ def login(request: Request, session: Annotated[Session, Depends(get_session)]):
     response = RedirectResponse(f"{authorize_url}?{query}", status_code=302)
     response.set_cookie(LOGIN_COOKIE, state, max_age=600, httponly=True, samesite="lax",
                         secure=_secure(settings), path="/ui/auth")
+    response.set_cookie(NEXT_COOKIE, _safe_next(next), max_age=600, httponly=True,
+                        samesite="lax", secure=_secure(settings), path="/ui/auth")
     return response
 
 
@@ -117,10 +134,11 @@ def callback(
     ))
     audit.record(session, user.id, "web.login", request)
     session.commit()
-    response = RedirectResponse("/ui/", status_code=302)
+    response = RedirectResponse(_safe_next(request.cookies.get(NEXT_COOKIE)), status_code=302)
     response.set_cookie(SESSION_COOKIE, token, max_age=settings.web_session_ttl,
                         httponly=True, samesite="lax", secure=_secure(settings), path="/")
     response.delete_cookie(LOGIN_COOKIE, path="/ui/auth")
+    response.delete_cookie(NEXT_COOKIE, path="/ui/auth")
     return response
 
 

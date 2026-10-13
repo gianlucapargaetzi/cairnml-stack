@@ -19,7 +19,7 @@ function getFiguresExplorerIllustrationContent(
 ): React.ReactNode {
   const Never_Executed = (
     <>
-      It’s super easy to search Aim experiments. Just start typing your query in
+      It’s super easy to search MLOps Flow runs. Just start typing your query in
       the search bar above.
       <br />
       Look up

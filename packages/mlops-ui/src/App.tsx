@@ -11,19 +11,19 @@ import Theme from 'components/Theme/Theme';
 import BusyLoaderWrapper from 'components/BusyLoaderWrapper/BusyLoaderWrapper';
 import ErrorBoundary from 'components/ErrorBoundary/ErrorBoundary';
 
-import { getBasePath } from 'config/config';
-
 import PageWrapper from 'pages/PageWrapper';
 
 import routes from 'routes/routes';
 
 import projectsModel from 'services/models/projects/projectsModel';
+import { loadSession } from 'services/session/session';
 
 import { IProjectsModelState } from './types/services/models/projects/projectsModel';
 
 import './App.scss';
 
-const basePath = getBasePath(false);
+// The router lives under the fork's public path (/ui-next), set by homepage in package.json.
+const basePath = process.env.PUBLIC_URL ?? '';
 
 // loading monaco from node modules instead of CDN
 loader.config({
@@ -34,8 +34,17 @@ loader.config({
 
 function App(): React.FunctionComponentElement<React.ReactNode> {
   const projectsData = useModel<Partial<IProjectsModelState>>(projectsModel);
+  const [sessionReady, setSessionReady] = React.useState(false);
 
   React.useEffect(() => {
+    // Nothing loads until the server confirms the session and hands over the CSRF token.
+    loadSession().then(() => setSessionReady(true));
+  }, []);
+
+  React.useEffect(() => {
+    if (!sessionReady) {
+      return;
+    }
     let timeoutId: number;
     const preloader = document.getElementById('preload-spinner');
     if (preloader) {
@@ -48,7 +57,11 @@ function App(): React.FunctionComponentElement<React.ReactNode> {
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, []);
+  }, [sessionReady]);
+
+  if (!sessionReady) {
+    return <BusyLoaderWrapper height='100vh' isLoading />;
+  }
 
   return (
     <BrowserRouter basename={basePath}>

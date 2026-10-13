@@ -130,3 +130,20 @@ def test_secure_cookie_over_https(browser, app):
     app.state.settings.public_url = "https://mlops.example"
     response = browser.get("/ui/auth/login")
     assert "secure" in response.headers["set-cookie"].lower()
+
+
+@pytest.mark.parametrize(
+    "requested, expected",
+    [
+        ("/ui-next/runs?q=x", "/ui-next/runs?q=x"),
+        ("/ui/", "/ui/"),
+        ("https://evil.example/", "/ui/"),
+        ("//evil.example/", "/ui/"),
+        ("/api/v1/me", "/ui/"),
+        (None, "/ui/"),
+    ],
+)
+def test_login_returns_the_browser_to_an_allowed_ui_path_only(browser, requested, expected):
+    _, query = start_login(browser, {"next": requested} if requested else None)
+    done = browser.get("/ui/auth/callback", params={"code": "abc", "state": query["state"][0]})
+    assert done.status_code == 302 and done.headers["location"] == expected

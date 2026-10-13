@@ -3,13 +3,13 @@ import createResource from 'modules/core/utils/createResource';
 
 import { IRun } from 'types/services/models/metrics/runModel';
 
-import { parseStream } from 'utils/encoder/streamEncoding';
+import { runsList } from 'utils/explorer/explorerJson';
 
 function createActiveRunsEngine() {
   let { call } = createActiveRunsRequest();
 
   const { fetchData, state, destroy } = createResource<IRun<unknown>[]>(
-    async () => parseStream(await call()),
+    async () => runsList(await call()),
   );
   return { fetchActiveRuns: fetchData, activeRunsState: state, destroy };
 }

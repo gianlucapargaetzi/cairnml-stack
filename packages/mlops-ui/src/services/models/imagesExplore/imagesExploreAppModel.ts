@@ -57,6 +57,7 @@ import { IModel } from 'types/services/models/model';
 import { ISyntaxErrorDetails } from 'types/components/NotificationContainer/NotificationContainer';
 import { ITagInfo, ITagProps } from 'types/pages/tags/Tags';
 
+import { IExplorerSearch } from 'utils/explorer/explorerJson';
 import getAppConfigDataMethod from 'utils/app/getAppConfigData';
 import onRowSelectAction from 'utils/app/onRowSelect';
 import { AIM64_ENCODING_PREFIX, encode } from 'utils/encoder/encoder';
@@ -288,9 +289,7 @@ function setDefaultAppConfigData(recoverTableState: boolean = true) {
 }
 
 let imagesRequestRef: {
-  call: (
-    exceptionHandler: (detail: any) => void,
-  ) => Promise<ReadableStream<IRun<IMetricTrace>[]>>;
+  call: (exceptionHandler: (detail: any) => void) => Promise<IExplorerSearch>;
   abort: () => void;
 };
 

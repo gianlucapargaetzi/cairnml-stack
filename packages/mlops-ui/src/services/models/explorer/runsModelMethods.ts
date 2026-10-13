@@ -56,11 +56,7 @@ import { onTableDiffShow } from 'utils/app/onTableDiffShow';
 import updateColumnsWidths from 'utils/app/updateColumnsWidths';
 import updateSortFields from 'utils/app/updateTableSortFields';
 import contextToString from 'utils/contextToString';
-import {
-  decodeBufferPairs,
-  decodePathsVals,
-  iterFoldTree,
-} from 'utils/encoder/streamEncoding';
+import { IExplorerSearch, iterExplorerRuns } from 'utils/explorer/explorerJson';
 import { formatValue } from 'utils/formatValue';
 import getObjectPaths from 'utils/getObjectPaths';
 import JsonToCSV from 'utils/JsonToCSV';
@@ -91,9 +87,7 @@ function getRunsModelMethods(
   const { model, setModelDefaultAppConfigData } = initialApp;
 
   let runsRequestRef: {
-    call: (
-      exceptionHandler: (detail: any) => void,
-    ) => Promise<ReadableStream<IRun<IParamTrace>[]>>;
+    call: (exceptionHandler: (detail: any) => void) => Promise<IExplorerSearch>;
     abort: () => void;
   };
   let runsArchiveRef: {
@@ -215,9 +209,7 @@ function getRunsModelMethods(
           const stream = await runsRequestRef.call((detail) => {
             exceptionHandler({ detail, model });
           });
-          let bufferPairs = decodeBufferPairs(stream as ReadableStream<any>);
-          let decodedPairs = decodePathsVals(bufferPairs);
-          let objects = iterFoldTree(decodedPairs, 1);
+          let objects = iterExplorerRuns(stream);
 
           const runsData: IRun<IMetricTrace | IParamTrace>[] = isInitial
             ? []

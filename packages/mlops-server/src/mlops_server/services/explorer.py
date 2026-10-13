@@ -6,10 +6,20 @@ from __future__ import annotations
 
 from typing import Any
 
+from mlops_common.schemas import TERMINAL_STATUSES
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from mlops_server.models import Experiment, MetricPoint, MetricSeries, Project, Run, RunTag, Tag
+from mlops_server.models import (
+    Experiment,
+    MetricPoint,
+    MetricSeries,
+    Project,
+    Run,
+    RunTag,
+    Tag,
+    User,
+)
 from mlops_server.security.deps import Principal
 from mlops_server.services import access
 from mlops_server.services.metrics import sample_ranks
@@ -67,38 +77,53 @@ def run_info(session: Session, run: Run) -> dict[str, Any]:
 
 
 def _props(session: Session, runs: list[Run]) -> dict[str, dict[str, Any]]:
-    """Display fields for each run. Project, experiment and tags are read once per page."""
+    """Display fields for each run. Project, experiment, creator and tags are read once per page."""
     if not runs:
         return {}
-    project_ids = {run.project_id for run in runs}
-    experiment_ids = {run.experiment_id for run in runs if run.experiment_id}
     slugs = dict(session.execute(
-        select(Project.id, Project.slug).where(Project.id.in_(project_ids))
+        select(Project.id, Project.slug).where(Project.id.in_({r.project_id for r in runs}))
     ).all())
-    names = dict(session.execute(
-        select(Experiment.id, Experiment.name).where(Experiment.id.in_(experiment_ids))
-    ).all()) if experiment_ids else {}
-    tags: dict[str, list[str]] = {}
-    for run_id, name in session.execute(
-        select(RunTag.run_id, Tag.name)
+    experiment_ids = {run.experiment_id for run in runs if run.experiment_id}
+    experiments = {
+        row.id: row for row in session.execute(
+            select(Experiment.id, Experiment.name, Experiment.description)
+            .where(Experiment.id.in_(experiment_ids))
+        )
+    } if experiment_ids else {}
+    owners = dict(session.execute(
+        select(User.id, User.username).where(User.id.in_({r.owner_id for r in runs}))
+    ).all())
+    tags: dict[str, list[dict[str, Any]]] = {}
+    for run_id, tag_id, name, color in session.execute(
+        select(RunTag.run_id, Tag.id, Tag.name, Tag.color)
         .join(Tag, Tag.id == RunTag.tag_id)
         .where(RunTag.run_id.in_([run.id for run in runs]))
         .order_by(Tag.name)
     ):
-        tags.setdefault(run_id, []).append(name)
-    return {
-        run.id: {
+        tags.setdefault(run_id, []).append({"id": tag_id, "name": name, "color": color})
+    out = {}
+    for run in runs:
+        experiment = experiments.get(run.experiment_id)
+        out[run.id] = {
             "name": run.name,
-            "description": run.description,
+            "description": run.description or "",
             "archived": run.archived,
             "status": run.status,
+            "active": run.status not in TERMINAL_STATUSES,
             "project": slugs[run.project_id],
-            "experiment": names.get(run.experiment_id, DEFAULT_EXPERIMENT),
+            "experiment": (
+                {"id": experiment.id, "name": experiment.name,
+                 "description": experiment.description or ""}
+                if experiment else
+                {"id": None, "name": DEFAULT_EXPERIMENT, "description": ""}
+            ),
+            "creator": {"username": owners.get(run.owner_id)},
+            "creation_time": run.created_at.timestamp(),
+            "end_time": run.finished_at.timestamp() if run.finished_at else None,
             "created_at": run.created_at.isoformat(),
             "tags": tags.get(run.id, []),
         }
-        for run in runs
-    }
+    return out
 
 
 def _traces(
@@ -126,16 +151,19 @@ def _sampled_points(session: Session, series_id: int, density: int) -> dict[str,
         order_by=(MetricPoint.step, MetricPoint.ts, MetricPoint.id)
     ).label("rn")
     inner = (
-        select(MetricPoint.step, MetricPoint.value, rank)
+        select(MetricPoint.step, MetricPoint.value, MetricPoint.epoch, MetricPoint.ts, rank)
         .where(MetricPoint.series_id == series_id)
         .subquery()
     )
     rows = session.execute(
-        select(inner.c.step, inner.c.value, inner.c.rn)
+        select(inner.c.step, inner.c.value, inner.c.epoch, inner.c.ts, inner.c.rn)
         .where(inner.c.rn.in_(sample_ranks(count, density)))
         .order_by(inner.c.rn)
     ).all()
-    points = [[step if step is not None else rn, value] for step, value, rn in rows]
+    points = [
+        [step if step is not None else rn, value, epoch, ts]
+        for step, value, epoch, ts, rn in rows
+    ]
     # The last rank is always sampled, so its value is the series' last value.
     return {"count": count, "last": points[-1][1], "points": points}
 

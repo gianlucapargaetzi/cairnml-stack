@@ -420,8 +420,8 @@ def browser(app, server, idp):
     return client
 
 
-def start_login(browser):
-    response = browser.get("/ui/auth/login")
+def start_login(browser, params: dict | None = None):
+    response = browser.get("/ui/auth/login", params=params or {})
     assert response.status_code == 302
     query = parse_qs(urlparse(response.headers["location"]).query)
     browser.idp["nonce"] = query["nonce"][0]

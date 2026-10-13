@@ -1,35 +1,25 @@
-import Cookies from 'js-cookie';
-
-import { getAPIHost, getAPIAuthToken } from 'config/config';
-
-import ENDPOINTS from './endpoints';
-
-export interface AuthToken {
-  /**
-   * @description access_token is the token of the user
-   * @example "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9"
-   */
-  access_token: string;
-  /**
-   * @description token_type is the type of the token
-   * @example "bearer"
-   */
-  token_type: string;
-  /**
-   * @description refresh_token is the refresh token of the user
-   * @example 3600
-   */
-  refresh_token: string;
-}
-
-const AUTH_TOKEN_KEY = 'Auth';
-const AUTH_REFRESH_TOKEN_KEY = 'token';
-const AUTH_USER_KEY = 'user';
+import { getAPIHost } from 'config/config';
 
 export const CONTENT_TYPE = {
   JSON: 'application/json',
   FORM_DATA: 'application/x-www-form-urlencoded',
 };
+
+// The session lives in an httpOnly cookie set by the server. The CSRF token is kept in memory
+// and sent with every write; it is read from /api/v1/me when the app starts.
+let csrfToken = '';
+
+export function setCsrfToken(token: string) {
+  csrfToken = token;
+}
+
+// Sends the browser to sign in and back to the page it was on.
+export function redirectToSignIn() {
+  const next = encodeURIComponent(
+    `${window.location.pathname}${window.location.search}`,
+  );
+  window.location.assign(`/ui/auth/login?next=${next}`);
+}
 
 function createAPIRequestWrapper<ResponseDataType>(
   url: string,
@@ -47,23 +37,20 @@ function createAPIRequestWrapper<ResponseDataType>(
           .then(async (response) => {
             try {
               if (response.status >= 400) {
-                const body = await response.json();
-
+                if (response.status === 401) {
+                  redirectToSignIn();
+                }
+                // The body is read once here; the error goes to the caller and the request fails.
+                const body = await response.json().catch(() => ({}));
                 if (typeof exceptionHandler === 'function') {
                   exceptionHandler(body);
                 }
-
-                return await checkCredentials<ResponseDataType>(
-                  response,
-                  url,
-                  () =>
-                    createAPIRequestWrapper<ResponseDataType>(
-                      url,
-                      options,
-                      stream,
-                      apiHost,
-                    ).call(exceptionHandler),
+                reject(
+                  new Error(
+                    String(body.detail ?? body.message ?? response.statusText),
+                  ),
                 );
+                return;
               }
               const data = stream ? response.body : await response.json();
 
@@ -171,7 +158,7 @@ function post<ResponseDataType>(
     {
       method: 'POST',
       ...options,
-      headers: getRequestHeaders(),
+      headers: getWriteHeaders(),
       body: JSON.stringify(data),
     },
     false,
@@ -190,7 +177,26 @@ function put<ResponseDataType>(
     {
       method: 'PUT',
       ...options,
-      headers: getRequestHeaders(),
+      headers: getWriteHeaders(),
+      body: JSON.stringify(data),
+    },
+    false,
+    apiHost,
+  );
+}
+
+function patch<ResponseDataType>(
+  url: string,
+  data: object,
+  options?: RequestInit,
+  apiHost: string = getAPIHost(),
+) {
+  return createAPIRequestWrapper<ResponseDataType>(
+    url,
+    {
+      method: 'PATCH',
+      ...options,
+      headers: getWriteHeaders(),
       body: JSON.stringify(data),
     },
     false,
@@ -208,7 +214,7 @@ function remove<ResponseDataType>(
     {
       method: 'DELETE',
       ...options,
-      headers: getRequestHeaders(),
+      headers: getWriteHeaders(),
     },
     false,
     apiHost,
@@ -237,85 +243,19 @@ function getTimezoneOffset(): string {
  * });
  */
 function getRequestHeaders(headers = {}) {
-  const requestHeaders: Record<string, string> = {
+  return {
     'X-Timezone-Offset': getTimezoneOffset(),
     'Content-Type': CONTENT_TYPE.JSON,
     ...headers,
   };
-  const Authorization = getAuthToken();
-  if (Authorization) {
-    requestHeaders.Authorization = Authorization;
-  }
-  return requestHeaders;
 }
 
-/**
- * getAuthToken - Gets the token from local storage
- * @returns {string} - The token
- */
-function getAuthToken(): string {
-  if (typeof window === 'undefined') {
-    return getAPIAuthToken();
-  }
-  return localStorage.getItem(AUTH_TOKEN_KEY) || '';
+export function getCsrfToken() {
+  return csrfToken;
 }
 
-/**
- * removeAuthToken - Removes the token from local storage and refresh token from cookies
- * @returns {void}
- */
-function removeAuthToken(): void {
-  localStorage.removeItem(AUTH_TOKEN_KEY);
-  localStorage.removeItem(AUTH_USER_KEY);
-  removeRefreshToken();
-}
-
-/**
- * setAuthToken - Sets the token in local storage and refresh token in cookies
- * @param {AuthToken} token - The token object
- * @returns {void}
- */
-function setAuthToken({
-  token_type,
-  refresh_token,
-  access_token,
-}: AuthToken): void {
-  localStorage.setItem(AUTH_TOKEN_KEY, `${token_type} ${access_token}`);
-  setRefreshToken(refresh_token);
-}
-
-/**
- * setRefreshToken - Sets the refresh token in cookies
- * @param refresh_token - The refresh token
- * @returns {void}
- */
-function setRefreshToken(refresh_token: string): void {
-  Cookies.set(AUTH_REFRESH_TOKEN_KEY, refresh_token);
-}
-
-/**
- * removeRefreshToken - Removes the refresh token from cookies
- * @returns {void}
- */
-function removeRefreshToken(): void {
-  Cookies.remove(AUTH_REFRESH_TOKEN_KEY);
-}
-
-/**
- * refreshToken is a function that makes a GET request to the auth endpoint for refresh the token
- * @returns IResponse<AuthToken>
- * @throws Error
- */
-function refreshToken() {
-  return get<AuthToken>(
-    `${ENDPOINTS.AUTH.BASE}/${ENDPOINTS.AUTH.REFRESH}`,
-    undefined,
-    {
-      credentials:
-        process.env.NODE_ENV === 'development' ? 'include' : 'same-origin',
-    },
-    `${window.location.origin}/api`,
-  );
+function getWriteHeaders() {
+  return getRequestHeaders({ 'X-CSRF-Token': csrfToken });
 }
 
 /**
@@ -327,45 +267,6 @@ function refreshToken() {
  * const response = await fetch(`${API_ROOT}${endpoint}`);
  * return parseResponse<T>(response);
  */
-async function parseResponse<T>(response: Response): Promise<T> {
-  try {
-    const data = await response.json();
-    if (response.ok) {
-      return data;
-    } else {
-      return Promise.reject(new Error(data.message));
-    }
-  } catch (error) {
-    throw error;
-  }
-}
-
-async function checkCredentials<T>(
-  response: Response,
-  endpoint: string,
-  refetch: () => Promise<T>,
-): Promise<T> {
-  if (response.status === 401) {
-    if (endpoint === `${ENDPOINTS.AUTH.BASE}/${ENDPOINTS.AUTH.REFRESH}`) {
-      removeAuthToken();
-      window.location.assign(`${window.location.origin}/sign-in`);
-      return parseResponse<T>(response);
-    }
-    if (localStorage.getItem('refreshing') !== 'true') {
-      localStorage.setItem('refreshing', 'true');
-      // Refresh token
-      const token = await refreshToken().call();
-      if (token) {
-        setAuthToken(token);
-        localStorage.setItem('refreshing', 'false');
-        window.location.reload();
-        return refetch();
-      }
-      localStorage.setItem('refreshing', 'false');
-    }
-  }
-  return parseResponse<T>(response);
-}
 
 const API = {
   get,
@@ -373,6 +274,7 @@ const API = {
   getStream1,
   post,
   put,
+  patch,
   delete: remove,
 };
 

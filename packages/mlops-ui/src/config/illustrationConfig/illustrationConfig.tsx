@@ -41,7 +41,7 @@ const Illustration_Title_Config: { [key: string]: object | any } = {
     [IllustrationsEnum.EmptySearch]: 'No Results',
     [IllustrationsEnum.ExploreData]: (
       <>
-        It’s super easy to search Aim experiments. Just start typing your query
+        It’s super easy to search MLOps Flow runs. Just start typing your query
         in the search bar above.
         <br />
         Look up
@@ -63,7 +63,7 @@ const Illustration_Title_Config: { [key: string]: object | any } = {
     [IllustrationsEnum.EmptySearch]: 'No Results',
     [IllustrationsEnum.ExploreData]: (
       <>
-        It’s super easy to search Aim experiments. Just start typing your query
+        It’s super easy to search MLOps Flow runs. Just start typing your query
         in the search bar above.
         <br />
         Look up
@@ -87,7 +87,7 @@ const Illustration_Title_Config: { [key: string]: object | any } = {
     [IllustrationsEnum.EmptySearch]: 'No Results',
     [IllustrationsEnum.ExploreData]: (
       <>
-        It’s super easy to search Aim experiments. Just start typing your query
+        It’s super easy to search MLOps Flow runs. Just start typing your query
         in the search bar above.
         <br />
         Look up
@@ -109,7 +109,7 @@ const Illustration_Title_Config: { [key: string]: object | any } = {
     [IllustrationsEnum.EmptySearch]: 'No Results',
     [IllustrationsEnum.ExploreData]: (
       <>
-        It’s super easy to search Aim experiments. Just start typing your query
+        It’s super easy to search MLOps Flow runs. Just start typing your query
         in the search bar above.
         <br />
         Look up
@@ -131,7 +131,7 @@ const Illustration_Title_Config: { [key: string]: object | any } = {
   figures: {
     [PipelineStatusEnum.Never_Executed]: (
       <>
-        It’s super easy to search Aim experiments. Just start typing your query
+        It’s super easy to search MLOps Flow runs. Just start typing your query
         in the search bar above.
         <br />
         Look up
@@ -157,7 +157,7 @@ const Illustration_Title_Config: { [key: string]: object | any } = {
     [IllustrationsEnum.EmptySearch]: 'No Results',
     [IllustrationsEnum.ExploreData]: (
       <>
-        It’s super easy to search Aim experiments. Just start typing your query
+        It’s super easy to search MLOps Flow runs. Just start typing your query
         in the search bar above.
         <br />
         Look up

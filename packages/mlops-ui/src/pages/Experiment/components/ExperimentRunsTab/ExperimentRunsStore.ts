@@ -5,14 +5,14 @@ import { RequestOptions } from 'services/NetworkService';
 
 import { IRun } from 'types/services/models/metrics/runModel';
 
-import { parseStream } from 'utils/encoder/streamEncoding';
+import { runsList } from 'utils/explorer/explorerJson';
 
 function createExperimentRunsEngine() {
   const { call } = createSearchRunRequest();
 
   const { fetchData, state, destroy } = createResource<IRun<unknown>[]>(
     async (queryParams: RequestOptions['query_params']) =>
-      parseStream(await call(queryParams)),
+      runsList(await call(queryParams)),
   );
   return {
     fetchExperimentRuns: (queryParams: RequestOptions['query_params']) =>

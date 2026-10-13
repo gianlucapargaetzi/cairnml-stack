@@ -1,185 +1,84 @@
-import { getAPIHost } from 'config/config';
-
-import ENDPOINTS from 'services/api/endpoints';
-import NetworkService, { RequestInstance } from 'services/NetworkService';
+import API from 'services/api/api';
 
 import { SequenceTypesEnum } from 'types/core/enums';
+import { IApiRequest } from 'types/services/services';
 
-import {
-  RunsSearchQueryParams,
-  RunsSearchResult,
-  IAlignMetricsData,
-} from './types';
+import { RunsSearchQueryParams, RunsSearchResult } from './types';
 
-const api = new NetworkService(`${getAPIHost()}${ENDPOINTS.RUNS.BASE}`);
+// The runs requests go to the explorer API (/api/v1/explorer) and return JSON. Sequence requests
+// (images, audios, texts, figures, distributions) and metric alignment arrive in Phase 5; until
+// then they fail when called.
 
-/**
- * function searchRuns
- * this call is used for getting explorer' data
- * @param sequenceType - sequence name
- * @param queryParams
- */
+export interface RequestInstance {
+  call: (...args: any[]) => Promise<any>;
+  cancel: () => void;
+}
+
+// The explorer's names for the fork's query parameters: p (density) is points.
+function toExplorerQuery(queryParams: RunsSearchQueryParams = {}) {
+  const { p, ...rest } = queryParams as RunsSearchQueryParams & {
+    [key: string]: unknown;
+  };
+  return { ...rest, ...(p ? { points: p } : {}) };
+}
+
+function unsupported(what: string): RequestInstance {
+  return {
+    call: () => Promise.reject(new Error(`${what} is not supported yet.`)),
+    cancel: () => undefined,
+  };
+}
+
+function requestWithCancel(
+  make: (...args: any[]) => IApiRequest<any>,
+): RequestInstance {
+  let current: IApiRequest<any> | null = null;
+  return {
+    call: (...args: any[]) => {
+      current = make(...args);
+      return current.call();
+    },
+    cancel: () => current?.abort(),
+  };
+}
+
 async function searchRuns(
   sequenceType: SequenceTypesEnum,
   queryParams: RunsSearchQueryParams,
 ): Promise<RunsSearchResult> {
-  return (
-    await api.makeAPIGetRequest(`${ENDPOINTS.RUNS.SEARCH}/${sequenceType}`, {
-      query_params: queryParams,
-    })
-  ).body;
+  throw new Error(`${sequenceType} search is not supported yet.`);
 }
 
 function createSearchRunsRequest(
   sequenceType: SequenceTypesEnum,
 ): RequestInstance {
-  const controller = new AbortController();
-  const signal = controller.signal;
-
-  async function call(
-    queryParams: RunsSearchQueryParams,
-  ): Promise<RunsSearchResult> {
-    return (
-      await api.makeAPIGetRequest(`${ENDPOINTS.RUNS.SEARCH}/${sequenceType}`, {
-        query_params: queryParams,
-        signal,
-      })
-    ).body;
-  }
-
-  function cancel(): void {
-    controller.abort();
-  }
-
-  return {
-    call,
-    cancel,
-  };
+  return unsupported(`${sequenceType} search`);
 }
 
 function createSearchRunRequest(): RequestInstance {
-  const controller = new AbortController();
-  const signal = controller.signal;
-
-  async function call(
-    queryParams: RunsSearchQueryParams,
-  ): Promise<RunsSearchResult> {
-    return (
-      await api.makeAPIGetRequest(`${ENDPOINTS.RUNS.SEARCH}/run`, {
-        query_params: queryParams,
-        signal,
-      })
-    ).body;
-  }
-
-  function cancel(): void {
-    controller.abort();
-  }
-
-  return {
-    call,
-    cancel,
-  };
+  return requestWithCancel((queryParams?: RunsSearchQueryParams) =>
+    API.get<any>('v1/explorer/runs/search', toExplorerQuery(queryParams)),
+  );
 }
 
 function createRunLogRecordsRequest(): RequestInstance {
-  const controller = new AbortController();
-  const signal = controller.signal;
-
-  async function call(
-    runId: string,
-    record_range?: string,
-  ): Promise<RunsSearchResult> {
-    return (
-      await api.makeAPIGetRequest(`${runId}/log-records`, {
-        query_params: record_range ? { record_range } : {},
-        signal,
-      })
-    ).body;
-  }
-
-  function cancel(): void {
-    controller.abort();
-  }
-
-  return {
-    call,
-    cancel,
-  };
+  return requestWithCancel((runId: string) =>
+    API.get<any[]>(`v1/runs/${runId}/logs`),
+  );
 }
 
 function createBlobsRequest(
   sequenceType: `${SequenceTypesEnum}`,
 ): RequestInstance {
-  const controller = new AbortController();
-  const signal = controller.signal;
-
-  async function call(uris: string[]): Promise<RunsSearchResult> {
-    return (
-      await api.makeAPIPostRequest(`${sequenceType}/get-batch`, {
-        body: uris,
-        signal,
-      })
-    ).body;
-  }
-
-  function cancel(): void {
-    controller.abort();
-  }
-
-  return {
-    call,
-    cancel,
-  };
+  return unsupported(`${sequenceType} data`);
 }
 
 function createActiveRunsRequest(): RequestInstance {
-  const controller = new AbortController();
-  const signal = controller.signal;
-
-  async function call(): Promise<RunsSearchResult> {
-    return (
-      await api.makeAPIGetRequest(`${ENDPOINTS.RUNS.ACTIVE}`, {
-        signal,
-      })
-    ).body;
-  }
-
-  function cancel(): void {
-    controller.abort();
-  }
-
-  return {
-    call,
-    cancel,
-  };
+  return requestWithCancel(() => API.get<any>('v1/explorer/runs/active'));
 }
 
 function alignMetricsRequest(): RequestInstance {
-  const controller = new AbortController();
-  const signal = controller.signal;
-
-  async function call(query: {
-    body: IAlignMetricsData;
-    params: RunsSearchQueryParams;
-  }): Promise<RunsSearchResult> {
-    return (
-      await api.makeAPIPostRequest(`${ENDPOINTS.RUNS.SEARCH}/metric/align`, {
-        body: query.body,
-        query_params: query.params,
-        signal,
-      })
-    ).body;
-  }
-
-  function cancel(): void {
-    controller.abort();
-  }
-
-  return {
-    call,
-    cancel,
-  };
+  return unsupported('Metric alignment');
 }
 
 export {

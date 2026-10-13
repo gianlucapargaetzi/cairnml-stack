@@ -1,7 +1,4 @@
-import Cookies from 'js-cookie';
-
-import ENDPOINTS from '../api/endpoints';
-import { AuthToken } from '../api/api';
+import { getCsrfToken, redirectToSignIn } from '../api/api';
 
 import {
   HttpRequestMethods,
@@ -27,8 +24,6 @@ import exceptionDetector from './interceptors/exceptionDetector';
 class NetworkService {
   private interceptors: Interceptor[] = [exceptionDetector];
   private readonly uri?: string;
-  private readonly AUTH_TOKEN_KEY = 'Auth';
-  private readonly AUTH_REFRESH_TOKEN_KEY = 'token';
   private readonly CONTENT_TYPE = {
     JSON: 'application/json',
     FORM_DATA: 'application/x-www-form-urlencoded',
@@ -255,14 +250,6 @@ class NetworkService {
   }
 
   /**
-   * getAuthToken - Gets the token from local storage
-   * @returns {string} - The token
-   */
-  public getAuthToken(): string {
-    return localStorage.getItem(this.AUTH_TOKEN_KEY) || '';
-  }
-
-  /**
    * getRequestHeaders is a function that returns the request headers
    * @returns object
    * @example
@@ -280,68 +267,12 @@ class NetworkService {
       ...headers,
     };
 
-    const Authorization = this.getAuthToken();
-    if (Authorization) {
-      requestHeaders.Authorization = Authorization;
+    // The session is an httpOnly cookie, sent by the browser. Writes echo the CSRF token.
+    const csrf = getCsrfToken();
+    if (csrf) {
+      requestHeaders['X-CSRF-Token'] = csrf;
     }
     return requestHeaders;
-  }
-
-  /**
-   * refreshToken is a function that makes a GET request to the auth endpoint for refresh the token
-   * @returns IResponse<AuthToken>
-   * @throws Error
-   */
-  public async refreshToken() {
-    return this.makeAPIGetRequest(
-      `${ENDPOINTS.AUTH.BASE}/${ENDPOINTS.AUTH.REFRESH}`,
-      {
-        headers: this.getRequestHeaders(),
-        credentials:
-          process.env.NODE_ENV === 'development' ? 'include' : 'same-origin',
-      },
-      `${window.location.origin}/api`,
-    );
-  }
-
-  /**
-   * removeAuthToken - Removes the token from local storage and refresh token from cookies
-   * @returns {void}
-   */
-  public removeAuthToken(): void {
-    localStorage.removeItem(this.AUTH_TOKEN_KEY);
-    this.removeRefreshToken();
-  }
-
-  /**
-   * setAuthToken - Sets the token in local storage and refresh token in cookies
-   * @param {AuthToken} token - The token object
-   * @returns {void}
-   */
-  public setAuthToken({
-    token_type,
-    refresh_token,
-    access_token,
-  }: AuthToken): void {
-    localStorage.setItem(this.AUTH_TOKEN_KEY, `${token_type} ${access_token}`);
-    this.setRefreshToken(refresh_token);
-  }
-
-  /**
-   * setRefreshToken - Sets the refresh token in cookies
-   * @param refresh_token - The refresh token
-   * @returns {void}
-   */
-  public setRefreshToken(refresh_token: string): void {
-    Cookies.set(this.AUTH_REFRESH_TOKEN_KEY, refresh_token);
-  }
-
-  /**
-   * removeRefreshToken - Removes the refresh token from cookies
-   * @returns {void}
-   */
-  public removeRefreshToken(): void {
-    Cookies.remove(this.AUTH_REFRESH_TOKEN_KEY);
   }
 
   /**
@@ -372,16 +303,7 @@ class NetworkService {
     refetch: () => Promise<T>,
   ): Promise<T> {
     if (response.status === 401) {
-      if (endpoint === `${ENDPOINTS.AUTH.BASE}/${ENDPOINTS.AUTH.REFRESH}`) {
-        this.removeAuthToken();
-        return this.parseResponse<T>(response);
-      }
-      // Refresh token
-      const token = (await this.refreshToken()).body;
-      if (token) {
-        this.setAuthToken(token);
-        return refetch();
-      }
+      redirectToSignIn();
     }
     return this.parseResponse<T>(response);
   }

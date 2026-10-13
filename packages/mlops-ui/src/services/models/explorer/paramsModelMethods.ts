@@ -48,6 +48,7 @@ import {
 } from 'types/services/models/explorer/createAppModel';
 import { ITagInfo, ITagProps } from 'types/pages/tags/Tags';
 
+import { IExplorerSearch } from 'utils/explorer/explorerJson';
 import exceptionHandler from 'utils/app/exceptionHandler';
 import getChartTitleData from 'utils/app/getChartTitleData';
 import { getFilteredGroupingOptions } from 'utils/app/getFilteredGroupingOptions';
@@ -130,9 +131,7 @@ function getParamsModelMethods(
   } = initialApp;
 
   let runsRequestRef: {
-    call: (
-      exceptionHandler: (detail: any) => void,
-    ) => Promise<ReadableStream<IRun<IParamTrace>[]>>;
+    call: (exceptionHandler: (detail: any) => void) => Promise<IExplorerSearch>;
     abort: () => void;
   };
   let runsArchiveRef: {

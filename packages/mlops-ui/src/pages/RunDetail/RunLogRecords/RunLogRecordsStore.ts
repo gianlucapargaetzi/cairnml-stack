@@ -1,41 +1,33 @@
 import { createRunLogRecordsRequest } from 'modules/core/api/runsApi';
 import createResource from 'modules/core/utils/createResource';
 
-import { parseStream } from 'utils/encoder/streamEncoding';
+import { sortedLogLines } from 'utils/explorer/explorerJson';
 
 import { RunLogRecordStateType } from '.';
 
 function createRunLogRecordsEngine() {
   let { call, cancel } = createRunLogRecordsRequest();
 
+  // One record per log line, keyed by its position in the run's logs.
   const { fetchData, state, destroy } = createResource<RunLogRecordStateType>(
-    async ({ runId, record_range }: { runId: string; record_range?: string }) =>
-      parseStream(await call(runId, record_range), {
-        dataProcessor: async (objects: any) => {
-          const data: RunLogRecordStateType = {
-            runLogRecordsList: {},
-            runLogRecordsTotalCount: 0,
-          };
-          try {
-            for await (let [keys, val] of objects) {
-              const object = { ...val, hash: keys[0] };
-              if (typeof object.hash === 'number') {
-                data.runLogRecordsList[object.hash] = object;
-              } else {
-                data.runLogRecordsTotalCount = val;
-              }
-            }
-          } catch (e) {
-            // eslint-disable-next-line no-console
-            console.error(e);
-            throw e;
-          }
-          return {
-            ...data,
-            runLogRecordsList: data.runLogRecordsList,
-          };
-        },
-      }),
+    async ({ runId }: { runId: string; record_range?: string }) => {
+      const lines = sortedLogLines(await call(runId));
+      const records: RunLogRecordStateType['runLogRecordsList'] = {};
+      lines.forEach((line, index) => {
+        records[index] = {
+          hash: index,
+          message: line.text,
+          log_level: 'INFO',
+          args: { stream: line.stream },
+          is_notified: false,
+          timestamp: line.ts,
+        };
+      });
+      return {
+        runLogRecordsList: records,
+        runLogRecordsTotalCount: lines.length,
+      };
+    },
   );
 
   function abortRunLogRecordsFetching() {

@@ -9,9 +9,6 @@ const Runs = React.lazy(
 const RunDetail = React.lazy(
   () => import(/* webpackChunkName: "run" */ 'pages/RunDetail/RunDetail'),
 );
-const Experiment = React.lazy(
-  () => import(/* webpackChunkName: "run" */ 'pages/Experiment/Experiment'),
-);
 const Metrics = React.lazy(
   () =>
     import(/* webpackChunkName: "metrics" */ 'pages/Metrics/MetricsContainer'),
@@ -19,17 +16,8 @@ const Metrics = React.lazy(
 const Params = React.lazy(
   () => import(/* webpackChunkName: "params" */ 'pages/Params/ParamsContainer'),
 );
-const Bookmarks = React.lazy(
-  () =>
-    import(
-      /* webpackChunkName: "bookmarks" */ 'pages/Bookmarks/BookmarksContainer'
-    ),
-);
 const Dashboard = React.lazy(
   () => import(/* webpackChunkName: "dashboard" */ 'pages/Dashboard/Dashboard'),
-);
-const TagsContainer = React.lazy(
-  () => import(/* webpackChunkName: "tags" */ 'pages/Tags/TagsContainer'),
 );
 const Scatters = React.lazy(
   () =>
@@ -37,24 +25,8 @@ const Scatters = React.lazy(
       /* webpackChunkName: "scatters" */ 'pages/Scatters/ScattersContainer'
     ),
 );
-const ImagesExplore = React.lazy(
-  () =>
-    import(
-      /* webpackChunkName: "images" */ 'pages/ImagesExplore/ImagesExplore'
-    ),
-);
-const FiguresExplore = React.lazy(
-  () => import(/* webpackChunkName: "figures" */ 'pages/FiguresExplorer'),
-);
-const AudiosExplorer = React.lazy(
-  () => import(/* webpackChunkName: "audios" */ 'pages/AudiosExplorer'),
-);
 const MetricsExplorer = React.lazy(
   () => import(/* webpackChunkName: "metrics_v2" */ 'pages/MetricsExplorer'),
-);
-
-const TextExplorer = React.lazy(
-  () => import(/* webpackChunkName: "text" */ 'pages/TextExplorer'),
 );
 
 export interface IRoute {
@@ -97,14 +69,6 @@ const routes: { [key: string]: any } = {
     isExact: true,
     title: pageTitlesEnum.METRICS_EXPLORER,
   },
-  METRICS_ID: {
-    path: PathEnum.Metrics_Id,
-    component: Metrics,
-    showInSidebar: false,
-    displayName: 'MetricsId',
-    isExact: true,
-    title: pageTitlesEnum.METRICS_EXPLORER,
-  },
   PARAMS: {
     path: PathEnum.Params,
     component: Params,
@@ -113,58 +77,6 @@ const routes: { [key: string]: any } = {
     icon: 'params',
     isExact: true,
     title: pageTitlesEnum.PARAMS_EXPLORER,
-  },
-  PARAMS_ID: {
-    path: PathEnum.Params_Id,
-    component: Params,
-    showInSidebar: false,
-    displayName: 'ParamsId',
-    isExact: true,
-    title: pageTitlesEnum.PARAMS_EXPLORER,
-  },
-  TEXT_EXPLORER: {
-    path: PathEnum.Text_Explorer,
-    component: TextExplorer,
-    showInSidebar: true,
-    icon: 'text',
-    displayName: 'Text',
-    isExact: true,
-    title: pageTitlesEnum.TEXT_EXPLORER,
-  },
-  IMAGE_EXPLORE: {
-    path: PathEnum.Images_Explore,
-    component: ImagesExplore,
-    showInSidebar: true,
-    displayName: 'Images',
-    icon: 'images',
-    isExact: true,
-    title: pageTitlesEnum.IMAGES_EXPLORER,
-  },
-  IMAGE_EXPLORE_ID: {
-    path: PathEnum.Images_Explore_Id,
-    component: ImagesExplore,
-    showInSidebar: false,
-    displayName: 'ImagesId',
-    isExact: true,
-    title: pageTitlesEnum.IMAGES_EXPLORER,
-  },
-  FIGURES_EXPLORER: {
-    path: PathEnum.Figures_Explorer,
-    component: FiguresExplore,
-    showInSidebar: true,
-    icon: 'figures',
-    displayName: 'Figures',
-    isExact: true,
-    title: pageTitlesEnum.FIGURES_EXPLORER,
-  },
-  AUDIOS_EXPLORER: {
-    path: PathEnum.Audios_Explorer,
-    component: AudiosExplorer,
-    showInSidebar: true,
-    icon: 'audios',
-    displayName: 'Audios',
-    isExact: true,
-    title: pageTitlesEnum.AUDIOS_EXPLORER,
   },
   SCATTERS: {
     path: PathEnum.Scatters,
@@ -175,32 +87,6 @@ const routes: { [key: string]: any } = {
     isExact: true,
     title: pageTitlesEnum.SCATTERS_EXPLORER,
   },
-  SCATTERS_EXPLORE_ID: {
-    path: PathEnum.Scatters_Id,
-    component: Scatters,
-    showInSidebar: false,
-    displayName: 'ScatterId',
-    isExact: true,
-    title: pageTitlesEnum.SCATTERS_EXPLORER,
-  },
-  BOOKMARKS: {
-    path: PathEnum.Bookmarks,
-    component: Bookmarks,
-    showInSidebar: true,
-    displayName: 'Bookmarks',
-    icon: 'bookmarks',
-    isExact: true,
-    title: pageTitlesEnum.BOOKMARKS,
-  },
-  TAGS: {
-    path: PathEnum.Tags,
-    component: TagsContainer,
-    showInSidebar: true,
-    displayName: 'Tags',
-    icon: 'tags',
-    isExact: true,
-    title: pageTitlesEnum.TAGS,
-  },
   RUN_DETAIL: {
     path: PathEnum.Run_Detail,
     component: RunDetail,
@@ -208,14 +94,6 @@ const routes: { [key: string]: any } = {
     displayName: 'Run Detail',
     isExact: false,
     title: pageTitlesEnum.RUN_DETAIL,
-  },
-  Experiment: {
-    path: PathEnum.Experiment,
-    component: Experiment,
-    showInSidebar: false,
-    displayName: 'Experiment',
-    isExact: false,
-    title: pageTitlesEnum.EXPERIMENT,
   },
   METRICS_EXPLORER: {
     path: PathEnum.Metrics_Explorer,

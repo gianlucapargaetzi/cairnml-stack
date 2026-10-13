@@ -28,7 +28,7 @@ function QuickStart() {
           tint={100}
           className='QuickStart__section__title'
         >
-          Integrate Aim with your code
+          Integrate MLOps Flow with your code
         </Text>
         <CodeBlock
           code={`from aim import Run

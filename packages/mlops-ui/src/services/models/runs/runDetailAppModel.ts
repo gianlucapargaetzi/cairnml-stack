@@ -14,14 +14,23 @@ import exceptionHandler from 'utils/app/exceptionHandler';
 import { encode } from 'utils/encoder/encoder';
 import contextToString from 'utils/contextToString';
 import alphabeticalSortComparator from 'utils/alphabeticalSortComparator';
-import {
-  decodeBufferPairs,
-  decodePathsVals,
-  iterFoldTree,
-} from 'utils/encoder/streamEncoding';
+import { IExplorerSearch, logRecords } from 'utils/explorer/explorerJson';
 import { filterSingleRunMetricsData } from 'utils/app/filterMetricData';
 
 import createModel from '../model';
+
+// The scalar traces of one run, in the shape the metric cards read.
+function runBatches(search: IExplorerSearch, runId: string): IRunBatch[] {
+  return (search.runs[runId]?.traces ?? []).map((trace) => ({
+    key: '',
+    name: trace.name,
+    context: Object.fromEntries(
+      Object.entries(trace.context).map(([k, v]) => [k, String(v)]),
+    ),
+    iters: trace.points.map((p) => p[0]),
+    values: trace.points.map((p) => p[1]),
+  }));
+}
 
 const model = createModel<Partial<any>>({
   isRunInfoLoading: true,
@@ -172,9 +181,9 @@ function getRunMetricsBatch(body: any, runHash: string) {
   return {
     call: async () => {
       try {
-        const data = await getRunsBatchRequestRef.call();
+        const search = await getRunsBatchRequestRef.call();
         const { runMetricsBatch, runSystemBatch } = processRunBatchData(
-          data,
+          runBatches(search, runHash),
           model.getState().runMetricsBatch,
           model.getState().runSystemBatch,
         );
@@ -209,7 +218,7 @@ function getRunLogs({
   if (getRunsLogsRequestRef) {
     getRunsLogsRequestRef.abort();
   }
-  getRunsLogsRequestRef = runsService.getRunLogs(runHash, record_range);
+  getRunsLogsRequestRef = runsService.getRunLogs(runHash);
   return {
     call: async () => {
       const runLogs = model.getState()?.runLogs ?? {};
@@ -217,16 +226,10 @@ function getRunLogs({
         model.setState({ isRunLogsLoading: true });
       }
 
-      const stream = await getRunsLogsRequestRef.call((detail: any) => {
+      const chunks = await getRunsLogsRequestRef.call((detail: any) => {
         exceptionHandler({ detail, model });
       });
-      let bufferPairs = decodeBufferPairs(stream);
-      let decodedPairs = decodePathsVals(bufferPairs);
-      let objects = iterFoldTree(decodedPairs, 1);
-      const runLogsData: { [key: string]: any } = {};
-      for await (let [keys, val] of objects) {
-        runLogsData[keys[0]] = { index: +keys[0], value: val };
-      }
+      const runLogsData: { [key: string]: any } = logRecords(chunks);
       const updatedLogsData: { [key: string]: any } = {
         ...runLogs,
         ...runLogsData,
@@ -287,7 +290,7 @@ function deleteRun(id: string, successCallback: () => void = _.noop) {
   try {
     runsService
       .deleteRun(id)
-      .call((detail) => {
+      .call((detail: any) => {
         exceptionHandler({ model, detail });
       })
       .then((res: any) => {
