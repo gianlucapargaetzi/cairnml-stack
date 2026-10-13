@@ -1,3 +1,4 @@
+import { IDispatchBody } from 'utils/jobs/dispatch';
 import { IJobOverrides } from 'utils/jobs/jobs';
 
 import API from '../api';
@@ -10,6 +11,7 @@ const endpoints = {
   SPEC: (id: string) => `v1/jobs/${id}/spec`,
   CANCEL: (id: string) => `v1/jobs/${id}/cancel`,
   RESCHEDULE: (id: string) => `v1/jobs/${id}/reschedule`,
+  DISPATCH: (runId: string) => `v1/runs/${runId}/dispatch`,
 };
 
 export interface IJobRow {
@@ -65,12 +67,18 @@ function rescheduleJob(id: string, overrides: IJobOverrides) {
   return API.post<IJobRow>(endpoints.RESCHEDULE(id), overrides);
 }
 
+// Schedules a run as a job on an agent.
+function dispatchRun(runId: string, body: IDispatchBody) {
+  return API.post<IJobRow>(endpoints.DISPATCH(runId), body);
+}
+
 const jobsService = {
   endpoints,
   getJobs,
   getJobSpec,
   cancelJob,
   rescheduleJob,
+  dispatchRun,
 };
 
 export default jobsService;

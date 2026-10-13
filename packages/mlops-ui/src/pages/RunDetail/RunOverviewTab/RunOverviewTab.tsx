@@ -8,6 +8,8 @@ import { ANALYTICS_EVENT_KEYS } from 'config/analytics/analyticsKeysMap';
 
 import * as analytics from 'services/analytics';
 
+import RunDispatchForm from '../RunDispatch/RunDispatchForm';
+
 import GitInfoCard from './components/GitInfoCard';
 import RunOverviewTabMetricsCard from './components/MetricsCard/RunOverviewTabMetricsCard';
 import RunOverviewTabArtifactsCard from './components/ArtifactsCard/RunOverviewTabArtifactsCard';
@@ -148,6 +150,7 @@ function RunOverviewTab({ runData, runHash }: IRunOverviewTabProps) {
                   <GitInfoCard data={cardsData.gitInfo} />
                 </ErrorBoundary>
               )}
+              <RunDispatchForm runId={runHash} />
             </>
           )}
         </div>
