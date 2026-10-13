@@ -41,13 +41,21 @@ RETIRED = re.compile(
 )
 
 
+def _vendored(path: Path) -> bool:
+    """Upstream Aim UI source, its dependencies and the built bundle are not our code."""
+    parts = path.parts
+    built = any(parts[i:i + 2] == ("ui", "next") for i in range(len(parts) - 1))
+    return "node_modules" in parts or "mlops-ui" in parts or built
+
+
 def test_the_code_does_not_use_retired_words():
     """Task is retired (now Experiment), and Experiment no longer means one execution (now Run)."""
     this_file = Path(__file__).resolve()
     code = [
         p for root in (ROOT / "packages", ROOT / "tests")
         for suffix in ("*.py", "*.js", "*.mjs", "*.css")
-        for p in root.rglob(suffix) if p.resolve() != this_file
+        for p in root.rglob(suffix)
+        if p.is_file() and p.resolve() != this_file and not _vendored(p)
     ]
     hits = [
         f"{p.relative_to(ROOT)}: {m.group(0)}"

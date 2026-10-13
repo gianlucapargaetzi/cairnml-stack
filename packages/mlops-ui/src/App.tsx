@@ -28,7 +28,7 @@ const basePath = getBasePath(false);
 // loading monaco from node modules instead of CDN
 loader.config({
   paths: {
-    vs: `${getBasePath()}/static-files/vs`,
+    vs: `${process.env.PUBLIC_URL}/vs`,
   },
 });
 

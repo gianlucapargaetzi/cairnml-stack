@@ -14,3 +14,6 @@ deploy/data/
 
 # Playwright MCP session files
 .playwright-mcp/
+
+# Built explorer (npm run build:server in packages/mlops-ui)
+packages/mlops-server/src/mlops_server/ui/next/

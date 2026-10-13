@@ -55,6 +55,13 @@ async def _validation_error_handler(_request: Request, exc: RequestValidationErr
     return JSONResponse(status_code=422, content=content)
 
 
+EXPLORER_CSP = (
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; "
+    "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+)
+
+
 def create_app(
     settings: Settings | None = None, *, oidc=None, storage=None, github=None, directory=None
 ) -> FastAPI:
@@ -150,7 +157,12 @@ def create_app(
         response.headers["X-Frame-Options"] = "DENY"
         if path.startswith("/api") or path.startswith("/ui/auth") or path in ("/ui", "/ui/"):
             response.headers["Cache-Control"] = "no-store"
-        if path.startswith("/ui"):
+        if path.startswith("/ui-next"):
+            # The explorer: no inline scripts, inline styles for its CSS-in-JS, blob workers.
+            response.headers["Content-Security-Policy"] = EXPLORER_CSP
+            if not path.startswith("/ui-next/static/"):
+                response.headers["Cache-Control"] = "no-store"
+        elif path.startswith("/ui"):
             response.headers["Content-Security-Policy"] = (
                 "default-src 'self'; img-src 'self' data:; frame-ancestors 'none'; "
                 "base-uri 'none'; form-action 'self'"

@@ -74,24 +74,6 @@
         }
       }
     </style>
-    <script>
-      document.write(`<div id='preload-spinner' class='preloader'>
-        <div class='preloader-wrapper'>
-        <svg overflow='overlay' id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" width="56.71503" height="56.50146">
-  <g id="Logo">
-    <path fill="#57aeea" class="cls-1" d="M43.8887,2.55052A4.37315,4.37315,0,1,0,37.704,8.73494l10.98239,10.983a4.373,4.373,0,1,0,6.18471-6.18411Z"/>
-    <path fill="#7869d0" class="cls-2" d="M11.46467,5.38778a4.37283,4.37283,0,1,0-6.18411,6.18411l39.472,39.472A4.37314,4.37314,0,0,0,50.9373,44.8595Z"/>
-    <path fill="#688bdd" class="cls-3" d="M24.98757,1.2809a4.37293,4.37293,0,1,0-6.18411,6.18441l30.44626,30.446a4.37293,4.37293,0,1,0,6.18411-6.18441Z"/>
-    <path fill="#8946c2" class="cls-4" d="M7.463,19.01562A4.37314,4.37314,0,1,0,1.27833,25.2L31.29946,55.22055a4.37314,4.37314,0,1,0,6.18471-6.18441Z"/>
-    <path fill="#9923b5" class="cls-5" d="M8.62889,37.81033a4.37315,4.37315,0,1,0-6.18471,6.18442l10.98239,10.983a4.373,4.373,0,1,0,6.18471-6.18411Z"/>
-  </g>
-</svg>
-  <div class="progress-bar">
-    <div class="progress-bar-value"></div>
-  </div>
-</div>
-    </div>`);
-    </script>
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <!--
       Notice the use of %PUBLIC_URL% in the tags above.
@@ -151,10 +133,7 @@
     />
     <title>MLOps Flow</title>
 
-    <script>
-      window.API_BASE_PATH = '{{ base_path }}';
-      window.externalPublicPath = '%PUBLIC_URL%/';
-    </script>
+    <script src="%PUBLIC_URL%/runtime-config.js"></script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>

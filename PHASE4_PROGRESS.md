@@ -1,6 +1,6 @@
-# Phase 4 progress: UI fork (part 1)
+# Phase 4 progress: UI fork (parts 1 and 2)
 
-**Status:** Part 1 of 2. The fork compiles and no longer loads external services at build time. It is not served yet, and it does not talk to the explorer API yet, so the phase's done criteria are not met.
+**Status:** The fork compiles, is served at `/ui-next/` next to the old dashboard at `/ui/`, and has no inline scripts. It does not talk to the explorer API yet, so the phase's done criteria are not met.
 
 ## Done
 
@@ -11,9 +11,15 @@
 - The title is "MLOps Flow".
 - `npm run build` exits 0 with `NODE_OPTIONS=--openssl-legacy-provider`.
 
-## Not done (part 2)
+## Part 2: serving
+
+- Served at `/ui-next/` (decided: the old dashboard stays at `/ui/` until parity). The build is copied into `packages/mlops-server/src/mlops_server/ui/next` by `npm run build:server` and is git-ignored.
+- Own CSP for `/ui-next` (no inline scripts, `unsafe-inline` styles only); the preloader script and the inline runtime globals moved out of `index.html`.
+- Tests: `test_ui_next.py` (index, history fallback, static files, traversal, 503 when unbuilt, old dashboard unchanged).
+- Bundle scan: the built JS still contains URLs from third-party libraries (map tiles, gravatar, docs). They are not called by the explorer's own code. The Playwright cross-origin check in Phase 7 must confirm no request is made.
+
+## Not done
 
 - Data layer: the stream decoder (`utils/encoder/streamEncoding.ts`) and its consumers still expect Aim's binary `(path, value)` protocol. The endpoint table still points at Aim paths under `/api`.
 - Session auth: the UI still uses the bearer token in localStorage. Writes need the `X-CSRF-Token` from `/api/v1/me`.
-- Serving: `routers/ui.py` does not serve the fork build yet. The build uses `/static-files/` as its public path; the plan says `/ui/static/`. The location of the fork (`/ui/` versus a separate path while the old dashboard remains) is still undecided.
 - CSP, favicon and logo, Monaco asset path, and the bundle scan for external hosts.

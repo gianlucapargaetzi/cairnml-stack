@@ -6,6 +6,7 @@ dependencies = ["mlops-common", "mlops-server", "mlops-agent", "mlops-client"]
 
 [tool.uv.workspace]
 members = ["packages/*"]
+exclude = ["packages/mlops-ui"]
 
 [tool.uv.sources]
 mlops-common = { workspace = true }
