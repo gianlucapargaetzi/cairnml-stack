@@ -20,7 +20,7 @@ All 69 planned tasks are implemented in eight phases:
 4. Agent (identity, executors for python, image and compose, runner, log shipper, main loop).
 5. Client SDK and CLI (`mlops init`, `Experiment`, uplink with spool and sync, dispatch, admin commands, repo and dataset commands).
 6. Deploy (Dockerfiles, per-role compose stacks, Keycloak realm, bootstrap, Alembic baseline, runbook).
-7. User lifecycle and dashboard (IdP directory sync with automatic revocation, browser login with PKCE, read-only web access, UI shell and views, comparison, CSRF-protected cancel and task edit).
+7. User lifecycle and web UI (IdP directory sync with automatic revocation, browser login with PKCE, read-only web access, UI shell and views, comparison, CSRF-protected cancel and task edit).
 8. Projects, tasks, datasets and resources (task entity, repo links and history, commit graph, dataset cards, reschedule, resource usage, four-tab navigation, e2e tests).
 
 Test status at the last run:
@@ -32,7 +32,7 @@ Test status at the last run:
 
 - Nothing has run against the live compose stack from this machine. The hostnames `mlops-server`, `mlops-idp`, `mlops-nas` do not resolve, `deploy/.env` does not exist, and host port 8000 is used by another container (`scenegraph-editor`).
 - The end-to-end suite (`MLOPS_E2E=1 uv run pytest tests/e2e -m e2e`) has never run. It needs the stack, `uv sync --group ui` and `playwright install chromium`.
-- The dashboard has never been rendered in a browser. Only the pure helpers and the static tests are checked.
+- The web UI has never been rendered in a browser. Only the pure helpers and the static tests are checked.
 - Keycloak's `${…}` substitution for the sync secret is unverified. If it fails, directory sync fails closed.
 - `bootstrap.sh`'s `kcadm` and `mc` match strings are unverified.
 

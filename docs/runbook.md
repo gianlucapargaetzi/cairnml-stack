@@ -186,7 +186,7 @@ git push
 uv run mlops data push data/train
 ```
 
-`repo init` writes `.mlops/project.yaml` and configures the DVC remote on the NAS, without credentials. `data push` and `data pull` get temporary storage credentials from the server. Commit the `.dvc` pointer and `.mlops/project.yaml`; never the data itself. To describe the dataset in the dashboard, create its card (section 17). A data repository is linked to the project with `mlops repo link` (section 16).
+`repo init` writes `.mlops/project.yaml` and configures the DVC remote on the NAS, without credentials. `data push` and `data pull` get temporary storage credentials from the server. Commit the `.dvc` pointer and `.mlops/project.yaml`; never the data itself. To describe the dataset in the web UI, create its card (section 17). A data repository is linked to the project with `mlops repo link` (section 16).
 
 In your script, register the dataset (the path is relative to the working directory, and it must be DVC-tracked inside the Git repository):
 
@@ -269,7 +269,7 @@ On each machine:
 3. Point DNS, or `/etc/hosts`, for `mlops-server`, `mlops-idp` and `mlops-nas` at the machines that run those roles.
 4. Start only that role's compose file.
 
-The dashboard (section 13) is served by the Server, so it moves with the server role. When the Server moves to another hostname, the `MLOPS_IDP_SYNC_*` settings and the `mlops-web` redirect URIs in the IdP must use the final server hostname: `<MLOPS_SERVER_URL>/ui/auth/callback` for the redirect, and the sync client secret from `deploy/.env` on both the IdP and the Server.
+The web UI (section 13) is served by the Server, so it moves with the server role. When the Server moves to another hostname, the `MLOPS_IDP_SYNC_*` settings and the `mlops-web` redirect URIs in the IdP must use the final server hostname: `<MLOPS_SERVER_URL>/ui/auth/callback` for the redirect, and the sync client secret from `deploy/.env` on both the IdP and the Server.
 
 **Not solved by moving roles:**
 
@@ -277,17 +277,17 @@ The dashboard (section 13) is served by the Server, so it moves with the server 
 - **TLS is not configured.** All URLs are plain HTTP. Before you expose anything beyond one trusted LAN, put TLS in front of the server, the IdP and RustFS (a reverse proxy per stack), and change the Keycloak realm users and passwords.
 - **Keycloak runs in development mode** (`start-dev`), and its port 8180 is published on all host interfaces. The RustFS S3 API (9000) is on the LAN; the RustFS console (9001) is on loopback only.
 
-## 13. Dashboard *(not yet verified live)*
+## 13. Web UI *(not yet verified live)*
 
-The dashboard is a web view served by the server. Open it in a browser:
+The web UI (MLOps Flow) is served by the server. Open it in a browser:
 
 ```
-http://mlops-server:8000/ui/
+http://mlops-server:8000/ui-next/
 ```
 
-The hosts entry from step 2 is enough. With no session, the page sends you to the Keycloak login. Log in with a realm user: the `KC_ADMIN` user from step 4, or any user you created there. There is no separate dashboard account. The session lasts 8 hours; **Log out** in the header ends it. To run a recorded experiment on an agent, open it and use **Run on an agent** (queue, CPU, memory, GPU, labels). It creates a job, the same as `mlops dispatch`.
+The hosts entry from step 2 is enough. With no session, the page sends you to the Keycloak login. Log in with a realm user: the `KC_ADMIN` user from step 4, or any user you created there. There is no separate web UI account. The session lasts 8 hours; **Log out** in the header ends it. To run a recorded experiment on an agent, open it and use **Run on an agent** (queue, CPU, memory, GPU, labels). It creates a job, the same as `mlops dispatch`.
 
-The dashboard has four tabs, plus the overview at the front:
+The web UI has the Projects, Datasets, Jobs and Resources tabs, plus the overview at the front:
 
 - **Overview:** job counts by status, and projects with their run counts and last activity.
 - **Projects:** the projects you may see, as a tree by slug (`group/name`). A project page shows its experiments with their best results, the commit graph of the linked repository (click a commit to see the runs that ran on it), the linked datasets and the containers used. Section 15 explains experiments.
@@ -301,7 +301,7 @@ Also reachable from these pages:
 - **Comparison:** in the experiment list, tick 2 to 10 experiments and press **Compare selected**. The comparison shows their metrics, parameters and environment side by side.
 - **Admin:** read-only lists of users and agents, for admins only.
 
-The dashboard writes only three things: it cancels a job, copies and reschedules a job, and edits an experiment. It cannot start a brand-new job and cannot edit dataset cards. Use the CLI for those (sections 8, 10 and 17).
+The web UI writes only three things: it cancels a job, copies and reschedules a job, and edits an experiment. It cannot start a brand-new job and cannot edit dataset cards. Use the CLI for those (sections 8, 10 and 17).
 
 The end-to-end browser tests (`tests/e2e`) log in as the realm users `admin`, `dev`, `eve` and `carol`. Their passwords are not in the repository: the tests read them from `MLOPS_E2E_PASSWORD_<USER>` in the environment, for example `MLOPS_E2E_PASSWORD_DEV`. Set those variables to the passwords you gave the users.
 
@@ -324,7 +324,7 @@ Users are managed in the IdP. The server follows the IdP through a directory syn
 **What gets revoked** for a disabled user:
 
 - their client keys: CLI and SDK calls with those keys fail with `401`;
-- their browser sessions: the dashboard login ends;
+- their browser sessions: the web UI login ends;
 - their queued jobs: cancelled, with the message `owner was disabled`;
 - their running jobs: asked to stop.
 
@@ -362,7 +362,7 @@ uv run mlops experiment ls --project vision/seg
 uv run mlops experiment set vision/seg training --metric score --direction max --kind training --description "Segmentation training"
 ```
 
-`--kind` is one of `training`, `data-preparation`, `augmentation`, `evaluation`, `testing`, `compilation`, `inference` or `other`. `experiment set` changes only the metric, direction, kind and description. The Projects tab shows the best runs of each experiment by its primary metric and direction. The dashboard can make the same edit (section 13).
+`--kind` is one of `training`, `data-preparation`, `augmentation`, `evaluation`, `testing`, `compilation`, `inference` or `other`. `experiment set` changes only the metric, direction, kind and description. The Projects tab shows the best runs of each experiment by its primary metric and direction. The web UI can make the same edit (section 13).
 
 ## 16. Link repositories *(not yet verified live)*
 
@@ -409,9 +409,9 @@ The front matter is the YAML block between the two `---` lines. These keys are r
 
 The Markdown below the front matter is shown as the card text. A front matter that cannot be read is reported on the dataset page ("Card problem" or "Note"), and the rest of the page still shows.
 
-The dashboard shows the card on the Datasets tab, with its versions and the experiments that used the dataset. A dataset without a card shows `mlops dataset card init <path>`. The server reads cards through the GitHub App and caches dataset reads for 5 minutes, so a pushed card can take up to 5 minutes to appear. The CLI shows the same card with `mlops dataset show data/train --project vision/seg`.
+The web UI shows the card on the Datasets tab, with its versions and the experiments that used the dataset. A dataset without a card shows `mlops dataset card init <path>`. The server reads cards through the GitHub App and caches dataset reads for 5 minutes, so a pushed card can take up to 5 minutes to appear. The CLI shows the same card with `mlops dataset show data/train --project vision/seg`.
 
-## 18. Controlling jobs from the dashboard *(not yet verified live)*
+## 18. Controlling jobs from the web UI *(not yet verified live)*
 
 The Jobs tab lists scheduled (queued), running and finished jobs. Two actions are offered:
 
@@ -426,7 +426,7 @@ uv run mlops job cancel <job id>
 uv run mlops job reschedule <job id> --queue gpu-a100 --cpu 8 --param lr=0.01 --unset-param warmup
 ```
 
-`job reschedule` takes `--name`, `--queue`, `--cpu`, `--memory-gb`, `--gpu`, `--timeout` (seconds, at least 60), `--param KEY=VALUE` and `--unset-param KEY` (both repeatable). The CLI does not change labels or environment variables; use the dashboard for those.
+`job reschedule` takes `--name`, `--queue`, `--cpu`, `--memory-gb`, `--gpu`, `--timeout` (seconds, at least 60), `--param KEY=VALUE` and `--unset-param KEY` (both repeatable). The CLI does not change labels or environment variables; use the web UI for those.
 
 A rescheduled copy needs its commit on GitHub. If it is not, the request fails with `422 commit not found on GitHub` (troubleshooting, section 20).
 
@@ -478,12 +478,12 @@ Server errors quoted here are the exact messages.
 | `404 user not found` from `project-add-member` | The user has not run `mlops enroll` yet (step 5). |
 | Agent enrollment rejected, or `mlops-agent: not enrolled and MLOPS_AGENT_ENROLL_TOKEN is empty` | The token expired (900 seconds by default) or was already used. Create a new one with `mlops admin agent-token` (step 7). |
 | `sync-users` answers `503` | `IDP_SYNC_SECRET` is missing in the server environment (the server reads it as `MLOPS_IDP_SYNC_CLIENT_SECRET`). Set `IDP_SYNC_SECRET` in `deploy/.env` (bootstrap.sh generates it), then `docker compose -f deploy/compose.yaml up -d --force-recreate mlops-server`. |
-| Dashboard login loop (the login returns to the login page) | The redirect URI of the `mlops-web` client in the realm must equal `<MLOPS_SERVER_URL>/ui/auth/callback`. For the default host this is `http://mlops-server:8000/ui/auth/callback`. On another host, edit `deploy/idp/realm-mlops.json` before the first start, or change the Valid redirect URIs of `mlops-web` in the Keycloak console. |
+| Web UI login loop (the login returns to the login page) | The redirect URI of the `mlops-web` client in the realm must equal `<MLOPS_SERVER_URL>/ui/auth/callback`. For the default host this is `http://mlops-server:8000/ui/auth/callback`. On another host, edit `deploy/idp/realm-mlops.json` before the first start, or change the Valid redirect URIs of `mlops-web` in the Keycloak console. |
 | Keycloak did not pick up the new realm | Keycloak imports the realm file only when its data volume is empty. Reset it: `docker compose -f deploy/compose.yaml down -v mlops-idp`, then `up -d mlops-idp`. This deletes all Keycloak users, including `admin`: run bootstrap.sh again for `admin`, and create the other users again. Users recreated in the IdP get new IDs; the server then disables the old rows at the next sync, so those people enroll again. |
-| Blank dashboard | Open the browser's developer console. The Content-Security-Policy forbids inline scripts, and the page loads its scripts only from `/ui/static/`. A Content-Security-Policy message there means the page was changed to use an inline script. An error from `/api/v1` usually means the session expired: log in again. |
+| Blank web UI | Open the browser's developer console. The Content-Security-Policy forbids inline scripts, and the page loads its scripts only from `/ui-next/static/`. A Content-Security-Policy message there means the page was changed to use an inline script. An error from `/api/v1` usually means the session expired: log in again. |
 | A job's environment is stale or its packages are wrong | The job venv is cached in Docker volumes named `mlops-venv-*`. Stop running jobs, then remove them: `docker volume ls -q -f name=mlops-venv- \| xargs -r docker volume rm`. |
 | Projects tab: `Could not load the repository history: ...` | The repository is not linked to the project (`404 repository is not linked to this project`), or the GitHub App is not installed on it (`404 GitHub App is not installed on this repository`). Link it with `mlops repo link` (section 16) and install the App on it (step 3). `502 GitHub request failed` means GitHub could not be reached. |
 | Dataset page says "This dataset has no card yet" although the card was committed | The file must be named `<dataset path>.card.md` next to the `.dvc` file: `data/train.card.md` for the dataset `data/train`. Commit and push it, then wait up to 5 minutes for the cache (section 17). |
-| Jobs tab: `Could not cancel: missing or wrong CSRF token` (403) | The browser's copy of the session token is out of date, for example after logging in again in another tab. Reload the dashboard. `cross-origin request refused` (403) means the dashboard was opened under another address; open it at the server's own URL. A `401` sends you to the login page. |
+| Jobs tab: `Could not cancel: missing or wrong CSRF token` (403) | The browser's copy of the session token is out of date, for example after logging in again in another tab. Reload the web UI. `cross-origin request refused` (403) means the web UI was opened under another address; open it at the server's own URL. A `401` sends you to the login page. |
 | Copy and reschedule answers `422 commit not found on GitHub: push it first (<repo>@<sha>)` | The job's commit is not on GitHub any more, for example after a force-push. Push the commit again, then copy the job. |
 | Resources tab: "No usage reported yet." | See section 19: the agent has not reported yet, or its log says `could not sample usage`. |
