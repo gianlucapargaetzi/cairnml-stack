@@ -230,3 +230,44 @@ export function sortRows(rows, by, direction) {
     return (x < y ? -1 : x > y ? 1 : 0) * sign;
   });
 }
+
+// A parameter or environment value typed as text: JSON when it parses (0.1, true, [1,2]), else the string.
+export function parseValue(text) {
+  try { return JSON.parse(text); } catch { return text; }
+}
+
+// The sub-tab a job belongs to. Anything not active or scheduled is finished.
+export function jobGroup(status) {
+  if (status === "running") return "running";
+  if (status === "queued" || status === "assigned") return "scheduled";
+  return "finished";
+}
+
+// Keys whose value changed or was added (their new value) and keys that were removed (null).
+function mapDiff(before = {}, after = {}) {
+  const out = {};
+  for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
+    if (!(key in after)) out[key] = null;
+    else if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) out[key] = after[key];
+  }
+  return out;
+}
+
+const RESOURCE_FIELDS = ["cpu", "memory_gb", "gpu", "labels"];
+
+// The fields of a reschedule form that differ from the original job, in the shape the server's
+// JobOverrides takes. An unchanged form gives {}.
+export function buildOverrides(original, form) {
+  const out = {};
+  if (form.name !== original.name) out.name = form.name;
+  if (form.queue !== original.queue) out.queue = form.queue;
+  const resourcesChanged = RESOURCE_FIELDS.some(
+    (field) => JSON.stringify(form.resources[field]) !== JSON.stringify(original.resources[field]));
+  if (resourcesChanged) out.resources = form.resources;
+  if (Number.isFinite(form.timeout_s) && form.timeout_s !== original.timeout_s) out.timeout_s = form.timeout_s;
+  const params = mapDiff(original.params, form.params);
+  if (Object.keys(params).length) out.params = params;
+  const env = mapDiff(original.env, form.env);
+  if (Object.keys(env).length) out.env = env;
+  return out;
+}
