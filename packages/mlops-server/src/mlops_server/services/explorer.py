@@ -72,8 +72,18 @@ def search(
 
 
 def run_info(session: Session, run: Run) -> dict[str, Any]:
-    """The props and params of one run, without traces."""
-    return {"props": _props(session, [run])[run.id], "params": run.params}
+    """The props and params of one run, and the list of its metric series (without points)."""
+    series = session.execute(
+        select(MetricSeries.name, MetricSeries.context)
+        .where(MetricSeries.run_id == run.id)
+        .order_by(MetricSeries.name, MetricSeries.id)
+    ).all()
+    return {
+        "props": _props(session, [run])[run.id],
+        "params": run.params,
+        "traces": {"metric": [{"name": name, "context": context} for name, context in series]},
+        "artifacts": [],
+    }
 
 
 def _props(session: Session, runs: list[Run]) -> dict[str, dict[str, Any]]:

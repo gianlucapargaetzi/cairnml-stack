@@ -1,4 +1,8 @@
-import { IExplorerSearch, iterExplorerRuns } from 'utils/explorer/explorerJson';
+import {
+  IExplorerSearch,
+  iterExplorerRuns,
+  toSequence,
+} from 'utils/explorer/explorerJson';
 
 import { IRequestProgress } from './setRequestProgress';
 
@@ -24,4 +28,22 @@ export default async function getRunData(
   }
 
   return runData;
+}
+
+// The same folding for the metric explorer, where each run is a sequence (see toSequence).
+export async function getSequenceData(
+  search: IExplorerSearch,
+  setProgress?: (progress: IRequestProgress) => void,
+) {
+  const sequences = [];
+  for await (let [keys, val] of iterExplorerRuns(search, toSequence)) {
+    const data = { ...(val as any), hash: keys[0] };
+    if (data.hash.startsWith('progress')) {
+      const { 0: checked, 1: trackedRuns } = data;
+      setProgress?.({ matched: sequences.length, checked, trackedRuns });
+    } else {
+      sequences.push(data);
+    }
+  }
+  return sequences;
 }

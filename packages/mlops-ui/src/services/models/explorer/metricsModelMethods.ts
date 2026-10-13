@@ -75,7 +75,7 @@ import getFilteredRow from 'utils/app/getFilteredRow';
 import { getGroupingPersistIndex } from 'utils/app/getGroupingPersistIndex';
 import getGroupingSelectOptions from 'utils/app/getGroupingSelectOptions';
 import getQueryStringFromSelect from 'utils/app/getQueryStringFromSelect';
-import getRunData from 'utils/app/getRunData';
+import { getSequenceData } from 'utils/app/getRunData';
 import onAggregationConfigChange from 'utils/app/onAggregationConfigChange';
 import onAlignmentMetricChange from 'utils/app/onAlignmentMetricChange';
 import onAlignmentTypeChange from 'utils/app/onAlignmentTypeChange';
@@ -306,7 +306,7 @@ function getMetricsAppModelMethods(
               exceptionHandler({ detail, model });
               resetModelState(configData, shouldResetSelectedRows!);
             });
-            const runData = await getRunData(stream, (progress) =>
+            const runData = await getSequenceData(stream, (progress) =>
               setRequestProgress(model, progress),
             );
             if (shouldUrlUpdate) {

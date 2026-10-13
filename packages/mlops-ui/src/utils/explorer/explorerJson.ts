@@ -2,6 +2,7 @@ import { ITagProps } from 'types/pages/tags/Tags';
 import {
   IMetricTrace,
   IRun,
+  ISequence,
   ITraceData,
 } from 'types/services/models/metrics/runModel';
 
@@ -126,12 +127,28 @@ export function toRun(hash: string, run: IExplorerRun): IRun<IMetricTrace> {
 
 // Yields the same [keys, value] items the old stream decoder produced: one progress record,
 // then one record per run, keyed by the run id.
+// The metric explorer reads a run as a sequence: its traces are a flat list, not `traces.metric`.
+export function toSequence(
+  runId: string,
+  run: IExplorerRun,
+): ISequence<IMetricTrace> {
+  const shaped = toRun(runId, run);
+  return {
+    hash: runId,
+    params: shaped.params,
+    props: shaped.props,
+    created_at: shaped.created_at,
+    traces: run.traces.map(toMetricTrace),
+  } as unknown as ISequence<IMetricTrace>;
+}
+
 export async function* iterExplorerRuns(
   search: IExplorerSearch,
+  shape: (runId: string, run: IExplorerRun) => unknown = toRun,
 ): AsyncGenerator<[string[], any]> {
   yield [['progress'], search.progress];
   for (const [runId, run] of Object.entries(search.runs)) {
-    yield [[runId], toRun(runId, run)];
+    yield [[runId], shape(runId, run)];
   }
 }
 

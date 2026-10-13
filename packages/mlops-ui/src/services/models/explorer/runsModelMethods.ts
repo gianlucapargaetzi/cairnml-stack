@@ -282,6 +282,10 @@ function getRunsModelMethods(
               },
               model,
             });
+          } else {
+            // Not silent: a failed row build leaves the table pending, so say why.
+            // eslint-disable-next-line no-console
+            console.error('Runs search could not be processed:', ex);
           }
         }
         const rowDataLength = model.getState()?.tableData?.length || 0;

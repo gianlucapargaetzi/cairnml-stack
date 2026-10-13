@@ -67,6 +67,13 @@ def test_search_returns_props_params_and_traces(lab):
     assert traces[("loss", (("subset", "val"),))]["count"] == 2
 
 
+def test_run_info_lists_the_metric_series_without_points(lab):
+    info = lab["dev"].http.get(f"/api/v1/explorer/runs/{lab['fast']}/info").json()
+    names = [(m["name"], m["context"]) for m in info["traces"]["metric"]]
+    assert ("loss", {}) in names and ("loss", {"subset": "val"}) in names
+    assert info["artifacts"] == [] and "points" not in str(info["traces"])
+
+
 def test_runs_of_other_projects_are_not_searched(lab):
     eve_view = _search(lab["eve"]).json()["runs"]
     assert list(eve_view) == [lab["private"]]
