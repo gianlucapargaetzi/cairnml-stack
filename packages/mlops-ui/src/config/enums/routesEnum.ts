@@ -9,6 +9,7 @@ enum PathEnum {
   Jobs = '/jobs',
   Resources = '/resources',
   Admin = '/admin',
+  Datasets = '/datasets',
   Bookmarks = '/bookmarks',
   Run_Detail = '/runs/:runHash',
   Experiment = '/experiments/:experimentId',
