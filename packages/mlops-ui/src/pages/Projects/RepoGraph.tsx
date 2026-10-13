@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import projectPagesService, {
@@ -17,6 +17,7 @@ const LANE = 20;
 const PAD = 20;
 const TEXT_GAP = 16;
 const TEXT_WIDTH = 560;
+const ZOOM_STEP = 0.85;
 
 // A curve between two commits: straight when they share a lane, bent otherwise.
 function edgePath(edge: IGraphEdge): string {
@@ -81,6 +82,60 @@ function RepoGraph({ repos, project }: IProps) {
   const height = layout ? PAD * 2 + Math.max(1, layout.nodes.length) * ROW : 0;
   const textStart = layout ? PAD + layout.laneCount * LANE + TEXT_GAP : 0;
 
+  // The visible window of the graph: the wheel zooms around the pointer, dragging pans.
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const [view, setView] = useState({ x: 0, y: 0, w: 0, h: 0 });
+  const drag = useRef<{ x: number; y: number; view: typeof view } | null>(null);
+  useEffect(() => {
+    setView({ x: 0, y: 0, w: width, h: height });
+  }, [width, height]);
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) {
+      return undefined;
+    }
+    // A native listener, so the page does not scroll while the graph zooms.
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const factor = event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
+      const rect = svg.getBoundingClientRect();
+      setView((current) => {
+        const px =
+          current.x + ((event.clientX - rect.left) / rect.width) * current.w;
+        const py =
+          current.y + ((event.clientY - rect.top) / rect.height) * current.h;
+        return {
+          x: px - (px - current.x) * factor,
+          y: py - (py - current.y) * factor,
+          w: current.w * factor,
+          h: current.h * factor,
+        };
+      });
+    };
+    svg.addEventListener('wheel', onWheel, { passive: false });
+    return () => svg.removeEventListener('wheel', onWheel);
+  }, [layout]);
+  function startDrag(event: React.PointerEvent<SVGSVGElement>) {
+    drag.current = { x: event.clientX, y: event.clientY, view };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+  function moveDrag(event: React.PointerEvent<SVGSVGElement>) {
+    const start = drag.current;
+    if (!start || !svgRef.current) {
+      return;
+    }
+    const rect = svgRef.current.getBoundingClientRect();
+    setView({
+      ...start.view,
+      x: start.view.x - ((event.clientX - start.x) / rect.width) * start.view.w,
+      y:
+        start.view.y - ((event.clientY - start.y) / rect.height) * start.view.h,
+    });
+  }
+  function endDrag() {
+    drag.current = null;
+  }
+
   return (
     <div className='RepoGraph'>
       <label>
@@ -111,10 +166,17 @@ function RepoGraph({ repos, project }: IProps) {
       {layout && (
         <div className='RepoGraph__panel'>
           <svg
+            ref={svgRef}
             className='RepoGraph__svg'
-            viewBox={`0 0 ${width} ${height}`}
+            viewBox={`${view.x} ${view.y} ${view.w || width} ${
+              view.h || height
+            }`}
             role='img'
             aria-label='commit graph'
+            onPointerDown={startDrag}
+            onPointerMove={moveDrag}
+            onPointerUp={endDrag}
+            onPointerCancel={endDrag}
           >
             {layout.edges.map((edge) => (
               <path
