@@ -165,6 +165,14 @@ class ApiClient:
     def list_repos(self, project: str) -> list[dict]:
         return self._json(self._http.get("/api/v1/projects/repos", params={"project": project}))
 
+    def list_datasets(self, project: str | None = None) -> list[dict]:
+        params = {"project": project} if project else None
+        return self._json(self._http.get("/api/v1/datasets", params=params))
+
+    def get_dataset(self, project: str, repo: str, path: str) -> dict:
+        params = {"project": project, "repo": repo, "path": path}
+        return self._json(self._http.get("/api/v1/datasets/detail", params=params))
+
     def create_agent_token(self, queues: list[str], ttl: int = 900) -> dict:
         return self._json(
             self._http.post("/api/v1/admin/agent-tokens", json={"queues": queues, "ttl": ttl})

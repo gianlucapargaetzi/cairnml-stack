@@ -15,6 +15,7 @@ from mlops_common.schemas import TERMINAL_STATUSES
 from mlops import runtime
 from mlops.config import NotEnrolled
 from mlops.data import dvc_command
+from mlops.dataset_card import parse_dvc_file, scaffold_card
 from mlops.dispatch import DispatchError, dispatch_experiment, server_detail
 from mlops.enroll import enroll as do_enroll
 from mlops.enroll import whoami as do_whoami
@@ -32,7 +33,15 @@ task_app = typer.Typer(
 app.add_typer(job_app, name="job")
 app.add_typer(repo_app, name="repo")
 app.add_typer(data_app, name="data")
+dataset_app = typer.Typer(
+    help="datasets of linked repositories and their cards", no_args_is_help=True
+)
+card_app = typer.Typer(
+    help="dataset cards: Markdown with YAML front matter, stored in Git", no_args_is_help=True
+)
 app.add_typer(task_app, name="task")
+app.add_typer(dataset_app, name="dataset")
+dataset_app.add_typer(card_app, name="card")
 
 
 def _fail(message: str) -> None:
@@ -338,6 +347,68 @@ def task_set(
             _fail(f"no task {name!r} in project {project}")
         api.patch_task(matches[0]["id"], **fields)
     typer.echo(f"updated {project}/{name}")
+
+
+@dataset_app.command("ls")
+def dataset_ls(project: str = typer.Option(None, help="Only this project")) -> None:  # noqa: B008
+    """List the DVC datasets of linked repositories."""
+    api = _api()
+    with _remote(api):
+        rows = api.list_datasets(project)
+    for d in rows:
+        card = "yes" if d["has_card"] else "no"
+        typer.echo(
+            f"{d['project']:<24} {d['repo']:<24} {d['path']:<28} "
+            f"{d['type'] or '-':<10} {d['license'] or '-':<12} card={card}"
+        )
+
+
+@dataset_app.command("show")
+def dataset_show(
+    path: str = typer.Argument(..., help="Dataset path without .dvc"),
+    project: str = typer.Option(..., help="Project slug"),
+    repo: str = typer.Option(None, help="Repository (needed when the path is in several)"),  # noqa: B008
+) -> None:
+    """Show a dataset's card, DVC hash and experiments that used it."""
+    api = _api()
+    with _remote(api):
+        repo = repo or next(
+            (d["repo"] for d in api.list_datasets(project) if d["path"] == path), None
+        )
+        if repo is None:
+            _fail(f"no dataset {path!r} in project {project}")
+        detail = api.get_dataset(project, repo, path)
+    card = detail["card"] or {}
+    license_name = card.get("license") or "-"
+    typer.echo(f"{card.get('title') or path} ({card.get('type', '-')}, license {license_name})")
+    used = detail["used_by"]["count"]
+    typer.echo(f"hash {detail['dvc']['dvc_hash']}  used by {used} experiment(s)")
+    typer.echo(card.get("body") or f"No card yet: run `mlops dataset card init {path}`.")
+
+
+@card_app.command("init")
+def card_init(
+    path: str = typer.Argument(..., help="Dataset path without .dvc"),
+    title: str = typer.Option(None, help="Title"),  # noqa: B008
+    license: str = typer.Option(None, help="SPDX id or free text"),  # noqa: B008
+    type: str = typer.Option(
+        "other", help="tabular, images, text, audio, video, timeseries, other"
+    ),
+    description: str = typer.Option(None, help="One-paragraph summary"),  # noqa: B008
+) -> None:
+    """Create PATH.card.md next to the .dvc file, from the DVC metadata. Nothing is uploaded."""
+    dvc_file = Path(path + ".dvc")
+    if not dvc_file.is_file():
+        _fail(f"{path} is not tracked by DVC (no {dvc_file})")
+    target = Path(path + ".card.md")
+    if target.exists():
+        _fail(f"{target} already exists; edit it instead")
+    info = parse_dvc_file(dvc_file.read_text())
+    target.write_text(
+        scaffold_card(path, info, title=title, license=license, type=type, description=description)
+    )
+    typer.echo(f"created {target}")
+    typer.echo(f"next: edit it, then `git add {target} && git commit && git push`")
 
 
 admin_app = typer.Typer(help="administration (requires the admin role)", no_args_is_help=True)

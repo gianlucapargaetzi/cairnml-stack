@@ -1826,6 +1826,7 @@ dependencies = [
     { name = "mlops-common" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic-settings" },
+    { name = "pyyaml" },
     { name = "sqlalchemy" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -1839,6 +1840,7 @@ requires-dist = [
     { name = "mlops-common", editable = "packages/mlops-common" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "pydantic-settings", specifier = ">=2.4" },
+    { name = "pyyaml", specifier = ">=6" },
     { name = "sqlalchemy", specifier = ">=2.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
 ]

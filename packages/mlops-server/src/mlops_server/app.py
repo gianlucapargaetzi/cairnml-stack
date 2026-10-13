@@ -20,6 +20,7 @@ from mlops_server.routers import (
     artifacts,
     auth,
     dashboard,
+    datasets,
     enroll,
     experiments,
     jobs,
@@ -117,6 +118,7 @@ def create_app(
         github = build_github(settings)
     app.state.github = github
     app.state.cache = TtlCache(60)
+    app.state.dataset_cache = TtlCache(300)
     if directory is None:
         from mlops_server.services.directory import build_directory
 
@@ -131,7 +133,7 @@ def create_app(
     )
     for module in (
         meta, enroll, auth, admin, projects, experiments, tasks, telemetry, artifacts, storage_api,
-        repos, jobs, agents, dashboard,
+        repos, jobs, agents, dashboard, datasets,
     ):
         app.include_router(module.router, prefix="/api/v1")
     app.include_router(web_auth.router)
