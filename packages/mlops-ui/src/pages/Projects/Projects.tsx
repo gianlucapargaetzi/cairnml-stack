@@ -223,7 +223,13 @@ function ProjectDetail({ slug }: { slug: string }) {
             const best = bestLabel(experiment);
             return (
               <tr key={experiment.id}>
-                <td>{experiment.name}</td>
+                <td>
+                  <Link
+                    to={`/experiment?id=${encodeURIComponent(experiment.id)}`}
+                  >
+                    {experiment.name}
+                  </Link>
+                </td>
                 <td>{experiment.kind}</td>
                 <td>{experiment.runs}</td>
                 <td>{experiment.running}</td>

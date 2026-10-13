@@ -1,251 +1,362 @@
-import React, { LazyExoticComponent } from 'react';
-import {
-  Route,
-  Switch,
-  useHistory,
-  useLocation,
-  useParams,
-  useRouteMatch,
-} from 'react-router-dom';
-import { Link } from 'react-router-dom';
-
-import { Paper, Tab, Tabs } from '@material-ui/core';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 
 import ErrorBoundary from 'components/ErrorBoundary/ErrorBoundary';
-import BusyLoaderWrapper from 'components/BusyLoaderWrapper/BusyLoaderWrapper';
-import NotificationContainer, {
-  useNotificationContainer,
-} from 'components/NotificationContainer';
-import { Spinner } from 'components/kit';
 
-import { ANALYTICS_EVENT_KEYS } from 'config/analytics/analyticsKeysMap';
+import experimentPagesService, {
+  IExperimentSummary,
+} from 'services/api/experimentPages/experimentPagesService';
 
-import * as analytics from 'services/analytics';
-
-import { setDocumentTitle } from 'utils/document/documentTitle';
-
-import ExperimentHeader from './components/ExperimentHeader';
-import useExperimentState from './useExperimentState';
+import {
+  bestId,
+  DIRECTIONS,
+  EXPERIMENT_KINDS,
+  explainSaveError,
+  paramText,
+  sortRows,
+  varyingKeys,
+} from 'utils/experiments/experiments';
+import { fmtNumber } from 'utils/projects/projects';
 
 import './Experiment.scss';
 
-const ExperimentOverviewTab = React.lazy(
-  () =>
-    import(
-      /* webpackChunkName: "ExperimentOverviewTab" */ './components/ExperimentOverviewTab'
-    ),
-);
+const POLL_MS = 10000;
 
-const ExperimentRunsTab = React.lazy(
-  () =>
-    import(
-      /* webpackChunkName: "ExperimentOverviewTab" */ './components/ExperimentRunsTab'
-    ),
-);
+function formatTime(value: string | null): string {
+  return value ? new Date(value).toLocaleString() : '–';
+}
 
-const ExperimentNotesTab = React.lazy(
-  () =>
-    import(
-      /* webpackChunkName: "ExperimentOverviewTab" */ './components/ExperimentNotesTab'
-    ),
-);
+function duration(run: {
+  started_at: string | null;
+  finished_at: string | null;
+}): string {
+  if (!run.started_at) {
+    return '–';
+  }
+  const end = run.finished_at ? Date.parse(run.finished_at) : Date.now();
+  const seconds = Math.max(
+    0,
+    Math.round((end - Date.parse(run.started_at)) / 1000),
+  );
+  return seconds < 60
+    ? `${seconds}s`
+    : `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+}
 
-const ExperimentSettingsTab = React.lazy(
-  () =>
-    import(
-      /* webpackChunkName: "ExperimentOverviewTab" */ './components/ExperimentSettingsTab'
-    ),
-);
+// The primary value of each run, oldest first, as a line.
+function ValueChart({ values, label }: { values: number[]; label: string }) {
+  const width = 640;
+  const height = 180;
+  const pad = 24;
+  const low = Math.min(...values);
+  const high = Math.max(...values);
+  const span = high - low || 1;
+  const x = (i: number) =>
+    pad +
+    (values.length === 1 ? 0 : (i / (values.length - 1)) * (width - 2 * pad));
+  const y = (v: number) =>
+    height - pad - ((v - low) / span) * (height - 2 * pad);
+  const points = values.map((v, i) => `${x(i)},${y(v)}`).join(' ');
+  return (
+    <svg
+      className='Experiment__chart'
+      viewBox={`0 0 ${width} ${height}`}
+      role='img'
+      aria-label={`${label} by run`}
+    >
+      <polyline points={points} fill='none' stroke='#2563eb' strokeWidth={2} />
+      {values.map((v, i) => (
+        <circle key={i} cx={x(i)} cy={y(v)} r={3} fill='#2563eb' />
+      ))}
+    </svg>
+  );
+}
 
-const tabs: Record<string, string> = {
-  overview: 'Overview',
-  runs: 'Runs',
-  notes: 'Notes',
-  settings: 'Settings',
-};
+function SettingsForm({
+  summary,
+  onSaved,
+}: {
+  summary: IExperimentSummary;
+  onSaved: () => void;
+}) {
+  const { experiment } = summary;
+  const [kind, setKind] = useState(experiment.kind);
+  const [description, setDescription] = useState(experiment.description ?? '');
+  const [metric, setMetric] = useState(experiment.primary_metric ?? '');
+  const [direction, setDirection] = useState(experiment.direction ?? 'min');
+  const [message, setMessage] = useState('');
 
-function Experiment(): React.FunctionComponentElement<React.ReactNode> {
-  const { experimentId } = useParams<{ experimentId: string }>();
-  const history = useHistory();
-  const { url } = useRouteMatch();
-  const { pathname } = useLocation();
-  const [activeTab, setActiveTab] = React.useState(pathname);
-  const {
-    experimentState,
-    experimentsState,
-    getExperimentsData,
-    updateExperiment,
-    deleteExperiment,
-  } = useExperimentState(experimentId);
-  const { notificationState, onNotificationDelete } =
-    useNotificationContainer();
-
-  const { data: experimentData, loading: isExperimentLoading } =
-    experimentState;
-
-  const { data: experimentsData, loading: isExperimentsLoading } =
-    experimentsState;
-
-  const tabContent: Record<
-    string,
-    { props: Record<string, unknown>; Component: LazyExoticComponent<any> }
-  > = {
-    overview: {
-      props: {
-        experimentName: experimentData?.name ?? '',
-        experimentId,
-        description: experimentData?.description ?? '',
-      },
-      Component: ExperimentOverviewTab,
-    },
-    runs: {
-      props: {
-        experimentName: experimentData?.name ?? '',
-        experimentId,
-      },
-      Component: ExperimentRunsTab,
-    },
-    notes: {
-      props: {
-        experimentId,
-      },
-      Component: ExperimentNotesTab,
-    },
-    settings: {
-      props: {
-        experimentName: experimentData?.name ?? '',
-        updateExperiment,
-        deleteExperiment,
-        description: experimentData?.description ?? '',
-      },
-      Component: ExperimentSettingsTab,
-    },
-  };
-
-  function handleTabChange(event: React.ChangeEvent<{}>, newValue: string) {
-    setActiveTab(newValue);
+  function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setMessage('Saving…');
+    experimentPagesService
+      .patchSettings(experiment.id, {
+        kind,
+        description: description || null,
+        primary_metric: metric || null,
+        direction: metric ? direction : null,
+      })
+      .call()
+      .then(() => {
+        setMessage('Saved.');
+        onSaved();
+      })
+      .catch((error) => setMessage(explainSaveError(error)));
   }
 
-  function redirect(): void {
-    const splitPathname: string[] = pathname.split('/');
-    const path: string = `${url}/overview`;
-    if (splitPathname.length > 4) {
-      history.replace(path);
-      setActiveTab(path);
-      return;
-    }
-    if (splitPathname[3]) {
-      if (!Object.keys(tabs).includes(splitPathname[3])) {
-        history.replace(path);
-      }
-    } else {
-      history.replace(path);
-    }
-    setActiveTab(path);
-  }
+  return (
+    <form className='Experiment__settings' onSubmit={submit}>
+      <label>
+        Kind
+        <select value={kind} onChange={(e) => setKind(e.target.value)}>
+          {EXPERIMENT_KINDS.map((k) => (
+            <option key={k} value={k}>
+              {k}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Description
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
+      </label>
+      <label>
+        Primary metric
+        <input
+          value={metric}
+          placeholder='e.g. val_loss'
+          onChange={(e) => setMetric(e.target.value)}
+        />
+      </label>
+      <label>
+        Better is
+        <select
+          value={direction}
+          onChange={(e) => setDirection(e.target.value)}
+        >
+          {DIRECTIONS.map((d) => (
+            <option key={d} value={d}>
+              {d}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div>
+        <button type='submit'>Save</button>
+      </div>
+      <p className='Experiment__muted' role='status'>
+        {message}
+      </p>
+    </form>
+  );
+}
 
-  function getCurrentTabValue(pathname: string, url: string) {
-    const values = Object.keys(tabs).map((tabKey) => `${url}/${tabKey}`);
-    return values.indexOf(pathname) === -1 ? false : pathname;
-  }
+function ExperimentDetail({ id }: { id: string }) {
+  const [summary, setSummary] = useState<IExperimentSummary | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [sort, setSort] = useState('created_at:desc');
+  const [reload, setReload] = useState(0);
 
-  React.useEffect(() => {
-    if (pathname !== activeTab) {
-      setActiveTab(pathname);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+  useEffect(() => {
+    const request = experimentPagesService.getSummary(id);
+    request
+      .call()
+      .then((data) => {
+        setSummary(data);
+        setError(null);
+      })
+      .catch((requestError) => {
+        if (requestError?.name !== 'AbortError') {
+          setError(
+            `The experiment could not be loaded: ${requestError.message}`,
+          );
+        }
+      });
+    return () => request.abort();
+  }, [id, reload]);
 
-  React.useEffect(() => {
-    setDocumentTitle(experimentData?.name || experimentId, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [experimentData]);
-
-  React.useEffect(() => {
-    redirect();
-    analytics.pageView(ANALYTICS_EVENT_KEYS.experiment.pageView);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const timer = window.setInterval(() => setReload((n) => n + 1), POLL_MS);
+    return () => window.clearInterval(timer);
   }, []);
 
+  const rows = useMemo(() => {
+    if (!summary) {
+      return [];
+    }
+    const [by, direction] = sort.split(':');
+    return sortRows(
+      summary.runs,
+      by,
+      direction === 'best' ? summary.experiment.direction ?? 'min' : direction,
+    );
+  }, [summary, sort]);
+
+  if (error) {
+    return (
+      <p className='Experiment__error' role='alert'>
+        {error}
+      </p>
+    );
+  }
+  if (!summary) {
+    return <p className='Experiment__muted'>Loading…</p>;
+  }
+  const { experiment, stats } = summary;
+  const direction = experiment.direction ?? 'min';
+  const best = bestId(summary.runs, direction);
+  const keys = varyingKeys(summary.runs);
+  const valued = summary.runs
+    .filter((r) => typeof r.primary_value === 'number')
+    .map((r) => r.primary_value as number)
+    .reverse();
+
+  return (
+    <>
+      <p>
+        <Link
+          to={`/projects?project=${encodeURIComponent(experiment.project)}`}
+        >
+          ← {experiment.project}
+        </Link>
+      </p>
+      <h1>
+        {experiment.name}{' '}
+        <span className='Experiment__kind'>{experiment.kind}</span>
+      </h1>
+      {experiment.description && (
+        <p className='Experiment__muted'>{experiment.description}</p>
+      )}
+
+      <details className='Experiment__settings-box'>
+        <summary>Settings</summary>
+        <SettingsForm
+          summary={summary}
+          onSaved={() => setReload((n) => n + 1)}
+        />
+      </details>
+
+      <div className='Experiment__cards'>
+        <div className='Experiment__card'>
+          <div className='Experiment__card-value'>
+            {stats.best ? fmtNumber(stats.best.value) : '–'}
+          </div>
+          <div className='Experiment__muted'>
+            {stats.best ? (
+              <>
+                best {experiment.primary_metric} ({direction}) ·{' '}
+                <Link to={`/runs/${encodeURIComponent(stats.best.run_id)}`}>
+                  {stats.best.name}
+                </Link>
+              </>
+            ) : (
+              'Set a primary metric to see the best result'
+            )}
+          </div>
+        </div>
+        <div className='Experiment__card'>
+          <div className='Experiment__card-value'>{stats.runs}</div>
+          <div className='Experiment__muted'>
+            runs ({stats.running} running)
+          </div>
+        </div>
+      </div>
+
+      <h2>Runs</h2>
+      <div className='Experiment__toolbar'>
+        <label>
+          Sort{' '}
+          <select value={sort} onChange={(e) => setSort(e.target.value)}>
+            <option value='created_at:desc'>newest first</option>
+            <option value='created_at:asc'>oldest first</option>
+            <option value='primary_value:best'>best first</option>
+          </select>
+        </label>
+      </div>
+      <table className='Experiment__table'>
+        <thead>
+          <tr>
+            <th>Run</th>
+            <th>Status</th>
+            <th>{experiment.primary_metric || 'Primary value'}</th>
+            {keys.map((key) => (
+              <th key={key}>{key}</th>
+            ))}
+            <th>Started</th>
+            <th>Duration</th>
+            <th>Commit</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((run) => (
+            <tr key={run.id}>
+              <td>
+                <Link to={`/runs/${encodeURIComponent(run.id)}`}>
+                  {run.name}
+                </Link>
+              </td>
+              <td>{run.status}</td>
+              <td className={run.id === best ? 'Experiment__best' : undefined}>
+                {fmtNumber(run.primary_value)}
+              </td>
+              {keys.map((key) => (
+                <td key={key} className='Experiment__mono'>
+                  {run.params && key in run.params
+                    ? paramText(run.params[key])
+                    : '–'}
+                </td>
+              ))}
+              <td>{formatTime(run.started_at ?? run.created_at)}</td>
+              <td>{duration(run)}</td>
+              <td className='Experiment__mono'>
+                {run.commit ? run.commit.slice(0, 8) : '–'}
+                {run.dirty ? ' +changes' : ''}
+              </td>
+            </tr>
+          ))}
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={6 + keys.length} className='Experiment__muted'>
+                No runs in this experiment yet.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+
+      {valued.length > 0 && (
+        <>
+          <h3>{experiment.primary_metric} by run</h3>
+          <ValueChart
+            values={valued}
+            label={experiment.primary_metric ?? 'primary metric'}
+          />
+        </>
+      )}
+    </>
+  );
+}
+
+// The experiment named by the id query parameter.
+function Experiment(): React.FunctionComponentElement<React.ReactNode> {
+  const location = useLocation();
+  const id = new URLSearchParams(location.search).get('id');
   return (
     <ErrorBoundary>
       <section className='Experiment'>
-        <ExperimentHeader
-          experimentData={experimentData}
-          experimentsData={experimentsData}
-          isExperimentLoading={isExperimentLoading}
-          isExperimentsLoading={isExperimentsLoading}
-          experimentId={experimentId}
-          getExperimentsData={getExperimentsData}
-        />
-        <Paper className='Experiment__tabsContainer'>
-          <Tabs
-            className='Experiment__tabsContainer__tabs container'
-            value={getCurrentTabValue(pathname, url)}
-            onChange={handleTabChange}
-            indicatorColor='primary'
-            textColor='primary'
-          >
-            {Object.keys(tabs).map((tabKey: string) => (
-              <Tab
-                key={`${url}/${tabKey}`}
-                label={tabs[tabKey]}
-                value={`${url}/${tabKey}`}
-                component={Link}
-                to={`${url}/${tabKey}`}
-              />
-            ))}
-          </Tabs>
-        </Paper>
-        <BusyLoaderWrapper
-          isLoading={isExperimentLoading}
-          height='calc(100vh - 112px)'
-        >
-          <Switch>
-            {Object.keys(tabs).map((tabKey: string) => {
-              const { Component, props } = tabContent[tabKey];
-              return (
-                <Route path={`${url}/${tabKey}`} key={tabKey}>
-                  <ErrorBoundary>
-                    {tabKey === 'overview' ? (
-                      <div className='Experiment__tabPanelBox overviewPanel'>
-                        <React.Suspense
-                          fallback={
-                            <div className='Experiment__tabPanelBox__suspenseLoaderContainer'>
-                              <Spinner />
-                            </div>
-                          }
-                        >
-                          <Component {...props} />
-                        </React.Suspense>
-                      </div>
-                    ) : (
-                      <div className='Experiment__tabPanelBox'>
-                        <div className='Experiment__tabPanel container'>
-                          <React.Suspense
-                            fallback={
-                              <div className='Experiment__tabPanelBox__suspenseLoaderContainer'>
-                                <Spinner />
-                              </div>
-                            }
-                          >
-                            <Component {...props} />
-                          </React.Suspense>
-                        </div>
-                      </div>
-                    )}
-                  </ErrorBoundary>
-                </Route>
-              );
-            })}
-          </Switch>
-        </BusyLoaderWrapper>
+        {id ? (
+          <ExperimentDetail key={id} id={id} />
+        ) : (
+          <p className='Experiment__error'>
+            No experiment was given. Open an experiment from its project.
+          </p>
+        )}
       </section>
-      <NotificationContainer
-        handleClose={onNotificationDelete}
-        data={notificationState!}
-      />
     </ErrorBoundary>
   );
 }
-export default React.memo(Experiment);
+
+export default Experiment;
