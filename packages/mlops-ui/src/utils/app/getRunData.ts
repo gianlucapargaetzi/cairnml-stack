@@ -3,6 +3,11 @@ import {
   iterExplorerRuns,
   toSequence,
 } from 'utils/explorer/explorerJson';
+import {
+  ExplorerSequenceKind,
+  IExplorerSequenceSearch,
+  toSequenceRun,
+} from 'utils/explorer/sequenceJson';
 
 import { IRequestProgress } from './setRequestProgress';
 
@@ -46,4 +51,18 @@ export async function getSequenceData(
     }
   }
   return sequences;
+}
+
+// The same folding for the sequence explorers (images, audio, text, figures, distributions).
+export async function getSequenceRunData(
+  search: IExplorerSequenceSearch,
+  kind: ExplorerSequenceKind,
+  setProgress?: (progress: IRequestProgress) => void,
+) {
+  const runs = Object.entries(search.runs).map(([runId, run]) =>
+    toSequenceRun(runId, run, kind),
+  );
+  const [checked, trackedRuns] = search.progress;
+  setProgress?.({ matched: runs.length, checked, trackedRuns });
+  return runs;
 }

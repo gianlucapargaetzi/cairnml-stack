@@ -38,7 +38,6 @@ import {
   IOnGroupingSelectChangeParams,
   ITooltip,
 } from 'types/services/models/metrics/metricsAppModel';
-import { IMetricTrace, IRun } from 'types/services/models/metrics/runModel';
 import { IBookmarkFormState } from 'types/components/BookmarkForm/BookmarkForm';
 import { ITableColumn } from 'types/pages/metrics/components/TableColumns/TableColumns';
 import {
@@ -57,18 +56,14 @@ import { IModel } from 'types/services/models/model';
 import { ISyntaxErrorDetails } from 'types/components/NotificationContainer/NotificationContainer';
 import { ITagInfo, ITagProps } from 'types/pages/tags/Tags';
 
-import { IExplorerSearch } from 'utils/explorer/explorerJson';
+import { IExplorerSequenceSearch } from 'utils/explorer/sequenceJson';
 import getAppConfigDataMethod from 'utils/app/getAppConfigData';
 import onRowSelectAction from 'utils/app/onRowSelect';
 import { AIM64_ENCODING_PREFIX, encode } from 'utils/encoder/encoder';
 import getObjectPaths from 'utils/getObjectPaths';
 import getUrlWithParam from 'utils/getUrlWithParam';
 import getStateFromUrl from 'utils/getStateFromUrl';
-import {
-  decodeBufferPairs,
-  decodePathsVals,
-  iterFoldTree,
-} from 'utils/encoder/streamEncoding';
+import {} from 'utils/encoder/streamEncoding';
 import { getItem, setItem } from 'utils/storage';
 import JsonToCSV from 'utils/JsonToCSV';
 import { formatValue } from 'utils/formatValue';
@@ -88,7 +83,7 @@ import getAdvancedSuggestion from 'utils/getAdvancedSuggestions';
 import { processDurationTime } from 'utils/processDurationTime';
 import onVisibilityChange from 'utils/app/onColumnsVisibilityChange';
 import setRequestProgress from 'utils/app/setRequestProgress';
-import getRunData from 'utils/app/getRunData';
+import { getSequenceRunData } from 'utils/app/getRunData';
 import getTooltipContent from 'utils/getTooltipContent';
 import decodeWithBase58Checker from 'utils/decodeWithBase58Checker';
 import { onCopyToClipBoard } from 'utils/onCopyToClipBoard';
@@ -289,7 +284,9 @@ function setDefaultAppConfigData(recoverTableState: boolean = true) {
 }
 
 let imagesRequestRef: {
-  call: (exceptionHandler: (detail: any) => void) => Promise<IExplorerSearch>;
+  call: (
+    exceptionHandler: (detail: any) => void,
+  ) => Promise<IExplorerSequenceSearch>;
   abort: () => void;
 };
 
@@ -408,8 +405,10 @@ function getImagesData(
             exceptionHandler({ detail, model });
             resetModelState();
           });
-          const runData = await getRunData(stream, (progress) =>
-            setRequestProgress(model, progress),
+          const runData = await getSequenceRunData(
+            stream,
+            'image',
+            (progress) => setRequestProgress(model, progress),
           );
 
           if (configData) {
@@ -1037,15 +1036,10 @@ function getImagesBlobsData(uris: string[]) {
         .call((detail: any) => {
           exceptionHandler({ detail, model });
         })
-        .then(async (stream) => {
-          let bufferPairs = decodeBufferPairs(stream);
-          let decodedPairs = decodePathsVals(bufferPairs);
-          let objects = iterFoldTree(decodedPairs, 1);
-
-          for await (let [keys, val] of objects) {
-            const URI = keys[0];
-            blobsURIModel.emit(URI as string, {
-              [URI]: arrayBufferToBase64(val as ArrayBuffer) as string,
+        .then((pairs) => {
+          for (const [URI, bytes] of pairs) {
+            blobsURIModel.emit(URI, {
+              [URI]: arrayBufferToBase64(bytes) as string,
             });
           }
         })

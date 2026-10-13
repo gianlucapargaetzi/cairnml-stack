@@ -21,10 +21,24 @@ interface IListedProject {
   name: string;
 }
 
+// Sequence names with the context keys each one is used with, per kind.
+type ExplorerSequenceNames = { [name: string]: string[] };
 interface IExplorerParams {
   params: string[];
   metric: { [name: string]: string[] };
+  images?: ExplorerSequenceNames;
+  audios?: ExplorerSequenceNames;
+  texts?: ExplorerSequenceNames;
+  figures?: ExplorerSequenceNames;
+  distributions?: ExplorerSequenceNames;
 }
+const SEQUENCE_KINDS = [
+  'images',
+  'audios',
+  'texts',
+  'figures',
+  'distributions',
+] as const;
 
 function getProjectsData(): IApiRequest<IProject> {
   const list = API.get<IListedProject[]>(endpoints.GET_PROJECTS);
@@ -69,7 +83,9 @@ function getProjectParams(
   };
 }
 
-function mergeParams(listings: IExplorerParams[]): IProjectParamsMetrics {
+export function mergeParams(
+  listings: IExplorerParams[],
+): IProjectParamsMetrics {
   const params: { [key: string]: any } = {};
   const metric: { [name: string]: { [key: string]: string }[] } = {};
   for (const listing of listings) {
@@ -92,7 +108,26 @@ function mergeParams(listings: IExplorerParams[]): IProjectParamsMetrics {
       metric[name] = [...(metric[name] ?? []), ...contexts];
     }
   }
-  return { params, metric, images: {} };
+  const sequences = Object.fromEntries(
+    SEQUENCE_KINDS.map((kind) => [kind, mergeSequenceNames(listings, kind)]),
+  );
+  return { params, metric, ...sequences } as IProjectParamsMetrics;
+}
+
+function mergeSequenceNames(
+  listings: IExplorerParams[],
+  kind: typeof SEQUENCE_KINDS[number],
+): { [name: string]: { [key: string]: string }[] } {
+  const merged: { [name: string]: { [key: string]: string }[] } = {};
+  for (const listing of listings) {
+    for (const [name, contextKeys] of Object.entries(listing[kind] ?? {})) {
+      const contexts = contextKeys.length
+        ? contextKeys.map((key) => ({ [key]: '' }))
+        : [{}];
+      merged[name] = [...(merged[name] ?? []), ...contexts];
+    }
+  }
+  return merged;
 }
 
 // Pinned sequences and the activity feed belong to the sequence and project pages (Phases 5, 6).

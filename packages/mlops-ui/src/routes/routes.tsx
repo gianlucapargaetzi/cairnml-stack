@@ -19,6 +19,12 @@ const Params = React.lazy(
 const Dashboard = React.lazy(
   () => import(/* webpackChunkName: "dashboard" */ 'pages/Dashboard/Dashboard'),
 );
+const ImagesExplore = React.lazy(
+  () =>
+    import(
+      /* webpackChunkName: "images" */ 'pages/ImagesExplore/ImagesExplore'
+    ),
+);
 const Scatters = React.lazy(
   () =>
     import(
@@ -82,6 +88,15 @@ const routes: { [key: string]: any } = {
     icon: 'scatterplot',
     isExact: true,
     title: pageTitlesEnum.SCATTERS_EXPLORER,
+  },
+  IMAGES: {
+    path: PathEnum.Images_Explore,
+    component: ImagesExplore,
+    showInSidebar: true,
+    displayName: 'Images',
+    icon: 'images',
+    isExact: true,
+    title: pageTitlesEnum.IMAGES_EXPLORER,
   },
   RUN_DETAIL: {
     path: PathEnum.Run_Detail,

@@ -99,28 +99,34 @@ function toTag(tag: IExplorerRunProps['tags'][number]): ITagProps {
   };
 }
 
+// The display fields of a run, in the shape the run tables and detail pages read.
+export function toRunProps(
+  props: IExplorerRunProps,
+): IRun<IMetricTrace>['props'] {
+  return {
+    experiment: {
+      id: props.experiment.id ?? '',
+      name: props.experiment.name,
+      description: props.experiment.description,
+    },
+    creator: props.creator?.username
+      ? { username: props.creator.username, email: '', photo: null }
+      : null,
+    name: props.name,
+    creation_time: props.creation_time,
+    end_time: props.end_time ?? 0,
+    description: props.description,
+    active: props.active,
+    tags: props.tags.map(toTag),
+  };
+}
+
 export function toRun(hash: string, run: IExplorerRun): IRun<IMetricTrace> {
-  const props = run.props;
   return {
     hash,
     params: run.params,
-    created_at: props.creation_time,
-    props: {
-      experiment: {
-        id: props.experiment.id ?? '',
-        name: props.experiment.name,
-        description: props.experiment.description,
-      },
-      creator: props.creator?.username
-        ? { username: props.creator.username, email: '', photo: null }
-        : null,
-      name: props.name,
-      creation_time: props.creation_time,
-      end_time: props.end_time ?? 0,
-      description: props.description,
-      active: props.active,
-      tags: props.tags.map(toTag),
-    },
+    created_at: run.props.creation_time,
+    props: toRunProps(run.props),
     traces: { metric: run.traces.map(toMetricTrace) },
   };
 }
