@@ -1,0 +1,82 @@
+.Tags {
+  padding: 16px;
+
+  h1 {
+    font-size: 20px;
+    margin: 0 0 8px;
+  }
+
+  h2 {
+    font-size: 15px;
+    margin: 16px 0 6px;
+  }
+
+  h3 {
+    font-size: 14px;
+    margin: 0 0 6px;
+  }
+
+  &__project {
+    display: grid;
+    gap: 4px;
+    max-width: 320px;
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+
+  &__table {
+    width: 100%;
+    border-collapse: collapse;
+
+    th,
+    td {
+      text-align: left;
+      padding: 6px 8px;
+      border-bottom: 1px solid #e3e8ef;
+      font-size: 13px;
+    }
+
+    input {
+      font: inherit;
+      width: 100%;
+      padding: 3px 6px;
+      border: 1px solid #c9d2df;
+      border-radius: 4px;
+    }
+  }
+
+  &__actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  &__create {
+    display: grid;
+    gap: 8px;
+    max-width: 420px;
+    margin-top: 20px;
+    font-size: 13px;
+
+    label {
+      display: grid;
+      gap: 4px;
+    }
+
+    input {
+      font: inherit;
+      padding: 4px 6px;
+      border: 1px solid #c9d2df;
+      border-radius: 4px;
+    }
+  }
+
+  &__muted {
+    color: #5b6676;
+    font-size: 13px;
+  }
+
+  &__error {
+    color: #b42318;
+  }
+}

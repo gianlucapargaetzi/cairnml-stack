@@ -26,6 +26,9 @@ const ExperimentPage = React.lazy(
   () =>
     import(/* webpackChunkName: "experiment" */ 'pages/Experiment/Experiment'),
 );
+const Tags = React.lazy(
+  () => import(/* webpackChunkName: "tags" */ 'pages/Tags/Tags'),
+);
 const Projects = React.lazy(
   () => import(/* webpackChunkName: "projects" */ 'pages/Projects/Projects'),
 );
@@ -128,6 +131,15 @@ const routes: { [key: string]: any } = {
     icon: 'runs',
     isExact: true,
     title: pageTitlesEnum.EXPERIMENT,
+  },
+  TAGS: {
+    path: PathEnum.Tags,
+    component: Tags,
+    showInSidebar: true,
+    displayName: 'Tags',
+    icon: 'tags',
+    isExact: true,
+    title: pageTitlesEnum.TAGS,
   },
   PROJECTS: {
     path: PathEnum.Projects,

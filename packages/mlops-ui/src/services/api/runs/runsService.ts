@@ -7,6 +7,7 @@ import {
 } from 'utils/explorer/sequenceJson';
 
 import API from '../api';
+import tagPagesService from '../tagPages/tagPagesService';
 
 // Paths are relative to /api. The explorer API lives under /api/v1/explorer; run actions that
 // predate it use /api/v1/runs.
@@ -67,10 +68,10 @@ function deleteRuns(ids: string[]) {
   return unsupported(`Deleting ${ids.length} runs`);
 }
 
-// The fork attaches tags by name. The explorer attaches by tag id inside a project, which the
-// project pages (Phase 6) will provide.
+// The fork attaches tags by name. The explorer attaches by tag id inside the run's project, so the
+// name is resolved in that project first (the tag is created when it does not exist yet).
 function attachRunsTag(body: { tag_name: string }, runId: string) {
-  return unsupported(`Attaching the tag ${body.tag_name} to run ${runId}`);
+  return tagPagesService.attachTagByName(runId, body.tag_name);
 }
 
 function deleteRunsTag(runId: string, tagId: string) {
