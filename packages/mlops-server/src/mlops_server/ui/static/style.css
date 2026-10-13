@@ -44,6 +44,7 @@ tbody tr:nth-child(even) { background: var(--zebra); }
 .kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; }
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; word-break: break-word; }
+.hint { border: 1px dashed var(--line); border-radius: 6px; padding: 12px 16px; margin: 12px 0; }
 .chart-box { position: relative; height: 260px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
 pre.log { max-height: 420px; overflow: auto; background: var(--log-bg); color: var(--log-fg); padding: 10px; border-radius: 6px; font: 12px/1.4 ui-monospace, monospace; }
 pre.log .stderr { color: var(--bad); }
