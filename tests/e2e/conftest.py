@@ -317,7 +317,7 @@ def login(password_for):
     """Logs a realm user in through the IdP login page. The password comes from the environment."""
     from playwright.sync_api import expect  # noqa: PLC0415  (the ui group is optional)
 
-    ui_base = SERVER.rstrip("/") + "/ui/"
+    ui_base = SERVER.rstrip("/") + "/ui-next/"
 
     def _login(page, username="dev"):
         password = password_for(username)
@@ -326,7 +326,7 @@ def login(password_for):
         page.fill("#username", username)
         page.fill("#password", password)
         page.click("#kc-login")
-        page.wait_for_url(re.compile(r"/ui/"))
+        page.wait_for_url(re.compile(r"/ui-next/"))
         expect(page.locator("#user")).to_have_text(username)
 
     return _login

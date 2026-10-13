@@ -5,27 +5,26 @@ from pathlib import Path
 from fastapi import APIRouter
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
-STATIC = Path(__file__).resolve().parent.parent / "ui" / "static"
 router = APIRouter()
 
 
+# The MLOps Flow UI (the Aim UI fork, built by packages/mlops-ui). Its files are copied into NEXT by
+# `npm run build:server`. The old dashboard is gone; the old addresses lead here.
 @router.get("/", include_in_schema=False)
 def root() -> RedirectResponse:
-    return RedirectResponse("/ui/", status_code=302)
+    return RedirectResponse("/ui-next/", status_code=302)
 
 
 @router.get("/ui", include_in_schema=False)
 def ui_no_slash() -> RedirectResponse:
-    return RedirectResponse("/ui/", status_code=302)
+    return RedirectResponse("/ui-next/", status_code=302)
 
 
 @router.get("/ui/", include_in_schema=False)
-def index() -> FileResponse:
-    return FileResponse(STATIC / "index.html", media_type="text/html")
+def ui_index() -> RedirectResponse:
+    return RedirectResponse("/ui-next/", status_code=302)
 
 
-# The MLOps Flow explorer (the Aim UI fork, built by packages/mlops-ui). It runs next to the old
-# dashboard until the fork reaches parity. Its files are copied into NEXT by `npm run build:server`.
 NEXT = Path(__file__).resolve().parent.parent / "ui" / "next"
 NEXT_UNBUILT = "The explorer is not built. Run `npm run build:server` in packages/mlops-ui."
 

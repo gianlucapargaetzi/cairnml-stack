@@ -63,6 +63,6 @@ def test_a_missing_build_says_how_to_build_it(server, monkeypatch, tmp_path):
     assert response.status_code == 503 and "build:server" in response.text
 
 
-def test_the_old_dashboard_still_answers_at_ui(server, built):
-    assert server.get("/ui/", follow_redirects=False).status_code == 200
-    assert "default-src 'self'; img-src" in server.get("/ui/").headers["Content-Security-Policy"]
+def test_the_old_dashboard_address_leads_to_the_fork(server, built):
+    # The old dashboard is gone; its address leads to the fork.
+    assert server.get("/ui/", follow_redirects=False).headers["location"] == "/ui-next/"

@@ -52,7 +52,7 @@ def _safe_next(value: str | None) -> str:
     """Where to send the browser after sign-in. Only paths of this server's UIs are allowed."""
     if value and value.startswith(ALLOWED_NEXT) and not value.startswith("//"):
         return value
-    return "/ui/"
+    return "/ui-next/"
 
 
 @router.get("/login")
@@ -157,7 +157,7 @@ def logout(
     session.commit()
     settings = request.app.state.settings
     query = urlencode({"client_id": settings.web_client_id,
-                       "post_logout_redirect_uri": f"{settings.public_url.rstrip('/')}/ui/"})
+                       "post_logout_redirect_uri": f"{settings.public_url.rstrip('/')}/ui-next/"})
     logout_url = endpoints(settings)[2]
     response = JSONResponse({"logout_url": f"{logout_url}?{query}"})
     response.delete_cookie(SESSION_COOKIE, path="/")

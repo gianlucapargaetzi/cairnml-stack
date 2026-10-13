@@ -1,1 +1,0 @@
-chart.umd.js is Chart.js 4.4.4 (MIT), downloaded from the jsdelivr npm mirror once and committed so the dashboard never loads code from a third party at runtime. To update it, download the new file and rewrite chart.umd.js.sha256.

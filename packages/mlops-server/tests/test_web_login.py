@@ -21,7 +21,7 @@ def test_login_redirects_to_the_idp_with_pkce_state_and_nonce(browser, settings)
 def test_callback_creates_a_session_and_me_works_with_the_cookie(browser, app):
     _, query = start_login(browser)
     done = browser.get("/ui/auth/callback", params={"code": "abc", "state": query["state"][0]})
-    assert done.status_code == 302 and done.headers["location"] == "/ui/"
+    assert done.status_code == 302 and done.headers["location"] == "/ui-next/"
     cookie = done.headers["set-cookie"].lower()
     assert "mlops_session=" in cookie and "httponly" in cookie and "samesite=lax" in cookie
     assert "secure" not in cookie
@@ -137,10 +137,10 @@ def test_secure_cookie_over_https(browser, app):
     [
         ("/ui-next/runs?q=x", "/ui-next/runs?q=x"),
         ("/ui/", "/ui/"),
-        ("https://evil.example/", "/ui/"),
-        ("//evil.example/", "/ui/"),
-        ("/api/v1/me", "/ui/"),
-        (None, "/ui/"),
+        ("https://evil.example/", "/ui-next/"),
+        ("//evil.example/", "/ui-next/"),
+        ("/api/v1/me", "/ui-next/"),
+        (None, "/ui-next/"),
     ],
 )
 def test_login_returns_the_browser_to_an_allowed_ui_path_only(browser, requested, expected):
