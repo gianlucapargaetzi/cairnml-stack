@@ -7,6 +7,7 @@ import createModel from 'services/models/model';
 import runsService from 'services/api/runs/runsService';
 import { trackEvent } from 'services/analytics';
 
+import { sequenceTraceEntries } from 'utils/explorer/sequenceJson';
 import {
   decodeBufferPairs,
   decodePathsVals,
@@ -212,9 +213,14 @@ async function getRunTraceBatch(isInitial = false) {
       console.error(detail);
     });
 
-    let bufferPairs = decodeBufferPairs(stream);
-    let decodedPairs = decodePathsVals(bufferPairs);
-    let objects = iterFoldTree(decodedPairs, 1);
+    // Images arrive as JSON from the explorer; the other kinds still use the binary stream.
+    const objects =
+      traceType === 'images'
+        ? sequenceTraceEntries(
+            stream,
+            requestOptions?.trace ?? { name: '', context: {} },
+          )
+        : iterFoldTree(decodePathsVals(decodeBufferPairs(stream)), 1);
 
     let data: Partial<TraceResponseData> = {};
     for await (let [keys, val] of objects) {

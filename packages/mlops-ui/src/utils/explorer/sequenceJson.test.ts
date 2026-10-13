@@ -1,4 +1,6 @@
 import {
+  sequenceTraceEntries,
+  toExplorerTraceQuery,
   IExplorerSequenceSearch,
   toExplorerSequenceQuery,
   toSequenceRun,
@@ -178,6 +180,104 @@ describe('toExplorerSequenceQuery', () => {
       toExplorerSequenceQuery({ q: '', index_range: '', record_density: '' }),
     ).toEqual({
       q: '',
+    });
+  });
+});
+
+describe('sequenceTraceEntries', () => {
+  const target = { name: 'pred', context: { subset: 'val' } };
+  const run = {
+    ...search.runs.run_1,
+    sequences: [
+      {
+        name: 'pred',
+        context: {},
+        count: 1,
+        items: [
+          {
+            step: 9,
+            idx: 0,
+            epoch: null,
+            ts: 1,
+            caption: 'other',
+            format: 'png',
+            width: 1,
+            height: 1,
+            blob_uri: 'https://nas/x',
+          },
+        ],
+      },
+      {
+        name: 'pred',
+        context: { subset: 'val' },
+        count: 2,
+        items: [
+          {
+            step: 4,
+            idx: 0,
+            epoch: null,
+            ts: 1,
+            caption: 'v',
+            format: 'png',
+            width: 8,
+            height: 4,
+            blob_uri: 'https://nas/v40',
+          },
+          {
+            step: 5,
+            idx: 0,
+            epoch: null,
+            ts: 1,
+            caption: 'v',
+            format: 'png',
+            width: 8,
+            height: 4,
+            blob_uri: 'https://nas/v50',
+          },
+        ],
+      },
+    ],
+    ranges: {
+      record_range_total: [4, 6],
+      index_range_total: [0, 1],
+      record_range_used: [4, 6],
+      index_range_used: [0, 1],
+    },
+  };
+  const searchOfRun = {
+    runs: { run_1: run },
+    progress: [1, 1] as [number, number],
+  };
+
+  it('gives the model one value per field, for the sequence with the same name and context', () => {
+    const entries = Object.fromEntries(
+      sequenceTraceEntries(searchOfRun, target),
+    );
+    expect(entries.name).toBe('pred');
+    expect(entries.context).toEqual({ subset: 'val' });
+    expect(entries.iters).toEqual([4, 5]);
+    expect(entries.values[0][0].blob_uri).toBe('https://nas/v40');
+    expect(entries.record_range_total).toEqual([4, 6]);
+    expect(entries.index_range_total).toEqual([0, 1]);
+  });
+
+  it('gives an empty trace when the run has no sequence of that name and context', () => {
+    const entries = Object.fromEntries(
+      sequenceTraceEntries(searchOfRun, { name: 'missing', context: {} }),
+    );
+    expect(entries.iters).toEqual([]);
+    expect(entries.values).toEqual([]);
+  });
+});
+
+describe('toExplorerTraceQuery', () => {
+  it('closes both ranges, since the run detail page sends exclusive ends for both', () => {
+    expect(
+      toExplorerTraceQuery({ q: 'x', record_range: '2:5', index_range: '0:3' }),
+    ).toEqual({
+      q: 'x',
+      record_range: '2:4',
+      index_range: '0:2',
     });
   });
 });

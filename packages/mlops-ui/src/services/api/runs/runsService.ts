@@ -1,5 +1,11 @@
 import { IApiRequest } from 'types/services/services';
 
+import {
+  IExplorerSequenceSearch,
+  ISequenceTraceTarget,
+  toExplorerTraceQuery,
+} from 'utils/explorer/sequenceJson';
+
 import API from '../api';
 
 // Paths are relative to /api. The explorer API lives under /api/v1/explorer; run actions that
@@ -91,8 +97,29 @@ function unsupported(what: string): IApiRequest<never> {
   };
 }
 
-// Sequence batches (distributions, figures, images, audios, texts) arrive in Phase 5.
-function getBatch(runId: string, trace: string, ..._args: unknown[]) {
+// One trace of a run (the run detail page asks for one trace at a time). Images come from the
+// explorer search, filtered to the run and the trace's name; the trace model picks the context.
+// Other kinds arrive with their pages (see issue 2 and the distributions decision).
+function getBatch(
+  runId: string,
+  trace: string,
+  params: { [key: string]: unknown } = {},
+  targets: unknown[] = [],
+) {
+  if (trace === 'images') {
+    const id = runId.replace(/[^A-Za-z0-9_]/g, '');
+    const target = targets[0] as ISequenceTraceTarget;
+    return API.get<IExplorerSequenceSearch>(
+      `v1/explorer/runs/search/${trace}`,
+      toExplorerTraceQuery({
+        ...params,
+        // JSON strings are valid filter strings, so any name is quoted safely.
+        q: `run.hash == '${id}' and ${trace}.name == ${JSON.stringify(
+          target.name,
+        )}`,
+      }),
+    );
+  }
   return unsupported(`Sequence data (${trace}) for run ${runId}`);
 }
 

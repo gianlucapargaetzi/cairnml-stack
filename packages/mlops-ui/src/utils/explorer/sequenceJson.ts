@@ -3,6 +3,8 @@
 // sequence, with the values of each sampled step grouped together. This module reshapes the JSON
 // into that layout. The item fields keep the names the models already read.
 
+import { isEqual } from 'lodash-es';
+
 import { IExplorerRunProps, toRunProps } from './explorerJson';
 
 export type ExplorerSequenceKind =
@@ -105,7 +107,7 @@ function toRecord(item: IExplorerSequenceItem): ISequenceRecord {
   return record;
 }
 
-function toTrace(sequence: IExplorerSequence): ISequenceTrace {
+export function toSequenceTrace(sequence: IExplorerSequence): ISequenceTrace {
   const byStep = new Map<number, IExplorerSequenceItem[]>();
   for (const item of sequence.items) {
     const step = item.step ?? NO_STEP;
@@ -135,7 +137,7 @@ export function toSequenceRun(
     props: toRunProps(run.props),
     created_at: run.props.creation_time,
     ranges: run.ranges,
-    traces: run.sequences.map(toTrace),
+    traces: run.sequences.map(toSequenceTrace),
   };
 }
 
@@ -153,8 +155,60 @@ export function toExplorerSequenceQuery(params: { [key: string]: unknown }): {
     query[key] = value;
   }
   if (typeof query.index_range === 'string') {
-    const [low, high] = query.index_range.split(':').map(Number);
-    query.index_range = `${low}:${Math.max(low, high - 1)}`;
+    query.index_range = closedRange(query.index_range);
   }
   return query;
+}
+
+// "low:high" with an exclusive high, as the run detail sliders send it, becomes the closed range.
+function closedRange(range: string): string {
+  const [low, high] = range.split(':').map(Number);
+  return `${low}:${Math.max(low, high - 1)}`;
+}
+
+// The run detail page sends both ranges with an exclusive end.
+export function toExplorerTraceQuery(params: { [key: string]: unknown }): {
+  [key: string]: unknown;
+} {
+  const query = toExplorerSequenceQuery(params);
+  if (typeof query.record_range === 'string') {
+    query.record_range = closedRange(query.record_range);
+  }
+  return query;
+}
+
+export interface ISequenceTraceTarget {
+  name: string;
+  context: { [key: string]: unknown };
+}
+
+// The fields of one trace (a sequence of one name and context) as [keys, value] entries, the
+// shape the run detail trace model reads from its stream. The ranges are the run's totals.
+export function sequenceTraceEntries(
+  search: IExplorerSequenceSearch,
+  target: ISequenceTraceTarget,
+): [string[], unknown][] {
+  const run = Object.values(search.runs)[0];
+  const sequence = run?.sequences.find(
+    (candidate) =>
+      candidate.name === target.name &&
+      isEqual(candidate.context, target.context),
+  );
+  const trace: ISequenceTrace = sequence
+    ? toSequenceTrace(sequence)
+    : {
+        name: target.name,
+        context: target.context,
+        count: 0,
+        iters: [],
+        values: [],
+      };
+  return [
+    [['name'], trace.name],
+    [['context'], trace.context],
+    [['iters'], trace.iters],
+    [['values'], trace.values],
+    [['record_range_total'], run?.ranges.record_range_total ?? [0, 1]],
+    [['index_range_total'], run?.ranges.index_range_total ?? [0, 1]],
+  ];
 }

@@ -14,11 +14,6 @@ import {
 import blobsURIModel from 'services/models/media/blobsURIModel';
 import imagesExploreService from 'services/api/imagesExplore/imagesExploreService';
 
-import {
-  decodeBufferPairs,
-  decodePathsVals,
-  iterFoldTree,
-} from 'utils/encoder/streamEncoding';
 import arrayBufferToBase64 from 'utils/arrayBufferToBase64';
 
 import { IImagesVisualizerProps } from '../types';
@@ -62,14 +57,10 @@ function ImagesVisualizer(
       call: () => {
         return request
           .call()
-          .then(async (stream) => {
-            let bufferPairs = decodeBufferPairs(stream);
-            let decodedPairs = decodePathsVals(bufferPairs);
-            let objects = iterFoldTree(decodedPairs, 1);
-            for await (let [keys, val] of objects) {
-              const URI = keys[0];
-              blobsURIModel.emit(URI as string, {
-                [URI]: arrayBufferToBase64(val as ArrayBuffer) as string,
+          .then((pairs) => {
+            for (const [URI, bytes] of pairs) {
+              blobsURIModel.emit(URI, {
+                [URI]: arrayBufferToBase64(bytes) as string,
               });
             }
           })
