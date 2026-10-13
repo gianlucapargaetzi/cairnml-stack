@@ -11,6 +11,10 @@ export interface IProject {
 export interface IProjectParamsMetrics {
   metric: { [key: string]: { [key: string]: string }[] };
   images: { [key: string]: { [key: string]: string }[] };
+  audios: { [key: string]: { [key: string]: string }[] };
+  texts: { [key: string]: { [key: string]: string }[] };
+  figures: { [key: string]: { [key: string]: string }[] };
+  distributions: { [key: string]: { [key: string]: string }[] };
   params: { [key: string]: any };
 }
 
