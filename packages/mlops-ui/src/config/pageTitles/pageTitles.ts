@@ -11,6 +11,7 @@ const pageTitles = {
   BOOKMARKS: 'Bookmarks',
   TAGS: 'Tags',
   JOBS: 'Jobs',
+  RESOURCES: 'Resources',
   RUN_DETAIL: '',
   EXPERIMENT: '',
   FIGURES_EXPLORER_NEW: 'New Figures',

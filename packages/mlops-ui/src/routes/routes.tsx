@@ -19,6 +19,9 @@ const Params = React.lazy(
 const Dashboard = React.lazy(
   () => import(/* webpackChunkName: "dashboard" */ 'pages/Dashboard/Dashboard'),
 );
+const Resources = React.lazy(
+  () => import(/* webpackChunkName: "resources" */ 'pages/Resources/Resources'),
+);
 const Jobs = React.lazy(
   () => import(/* webpackChunkName: "jobs" */ 'pages/Jobs/Jobs'),
 );
@@ -91,6 +94,15 @@ const routes: { [key: string]: any } = {
     icon: 'scatterplot',
     isExact: true,
     title: pageTitlesEnum.SCATTERS_EXPLORER,
+  },
+  RESOURCES: {
+    path: PathEnum.Resources,
+    component: Resources,
+    showInSidebar: true,
+    displayName: 'Resources',
+    icon: 'metrics',
+    isExact: true,
+    title: pageTitlesEnum.RESOURCES,
   },
   JOBS: {
     path: PathEnum.Jobs,
