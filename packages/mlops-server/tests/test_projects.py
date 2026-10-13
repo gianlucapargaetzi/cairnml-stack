@@ -2,7 +2,9 @@ def test_admin_creates_project_and_non_admin_cannot(server, enroll_client):
     admin, dev = enroll_client("root", roles=["mlops-admin"]), enroll_client("dev")
     body = {"slug": "vision/seg", "name": "Segmentation"}
     assert dev.http.post("/api/v1/projects", json=body).status_code == 403
-    assert admin.http.post("/api/v1/projects", json=body).json() == body
+    created = admin.http.post("/api/v1/projects", json=body).json()
+    assert created["slug"] == body["slug"] and created["name"] == body["name"]
+    assert created["id"].startswith("prj_")
     assert admin.http.post("/api/v1/projects", json=body).status_code == 409
 
 

@@ -28,14 +28,15 @@ def create_project(
     principal: Annotated[Principal, Depends(require("client", admin=True))],
     session: Annotated[Session, Depends(get_session)],
 ) -> ProjectOut:
-    session.add(Project(id=new_id("prj"), slug=body.slug, name=body.name))
+    project = Project(id=new_id("prj"), slug=body.slug, name=body.name)
+    session.add(project)
     audit.record(session, principal.id, "project.created", request, slug=body.slug)
     try:
         session.commit()
     except IntegrityError:
         session.rollback()
         raise HTTPException(409, "project already exists") from None
-    return ProjectOut(slug=body.slug, name=body.name)
+    return ProjectOut(id=project.id, slug=body.slug, name=body.name)
 
 
 @router.get("/projects", response_model=list[ProjectOut])
@@ -45,7 +46,7 @@ def list_projects(
 ) -> list[ProjectOut]:
     projects = session.scalars(select(Project).order_by(Project.slug)).all()
     return [
-        ProjectOut(slug=p.slug, name=p.name)
+        ProjectOut(id=p.id, slug=p.slug, name=p.name)
         for p in projects
         if access.is_member(session, principal, p)
     ]

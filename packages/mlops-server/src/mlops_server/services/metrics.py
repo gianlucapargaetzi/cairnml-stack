@@ -40,6 +40,17 @@ def series_id(session: Session, run_id: str, name: str, context: dict[str, Any])
     )
 
 
+MAX_POINTS = 500
+
+
+def sample_ranks(count: int, max_points: int = MAX_POINTS) -> list[int]:
+    """1-based ranks of at most `max_points` evenly spaced points, first and last included."""
+    if count <= max_points:
+        return list(range(1, count + 1))
+    span = count - 1
+    return sorted({round(i * span / (max_points - 1)) + 1 for i in range(max_points)})
+
+
 def default_context_points(*columns):
     """Points of the default series (empty context). The legacy metric endpoints and the
     run summaries read only these, so context series do not change their numbers."""

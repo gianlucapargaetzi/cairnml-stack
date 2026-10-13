@@ -19,7 +19,7 @@ from mlops_server.models import Experiment, MetricPoint, MetricSeries, Project, 
 from mlops_server.security.deps import READERS, Principal, get_session, require
 from mlops_server.services import access
 from mlops_server.services.experiments import DEFAULT_EXPERIMENT, get_or_create_experiment
-from mlops_server.services.metrics import default_context_points
+from mlops_server.services.metrics import default_context_points, sample_ranks
 
 router = APIRouter()
 any_principal = require("client", "agent", "run")
@@ -82,12 +82,7 @@ def create_run(
 
 
 SORTS = {"created_at": Run.created_at, "name": Run.name, "status": Run.status}
-MAX_COMPARE, MAX_POINTS = 10, 500
-
-
-def _accessible_project_ids(session: Session, principal: Principal) -> list[str]:
-    projects = session.scalars(select(Project))
-    return [p.id for p in projects if access.is_member(session, principal, p)]
+MAX_COMPARE = 10
 
 
 @router.get("/runs", response_model=list[RunOut])
@@ -104,7 +99,7 @@ def list_runs(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ):
-    ids = _accessible_project_ids(session, principal)
+    ids = access.accessible_project_ids(session, principal)
     if project:
         ids = [access.ensure_member(session, principal, project).id]
     query = select(Run).where(Run.project_id.in_(ids))
@@ -125,14 +120,6 @@ def list_runs(
     ]
 
 
-def _sample_ranks(count: int) -> list[int]:
-    """1-based ranks of at most MAX_POINTS evenly spaced points, first and last included."""
-    if count <= MAX_POINTS:
-        return list(range(1, count + 1))
-    span = count - 1
-    return sorted({round(i * span / (MAX_POINTS - 1)) + 1 for i in range(MAX_POINTS)})
-
-
 def _series(session: Session, run_id: str, name: str, count: int) -> list[list]:
     rank = func.row_number().over(
         order_by=(MetricPoint.step, MetricPoint.ts, MetricPoint.id)
@@ -143,7 +130,7 @@ def _series(session: Session, run_id: str, name: str, count: int) -> list[list]:
         .subquery()
     )
     query = select(inner.c.step, inner.c.value, inner.c.rn).where(
-        inner.c.rn.in_(_sample_ranks(count))
+        inner.c.rn.in_(sample_ranks(count))
     )
     return [
         [step if step is not None else rn, value]

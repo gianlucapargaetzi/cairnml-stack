@@ -26,6 +26,19 @@ def is_member(session: Session, principal: Principal, project: Project) -> bool:
     return session.get(ProjectMember, (project.id, principal.user_id)) is not None
 
 
+def accessible_project_ids(session: Session, principal: Principal) -> list[str]:
+    """Ids of the projects `principal` may read: its memberships, or every project for admins."""
+    if principal.kind not in ("client", "web") or principal.user_id is None:
+        return []
+    if principal.is_admin:
+        return list(session.scalars(select(Project.id)))
+    return list(
+        session.scalars(
+            select(ProjectMember.project_id).where(ProjectMember.user_id == principal.user_id)
+        )
+    )
+
+
 def ensure_member(session: Session, principal: Principal, slug: str) -> Project:
     project = get_project(session, slug)
     if not is_member(session, principal, project):

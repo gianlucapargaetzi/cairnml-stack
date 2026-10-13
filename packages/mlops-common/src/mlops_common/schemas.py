@@ -78,6 +78,7 @@ class ProjectCreate(BaseModel):
 
 
 class ProjectOut(BaseModel):
+    id: str
     slug: str
     name: str
 
