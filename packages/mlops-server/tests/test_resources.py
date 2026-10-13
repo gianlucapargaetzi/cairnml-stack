@@ -10,7 +10,7 @@ def lab(server, enroll_client, make_project, make_agent, new_job):
     dev = enroll_client("dev")
     make_project("vision/seg", members=["dev"])
     agent = make_agent(queues=["default", "gpu"], cpu=8, memory_gb=32, gpus=2, labels=["a100"])
-    running = new_job(dev.http, resources={"cpu": 2, "memory_gb": 4})
+    running = new_job(dev.http, resources={"cpu": 2, "memory_gb": 4}, name="secret-exp")
     agent.http.post("/api/v1/agents/poll", json={"wait_s": 0})
     agent.http.post(f"/api/v1/jobs/{running['id']}/status", json={"status": "running"})
     queued = new_job(dev.http, queue="nobody")
@@ -56,6 +56,28 @@ def test_offline_agents_do_not_count_as_serving(lab, app):
         s.commit()
     body = lab["dev"].http.get("/api/v1/resources").json()
     assert body["agents"][0]["online"] is False and all(q["agents"] == 0 for q in body["queues"])
+
+
+def test_outsiders_see_anonymous_counts_only(lab, enroll_client):
+    eve = enroll_client("eve")  # not a member of vision/seg
+    response = eve.http.get("/api/v1/resources")
+    assert response.status_code == 200
+    body = response.json()
+    text = response.text
+    assert "secret-exp" not in text and "vision/seg" not in text
+    assert lab["running"]["id"] not in text
+    agent = body["agents"][0]
+    assert agent["running_jobs"] == [] and agent["other_running_jobs"] == 1
+    queues = {q["name"]: q for q in body["queues"]}
+    assert (queues["default"]["running"], queues["default"]["agents"]) == (1, 1)
+    assert queues["nobody"]["queued"] == 1
+
+
+def test_members_see_their_own_running_jobs(lab):
+    agent = lab["dev"].http.get("/api/v1/resources").json()["agents"][0]
+    assert agent["running_jobs"][0]["experiment_name"] == "secret-exp"
+    assert agent["running_jobs"][0]["project"] == "vision/seg"
+    assert agent["other_running_jobs"] == 0
 
 
 def test_resources_need_a_login(server):

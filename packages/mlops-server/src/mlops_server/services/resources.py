@@ -35,6 +35,11 @@ def agents_status(
             .where(Job.agent_id == agent.id, Job.status.in_(scheduler.ACTIVE))
             .order_by(Job.created_at, Job.id)
         ).all()
+        listed = [
+            {"id": job_id, "experiment_name": name, "project": slug}
+            for job_id, project_id, name, slug in running
+            if visible_projects is None or project_id in visible_projects
+        ]
         out.append({
             "id": agent.id,
             "name": agent.name,
@@ -45,11 +50,9 @@ def agents_status(
             "free": {"cpu": free.cpu, "memory_gb": free.memory_gb, "gpu": free.gpu},
             "usage": agent.usage,
             "usage_at": agent.usage_at.isoformat() if agent.usage_at else None,
-            "running_jobs": [
-                {"id": job_id, "experiment_name": name, "project": slug}
-                for job_id, project_id, name, slug in running
-                if visible_projects is None or project_id in visible_projects
-            ],
+            "running_jobs": listed,
+            # Jobs in projects the caller cannot see, as a count only (no names or slugs).
+            "other_running_jobs": len(running) - len(listed),
         })
     return out
 

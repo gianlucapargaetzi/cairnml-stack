@@ -232,6 +232,13 @@ def get_resources(
     principal: Annotated[Principal, Depends(require(*READERS))],
     session: Annotated[Session, Depends(get_session)],
 ) -> dict:
-    # Visible to every authenticated reader: counts and names only, never key material.
-    agents = resources.agents_status(session, request.app.state.settings.agent_timeout)
+    # Visible to every authenticated reader. Running jobs are named only for projects the caller
+    # belongs to (admins: all); other projects appear as anonymous counts. Never key material.
+    visible = {
+        p.id for p in session.scalars(select(Project))
+        if access.is_member(session, principal, p)
+    }
+    agents = resources.agents_status(
+        session, request.app.state.settings.agent_timeout, visible_projects=visible
+    )
     return {"agents": agents, "queues": resources.queue_stats(session, agents)}
