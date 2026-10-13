@@ -1,0 +1,41 @@
+[project]
+name = "mlops-workspace"
+version = "0.0.0"
+requires-python = ">=3.11"
+dependencies = ["mlops-common", "mlops-server", "mlops-agent", "mlops-client"]
+
+[tool.uv.workspace]
+members = ["packages/*"]
+exclude = ["packages/mlops-ui"]
+
+[tool.uv.sources]
+mlops-common = { workspace = true }
+mlops-server = { workspace = true }
+mlops-agent = { workspace = true }
+mlops-client = { workspace = true }
+
+[dependency-groups]
+dev = [
+  "pytest>=8",
+  "pytest-timeout>=2.3",
+  "respx>=0.21",
+  "ruff>=0.6",
+  "testcontainers[postgres]>=4.8",
+]
+ui = ["pytest-playwright>=0.5"]
+
+[tool.pytest.ini_options]
+testpaths = ["packages", "tests"]
+addopts = "-m 'not e2e and not docker' --import-mode=importlib"
+timeout = 120
+markers = [
+  "e2e: needs the full docker compose stack (see tests/e2e)",
+  "docker: needs a local docker daemon",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]

@@ -1,0 +1,112 @@
+.Experiment {
+  padding: 16px;
+
+  h1 {
+    font-size: 20px;
+    margin: 0 0 6px;
+  }
+
+  h2 {
+    font-size: 15px;
+    margin: 20px 0 6px;
+  }
+
+  &__kind {
+    font-size: 12px;
+    color: #344054;
+    background: #eef1f5;
+    border-radius: 3px;
+    padding: 1px 6px;
+    margin-left: 4px;
+  }
+
+  &__settings-box {
+    margin: 8px 0;
+  }
+
+  &__settings {
+    display: grid;
+    gap: 8px;
+    max-width: 480px;
+    padding: 8px 0;
+    font-size: 13px;
+
+    label {
+      display: grid;
+      gap: 4px;
+    }
+
+    textarea,
+    input,
+    select {
+      font: inherit;
+      padding: 4px 6px;
+      border: 1px solid #c9d2df;
+      border-radius: 4px;
+    }
+  }
+
+  &__cards {
+    display: flex;
+    gap: 16px;
+    margin: 12px 0;
+  }
+
+  &__card {
+    border: 1px solid #e3e8ef;
+    border-radius: 4px;
+    padding: 12px 16px;
+    min-width: 220px;
+    background: #fff;
+  }
+
+  &__card-value {
+    font-size: 22px;
+    font-weight: 600;
+  }
+
+  &__toolbar {
+    margin-bottom: 8px;
+    font-size: 13px;
+  }
+
+  &__table {
+    width: 100%;
+    border-collapse: collapse;
+
+    th,
+    td {
+      text-align: left;
+      padding: 6px 8px;
+      border-bottom: 1px solid #e3e8ef;
+      font-size: 13px;
+    }
+  }
+
+  &__best {
+    font-weight: 700;
+    color: #067647;
+  }
+
+  &__chart {
+    width: 100%;
+    max-width: 640px;
+    border: 1px solid #e3e8ef;
+    border-radius: 4px;
+    background: #fff;
+  }
+
+  &__mono {
+    font-family: monospace;
+    font-size: 12px;
+  }
+
+  &__muted {
+    color: #5b6676;
+    font-size: 13px;
+  }
+
+  &__error {
+    color: #b42318;
+  }
+}

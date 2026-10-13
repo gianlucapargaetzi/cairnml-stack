@@ -1,0 +1,113 @@
+.Compare {
+  padding: 16px;
+
+  h1 {
+    font-size: 20px;
+    margin: 0 0 8px;
+  }
+
+  h2 {
+    font-size: 15px;
+    margin: 20px 0 6px;
+  }
+
+  h3 {
+    font-size: 13px;
+    margin: 0 0 4px;
+  }
+
+  &__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 13px;
+  }
+
+  &__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid #e3e8ef;
+    border-radius: 4px;
+    padding: 2px 8px;
+  }
+
+  &__swatch {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+  }
+
+  &__charts {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 12px;
+  }
+
+  &__chart-box {
+    border: 1px solid #e3e8ef;
+    border-radius: 4px;
+    padding: 8px;
+    background: #fff;
+  }
+
+  &__chart {
+    width: 100%;
+  }
+
+  &__axis {
+    font-size: 10px;
+    fill: #5b6676;
+  }
+
+  &__table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+
+    th,
+    td {
+      text-align: left;
+      padding: 6px 8px;
+      border-bottom: 1px solid #e3e8ef;
+      font-size: 13px;
+    }
+  }
+
+  &__best {
+    font-weight: 700;
+    color: #067647;
+  }
+
+  &__differs {
+    background: #fffaeb;
+  }
+
+  &__mono {
+    font-family: monospace;
+    font-size: 12px;
+  }
+
+  &__packages {
+    margin-top: 8px;
+    font-size: 13px;
+
+    pre {
+      background: #f5f7fa;
+      padding: 8px;
+      border-radius: 4px;
+      max-height: 240px;
+      overflow: auto;
+    }
+  }
+
+  &__muted {
+    color: #5b6676;
+    font-size: 13px;
+  }
+
+  &__error {
+    color: #b42318;
+  }
+}

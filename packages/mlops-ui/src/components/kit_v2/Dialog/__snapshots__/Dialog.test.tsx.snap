@@ -1,0 +1,28 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Dialog should render Dialog component 1`] = `<div />`;
+
+exports[`Dialog should render Dialog component with description 1`] = `<div />`;
+
+exports[`Dialog should render Dialog component with open 1`] = `
+<div
+  aria-hidden="true"
+  data-aria-hidden="true"
+/>
+`;
+
+exports[`Dialog should render Dialog component with title 1`] = `<div />`;
+
+exports[`Dialog should render Dialog component with trigger 1`] = `
+<div>
+  <button
+    aria-controls="radix-9"
+    aria-expanded="false"
+    aria-haspopup="dialog"
+    data-state="closed"
+    type="button"
+  >
+    Trigger
+  </button>
+</div>
+`;

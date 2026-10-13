@@ -1,0 +1,36 @@
+.RunDispatch {
+  display: grid;
+  gap: 8px;
+  max-width: 420px;
+  margin: 16px 0 24px;
+  font-size: 13px;
+
+  h3 {
+    margin: 0;
+    font-size: 15px;
+  }
+
+  label {
+    display: grid;
+    gap: 4px;
+  }
+
+  input {
+    font: inherit;
+    padding: 4px 6px;
+    border: 1px solid #c9d2df;
+    border-radius: 4px;
+  }
+
+  &__mono {
+    font-family: monospace;
+  }
+
+  &__muted {
+    color: #5b6676;
+  }
+
+  &__error {
+    color: #b42318;
+  }
+}

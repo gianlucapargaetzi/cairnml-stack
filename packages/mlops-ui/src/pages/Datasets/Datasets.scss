@@ -1,0 +1,101 @@
+.Datasets {
+  padding: 16px;
+
+  h1 {
+    font-size: 20px;
+    margin: 0 0 8px;
+  }
+
+  h2 {
+    font-size: 15px;
+    margin: 20px 0 6px;
+  }
+
+  &__toolbar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+    font-size: 13px;
+
+    select,
+    input {
+      font: inherit;
+      padding: 3px 6px;
+      border: 1px solid #c9d2df;
+      border-radius: 4px;
+    }
+  }
+
+  &__table {
+    width: 100%;
+    border-collapse: collapse;
+
+    th,
+    td {
+      text-align: left;
+      padding: 6px 8px;
+      border-bottom: 1px solid #e3e8ef;
+      font-size: 13px;
+      vertical-align: top;
+    }
+  }
+
+  &__facts {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 4px 12px;
+    font-size: 13px;
+
+    dt {
+      color: #5b6676;
+    }
+
+    dd {
+      margin: 0;
+    }
+  }
+
+  &__card {
+    border: 1px solid #e3e8ef;
+    border-radius: 4px;
+    padding: 12px 16px;
+    margin: 12px 0;
+    background: #fff;
+  }
+
+  &__hint {
+    border: 1px dashed #c9d2df;
+    border-radius: 4px;
+    padding: 12px;
+    font-size: 13px;
+
+    pre {
+      background: #f5f7fa;
+      padding: 8px;
+      border-radius: 4px;
+    }
+  }
+
+  &__type {
+    font-size: 12px;
+    color: #344054;
+    background: #eef1f5;
+    border-radius: 3px;
+    padding: 1px 6px;
+    margin-left: 4px;
+  }
+
+  &__mono {
+    font-family: monospace;
+    font-size: 12px;
+  }
+
+  &__muted {
+    color: #5b6676;
+    font-size: 13px;
+  }
+
+  &__error {
+    color: #b42318;
+  }
+}

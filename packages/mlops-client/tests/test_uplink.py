@@ -1,0 +1,221 @@
+import threading
+
+import httpx
+import pytest
+from mlops.spool import Spool
+from mlops.transfer import put_file
+from mlops.uplink import Uplink, replay
+
+
+class FakeApi:
+    def __init__(self, fail=0, status=None):
+        self.metrics, self.logs, self.fail, self.status = [], [], fail, status
+
+    def _maybe_fail(self):
+        if self.fail:
+            self.fail -= 1
+            if self.status:
+                raise httpx.HTTPStatusError(
+                    "x",
+                    request=httpx.Request("POST", "http://x"),
+                    response=httpx.Response(self.status),
+                )
+            raise httpx.ConnectError("down")
+
+    def post_metrics(self, exp, points):
+        self._maybe_fail()
+        self.metrics.append((exp, points))
+
+    def post_logs(self, exp, stream, seq, lines):
+        self._maybe_fail()
+        self.logs.append((exp, stream, seq, [line["text"] for line in lines]))
+
+    def patch_run(self, exp, **fields):
+        self._maybe_fail()
+
+
+def _uplink(tmp_path, api, **kw):
+    return Uplink(
+        api, "run_1", Spool(tmp_path / "spool" / "run_1", {"run_id": "run_1"}), **kw
+    )
+
+
+def test_metrics_and_logs_are_batched_with_sequences(tmp_path):
+    api = FakeApi()
+    up = _uplink(tmp_path, api, max_batch=2)
+    for i in range(3):
+        up.metric("loss", 1.0 / (i + 1), i)
+    up.log("stdout", "a")
+    up.log("stdout", "b")
+    up.flush()
+    up.log("stdout", "c")
+    up.flush()
+    assert [len(p) for _, p in api.metrics] == [2, 1]
+    assert [(s, seq, t) for _, s, seq, t in api.logs] == [
+        ("stdout", 0, ["a", "b"]),
+        ("stdout", 1, ["c"]),
+    ]
+    assert not up.degraded and not up._spool.exists()
+
+
+def test_transient_failure_spools_and_later_replays_in_order(tmp_path):
+    api = FakeApi(fail=1)
+    up = _uplink(tmp_path, api)
+    up.metric("loss", 1.0, 0)
+    up.flush()  # fails, spooled
+    assert up.degraded and up._spool.events()[0]["kind"] == "metrics"
+    up.metric("loss", 0.5, 1)
+    up.close()  # replays the spooled batch first, then sends the new point
+    assert [p[0]["step"] for _, p in api.metrics] == [0, 1]
+    assert not up._spool.exists()
+
+
+def test_replay_stops_at_first_failure_and_keeps_the_rest(tmp_path):
+    spool = Spool(tmp_path / "s", {"run_id": "run_1"})
+    spool.append("metrics", {"points": [{"name": "a", "value": 1, "step": 0, "ts": 1}]})
+    spool.append("logs", {"stream": "stdout", "seq": 0, "lines": [{"ts": 1, "text": "x"}]})
+    spool.append("metrics", {"points": [{"name": "b", "value": 2, "step": 1, "ts": 2}]})
+
+    class Flaky(FakeApi):
+        def post_logs(self, *a, **k):
+            raise httpx.ConnectError("down")
+
+    api = Flaky()
+    assert replay(spool, api, "run_1") == 1
+    assert [e["kind"] for e in spool.events()] == [
+        "logs",
+        "metrics",
+    ]  # first one is gone, no duplicates later
+    assert replay(spool, FakeApi(), "run_1") == 2 and not spool.exists()
+
+
+def test_client_errors_drop_the_batch_without_spooling(tmp_path):
+    api = FakeApi(fail=1, status=422)
+    up = _uplink(tmp_path, api)
+    up.metric("x", 1.0, 0)
+    up.flush()
+    assert not up._spool.exists() and not up.degraded
+
+
+def test_server_errors_are_spooled(tmp_path):
+    api = FakeApi(fail=1, status=503)
+    up = _uplink(tmp_path, api)
+    up.metric("x", 1.0, 0)
+    up.flush()
+    assert up._spool.exists() and up.degraded
+
+
+def test_without_an_api_everything_is_spooled(tmp_path):
+    up = Uplink(None, None, Spool(tmp_path / "off", {"local_id": "offline_1"}))
+    up.metric("x", 1.0, 0)
+    up.log("stderr", "oops")
+    up.close()
+    kinds = [e["kind"] for e in up._spool.events()]
+    assert kinds == ["metrics", "logs"] and up._spool.meta()["local_id"] == "offline_1"
+
+
+def test_background_thread_flushes(tmp_path):
+    api = FakeApi()
+    up = _uplink(tmp_path, api, flush_s=0.05)
+    up.start()
+    up.metric("x", 1.0, 0)
+    for _ in range(100):
+        if api.metrics:
+            break
+        threading_wait()
+    assert api.metrics  # sent by the background thread, before close() runs
+    up.close()
+
+
+def threading_wait():
+    threading.Event().wait(0.02)
+
+
+def test_replay_keeps_artifact_events_when_a_later_send_fails(tmp_path):
+    spool = Spool(tmp_path / "s", {"run_id": "run_1"})
+    spool.append("artifact", {"name": "model.bin", "sha256": "abc"})
+    spool.append("metrics", {"points": [{"name": "a", "value": 1, "step": 0, "ts": 1}]})
+
+    assert replay(spool, FakeApi(fail=1), "run_1") == 0
+    assert [e["kind"] for e in spool.events()] == ["artifact", "metrics"]
+
+    assert replay(spool, FakeApi(), "run_1") == 1
+    assert [e["kind"] for e in spool.events()] == ["artifact"]
+
+
+def test_replay_counts_server_rejected_events_as_dropped(tmp_path):
+    spool = Spool(tmp_path / "s", {"run_id": "run_1"})
+    spool.append("metrics", {"points": [{"name": "bad", "value": 1, "step": 0, "ts": 1}]})
+    spool.append("metrics", {"points": [{"name": "ok", "value": 2, "step": 1, "ts": 2}]})
+
+    class Rejects(FakeApi):
+        def post_metrics(self, exp, points):
+            if points[0]["name"] == "bad":
+                raise httpx.HTTPStatusError(
+                    "x",
+                    request=httpx.Request("POST", "http://x"),
+                    response=httpx.Response(422),
+                )
+            super().post_metrics(exp, points)
+
+    api = Rejects()
+    assert replay(spool, api, "run_1") == 1
+    assert [p[0]["name"] for _, p in api.metrics] == ["ok"]
+    assert not spool.exists()
+
+
+def test_spooled_events_are_sent_before_a_new_flush(tmp_path):
+    api = FakeApi()
+    up = _uplink(tmp_path, api)
+    up._spool.append("metrics", {"points": [{"name": "old", "value": 0, "step": 0, "ts": 1}]})
+    up.metric("new", 1.0, 1)
+    up.flush()
+    assert [p[0]["name"] for _, p in api.metrics] == ["old", "new"]
+    assert not up._spool.exists()
+
+
+def test_flush_keeps_order_when_the_drain_fails(tmp_path):
+    api = FakeApi()
+    up = _uplink(tmp_path, api)
+    up._spool.append("metrics", {"points": [{"name": "old", "value": 0, "step": 0, "ts": 1}]})
+    up.metric("new", 1.0, 1)
+    api.fail = 1  # the drain fails, so the new batch must queue behind the old one
+    up.flush()
+    assert up.degraded and api.metrics == []
+    assert [e["payload"]["points"][0]["name"] for e in up._spool.events()] == ["old", "new"]
+
+
+def test_truncated_last_line_keeps_complete_events(tmp_path):
+    spool = Spool(tmp_path / "s", {"run_id": "run_1"})
+    spool.append("metrics", {"points": [{"name": "a", "value": 1, "step": 0, "ts": 1}]})
+    spool.append("logs", {"stream": "stdout", "seq": 0, "lines": [{"ts": 1, "text": "x"}]})
+    path = tmp_path / "s" / "events.jsonl"
+    path.write_bytes(path.read_bytes() + b'{"kind": "metr')
+    assert [e["kind"] for e in spool.events()] == ["metrics", "logs"]
+
+
+def test_spool_file_path_rejects_traversal(tmp_path):
+    spool = Spool(tmp_path / "s")
+    assert spool.file_path("a/b.bin").parent.is_dir()
+    with pytest.raises(ValueError):
+        spool.file_path("../x")
+
+
+def test_put_file_sends_content_length_and_streams(tmp_path):
+    seen = {}
+
+    def handler(request):
+        seen["length"] = request.headers["content-length"]
+        seen["body"] = request.read()
+        return httpx.Response(200)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    path = tmp_path / "f.bin"
+    path.write_bytes(b"x" * 3000)
+    put_file("http://nas/x", path, http=client)
+    assert seen["length"] == "3000" and seen["body"] == b"x" * 3000
+    put_file("http://nas/x", b"abc", http=client)
+    assert seen["length"] == "3"
+    bad = httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(403)))
+    with pytest.raises(httpx.HTTPStatusError):
+        put_file("http://nas/x", b"abc", http=bad)

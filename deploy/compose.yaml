@@ -1,0 +1,10 @@
+name: mlops
+include:
+  - path: idp/compose.yaml
+    env_file: .env
+  - path: nas/compose.yaml
+    env_file: .env
+  - path: server/compose.yaml
+    env_file: .env
+  - path: agent/compose.yaml
+    env_file: .env
