@@ -86,6 +86,7 @@ function getRunInfo(runHash: string): IApiRequest<void> {
         });
         model.setState({
           runParams: data.params,
+          runSystem: data.system,
           runTraces: data.traces,
           runInfo: data.props,
           runArtifacts: data.artifacts,

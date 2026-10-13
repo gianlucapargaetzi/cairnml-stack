@@ -1,4 +1,6 @@
+import { IRunArtifact } from 'services/api/artifacts/artifactsService';
+
 export interface IRunOverviewTabArtifactsCardProps {
-  artifacts: { [key: string]: string };
+  artifacts: IRunArtifact[];
   isRunInfoLoading: boolean;
 }

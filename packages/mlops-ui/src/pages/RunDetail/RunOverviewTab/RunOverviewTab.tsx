@@ -34,7 +34,7 @@ function RunOverviewTab({ runData, runHash }: IRunOverviewTabProps) {
 
   const cardsData: Record<any, any> = React.useMemo(() => {
     const data: any = {};
-    const systemParams = runData?.runParams?.__system_params;
+    const systemParams = runData?.runSystem;
     if (!_.isEmpty(runData?.runParams)) {
       data.runParams = runData.runParams;
     }
@@ -57,7 +57,7 @@ function RunOverviewTab({ runData, runHash }: IRunOverviewTabProps) {
       if (!_.isEmpty(systemParams.packages)) {
         data.packages = systemParams.packages;
       }
-      if (!_.isEmpty(systemParams.packages)) {
+      if (!_.isEmpty(systemParams.git_info)) {
         data.gitInfo = systemParams.git_info;
       }
     }

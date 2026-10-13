@@ -97,9 +97,9 @@ function GitInfoCard(props: IGitInfoCardProps) {
               size={12}
               color='primary'
             >
-              {`${moment(props.data.commit?.timestamp).format(
-                DATE_GIT_COMMIT,
-              )}`}
+              {props.data.commit?.timestamp
+                ? moment(props.data.commit.timestamp).format(DATE_GIT_COMMIT)
+                : '–'}
             </Text>
           </div>
         </div>
