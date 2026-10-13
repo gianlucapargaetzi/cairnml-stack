@@ -112,8 +112,8 @@ class ProjectRepo(Base):
     created_at: Mapped[datetime] = mapped_column(_TS, default=utcnow)
 
 
-class Task(Base):
-    __tablename__ = "tasks"
+class Experiment(Base):
+    __tablename__ = "experiments"
     __table_args__ = (UniqueConstraint("project_id", "name"),)
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
@@ -125,12 +125,12 @@ class Task(Base):
     created_at: Mapped[datetime] = mapped_column(_TS, default=utcnow)
 
 
-class Experiment(Base):
-    __tablename__ = "experiments"
+class Run(Base):
+    __tablename__ = "runs"
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
     owner_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
-    task_id: Mapped[str | None] = mapped_column(ForeignKey("tasks.id"), nullable=True, index=True)
+    experiment_id: Mapped[str | None] = mapped_column(ForeignKey("experiments.id"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(200))
     status: Mapped[str] = mapped_column(String(20), default="created")
     source: Mapped[str] = mapped_column(String(10), default="local")
@@ -155,7 +155,7 @@ class Experiment(Base):
 class Job(Base):
     __tablename__ = "jobs"
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
-    experiment_id: Mapped[str] = mapped_column(ForeignKey("experiments.id"), index=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("runs.id"), index=True)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"))
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     spec: Mapped[dict[str, Any]] = mapped_column(JSON)
@@ -177,7 +177,7 @@ class Job(Base):
 class MetricPoint(Base):
     __tablename__ = "metric_points"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    experiment_id: Mapped[str] = mapped_column(ForeignKey("experiments.id"), index=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("runs.id"), index=True)
     name: Mapped[str] = mapped_column(String(200))
     step: Mapped[int | None] = mapped_column(Integer, nullable=True)
     value: Mapped[float] = mapped_column(Float)
@@ -186,9 +186,9 @@ class MetricPoint(Base):
 
 class LogChunk(Base):
     __tablename__ = "log_chunks"
-    __table_args__ = (UniqueConstraint("experiment_id", "stream", "seq"),)
+    __table_args__ = (UniqueConstraint("run_id", "stream", "seq"),)
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    experiment_id: Mapped[str] = mapped_column(ForeignKey("experiments.id"), index=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("runs.id"), index=True)
     stream: Mapped[str] = mapped_column(String(10))
     seq: Mapped[int] = mapped_column(Integer)
     lines: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
@@ -198,7 +198,7 @@ class LogChunk(Base):
 class Artifact(Base):
     __tablename__ = "artifacts"
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
-    experiment_id: Mapped[str] = mapped_column(ForeignKey("experiments.id"), index=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("runs.id"), index=True)
     name: Mapped[str] = mapped_column(String(255))
     key: Mapped[str] = mapped_column(String(600))
     size: Mapped[int] = mapped_column(BigInteger, default=0)

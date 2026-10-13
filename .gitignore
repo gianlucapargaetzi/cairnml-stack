@@ -8,3 +8,9 @@ deploy/secrets/
 deploy/wheels/
 dist/
 node_modules/
+
+# Host-side data of the stack (deploy/scripts/prune.sh empties it)
+deploy/data/
+
+# Playwright MCP session files
+.playwright-mcp/

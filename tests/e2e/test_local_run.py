@@ -37,4 +37,4 @@ def test_a_plain_script_is_logged_as_an_experiment(dev, project, tmp_path):
     url = api._http.get(f"/api/v1/experiments/{exp['id']}/artifacts/{out['id']}/download").json()[
         "url"
     ]
-    assert httpx.get(url).text == "artifact body"  # it really went through MinIO
+    assert httpx.get(url).text == "artifact body"  # it really went through RustFS

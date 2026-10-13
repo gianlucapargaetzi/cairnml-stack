@@ -26,6 +26,6 @@ networks:
     name: mlops
     external: true
   # Compose-managed. The same definition is in server/compose.yaml, so both files share it.
-  # Job containers reach only the server on this network; Postgres, MinIO and Keycloak are on mlops.
+  # Job containers reach only the server on this network; Postgres, RustFS and Keycloak are on mlops.
   mlops-jobs:
     name: mlops-jobs

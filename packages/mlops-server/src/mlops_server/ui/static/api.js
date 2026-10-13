@@ -81,6 +81,7 @@ const enc = encodeURIComponent;
 export const writes = {
   cancelJob: (id) => send("POST", `/jobs/${enc(id)}/cancel`),
   rescheduleJob: (id, overrides) => send("POST", `/jobs/${enc(id)}/reschedule`, overrides),
+  dispatchExperiment: (id, body) => send("POST", `/experiments/${enc(id)}/dispatch`, body),
   patchTask: (id, body) => send("PATCH", `/tasks/${enc(id)}`, body),
 };
 

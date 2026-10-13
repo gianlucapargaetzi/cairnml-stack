@@ -26,7 +26,7 @@ mkdir -p secrets
 
 if [ ! -f .env ]; then
   cp .env.example .env
-  for name in KC_ADMIN_PASSWORD MINIO_ROOT_PASSWORD MLOPS_S3_SECRET_KEY POSTGRES_PASSWORD IDP_SYNC_SECRET; do
+  for name in KC_ADMIN_PASSWORD RUSTFS_ROOT_PASSWORD MLOPS_S3_SECRET_KEY POSTGRES_PASSWORD IDP_SYNC_SECRET; do
     sed -i "s|^${name}=.*|${name}=$(openssl rand -hex 16)|" .env
   done
   agent_home="$HOME/.local/share/mlops-agent"
@@ -49,45 +49,50 @@ if [ ! -f secrets/github-app.pem ]; then
   echo "      see docs/runbook.md. The server starts without it, but dispatch will answer 503." >&2
 fi
 
+# The stack keeps its data in host folders (deploy/data/, git-ignored). Each folder must belong to
+# the uid its container runs as: Keycloak 1000, RustFS 10001, Postgres 999. Stopping the stack keeps
+# them; scripts/prune.sh empties them.
+mkdir -p data/idp data/nas data/postgres
+docker run --rm -v "$PWD/data:/data" alpine:3.20 sh -c '
+  chown 1000:1000 /data/idp && chmod 700 /data/idp &&
+  chown 10001:10001 /data/nas &&
+  chown 999:999 /data/postgres && chmod 700 /data/postgres'
+
 docker compose -f compose.yaml up -d --build mlops-idp mlops-nas mlops-nas-init mlops-postgres mlops-server
 
-# The realm ships without users. Create the realm admin once, with a generated password that is
-# printed here and never written to a tracked file. Runs inside the idp container with kcadm.
+# One admin login for both Keycloak's master realm and the mlops realm: KC_ADMIN and
+# KC_ADMIN_PASSWORD from deploy/.env. Runs inside the idp container with kcadm, on every bootstrap,
+# so the password in deploy/.env stays the one that works. Nothing is printed.
 KC_USER_SETUP='
 set -e
 K=/opt/keycloak/bin/kcadm.sh
 ok=0
 for _ in $(seq 1 90); do
-  if $K config credentials --server http://localhost:8080 --realm master \
+  if $K config credentials --server http://localhost:8180 --realm master \
        --user "$KC_MASTER_USER" --password "$KC_MASTER_PW" >/dev/null 2>&1; then ok=1; break; fi
   sleep 2
 done
 [ "$ok" = 1 ] || { echo "keycloak did not become ready" >&2; exit 1; }
-if $K get users -r mlops -q username=admin --fields username | grep -q "\"username\""; then
-  echo exists; exit 0
-fi
-$K create users -r mlops -s username=admin -s enabled=true -s emailVerified=true \
-  -s email=admin@example.test -s firstName=Admin -s lastName=User >/dev/null
-$K add-roles -r mlops --uusername admin --rolename mlops-admin
-$K set-password -r mlops --username admin --new-password "$ADMIN_PW"
-echo created
-'
-admin_pw=$(openssl rand -hex 12)
-admin_state=$(docker compose -f compose.yaml exec -T \
-  -e KC_MASTER_USER="$KC_ADMIN" -e KC_MASTER_PW="$KC_ADMIN_PASSWORD" -e ADMIN_PW="$admin_pw" \
-  mlops-idp sh -c "$KC_USER_SETUP" | tail -n 1)
-if [ "$admin_state" = created ]; then
-  echo "Keycloak realm user 'admin' (role mlops-admin) created."
-  echo "Its password, shown once and not stored by this script:"
-  echo "  $admin_pw"
+$K set-password -r master --username "$ADMIN_USER" --new-password "$ADMIN_PW" >/dev/null
+if $K get users -r mlops -q username="$ADMIN_USER" --fields username | grep -q "\"username\""; then
+  $K set-password -r mlops --username "$ADMIN_USER" --new-password "$ADMIN_PW" >/dev/null
 else
-  echo "Keycloak realm user 'admin' already exists; password unchanged."
+  $K create users -r mlops -s username="$ADMIN_USER" -s enabled=true -s emailVerified=true \
+    -s email="$ADMIN_USER@example.test" -s firstName=Admin -s lastName=User >/dev/null
+  $K add-roles -r mlops --uusername "$ADMIN_USER" --rolename mlops-admin
+  $K set-password -r mlops --username "$ADMIN_USER" --new-password "$ADMIN_PW"
 fi
+'
+docker compose -f compose.yaml exec -T \
+  -e KC_MASTER_USER="$KC_ADMIN" -e KC_MASTER_PW="$KC_ADMIN_PASSWORD" \
+  -e ADMIN_USER="$KC_ADMIN" -e ADMIN_PW="$KC_ADMIN_PASSWORD" \
+  mlops-idp sh -c "$KC_USER_SETUP" >/dev/null
+echo "admin login set from deploy/.env: user $KC_ADMIN, same password for Keycloak and mlops"
 
 echo "waiting for the server..."
 for _ in $(seq 1 60); do
   curl -fsS "${MLOPS_SERVER_URL}/api/v1/healthz" >/dev/null 2>&1 && { echo "server is up"; break; }
   sleep 2
 done
-echo "next: sign in as admin (device login), create a project, create an agent token, then:"
+echo "next: sign in as $KC_ADMIN (device login), create a project, create an agent token, then:"
 echo "  docker compose -f compose.yaml up -d mlops-agent   (from deploy/)"

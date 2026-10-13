@@ -272,6 +272,22 @@ export function buildOverrides(original, form) {
   return out;
 }
 
+// The body of a dispatch request from the experiment page's form. Empty resource fields are left
+// out, so the server applies its defaults. Throws on a value that is not a number of 0 or more.
+export function dispatchBody(form) {
+  const body = {
+    queue: form.queue.trim() || "default",
+    labels: form.labels.split(",").map((s) => s.trim()).filter(Boolean),
+  };
+  for (const field of ["cpu", "memory_gb", "gpu"]) {
+    if (form[field] === "" || form[field] == null) continue;
+    const value = Number(form[field]);
+    if (!Number.isFinite(value) || value < 0) throw new Error(`${field} must be a number of 0 or more`);
+    body[field] = value;
+  }
+  return body;
+}
+
 // Width of a usage bar in percent. A missing or zero total gives 0, and the result stays within 0 to 100.
 export function barPercent(used, total) {
   if (typeof used !== "number" || typeof total !== "number" || total <= 0) return 0;

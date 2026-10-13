@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from mlops_common.dispatch import DispatchError, build_job_spec
 from mlops_common.schemas import (
     ArtifactUrlRequest,
     GitInfo,
@@ -16,13 +17,13 @@ from mlops_common.schemas import (
     StsResponse,
     TokenResponse,
 )
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from mlops_server.ids import new_id
 from mlops_server.models import Agent, Artifact, Experiment, Job, Project, Task
-from mlops_server.routers.experiments import apply_status
+from mlops_server.routers.experiments import apply_status, experiment_out
 from mlops_server.security.deps import READERS, Principal, get_session, require, require_writer
 from mlops_server.services import access, audit
 from mlops_server.services.github import GitHubError, RepoNotAccessible
@@ -374,6 +375,46 @@ def job_spec(
     session: Annotated[Session, Depends(get_session)],
 ):
     return JobSpec.model_validate(_client_job(session, principal, job_id).spec)
+
+
+class DispatchBody(BaseModel):
+    queue: str = "default"
+    cpu: int | None = None
+    memory_gb: float | None = None
+    gpu: int | None = None
+    labels: list[str] = []
+
+
+@router.post("/experiments/{experiment_id}/dispatch", response_model=JobOut)
+def dispatch_experiment(
+    experiment_id: str,
+    body: DispatchBody,
+    request: Request,
+    principal: Annotated[Principal, Depends(require_writer("client"))],
+    session: Annotated[Session, Depends(get_session)],
+):
+    """Run a recorded experiment on an agent: the same spec the CLI builds, then the same checks."""
+    exp = access.load_experiment(session, principal, experiment_id, False)
+    artifacts = [
+        {"kind": a.kind, "name": a.name, "key": a.key}
+        for a in session.scalars(select(Artifact).where(Artifact.experiment_id == exp.id))
+    ]
+    requested = {"cpu": body.cpu, "memory_gb": body.memory_gb, "gpu": body.gpu}
+    resources = {k: v for k, v in requested.items() if v is not None}
+    if body.labels:
+        resources["labels"] = body.labels
+    try:
+        spec = JobSpec.model_validate(build_job_spec(
+            experiment_out(session, exp).model_dump(mode="json"), artifacts,
+            queue=body.queue, resources=resources,
+        ))
+    except DispatchError as exc:
+        raise HTTPException(422, str(exc)) from None
+    job = create_job(request, session, principal, spec, notes=f"dispatched from {exp.id}")
+    actor = principal.user_id or principal.id  # browser sessions name the person
+    audit.record(session, actor, "job.dispatched", request, from_experiment=exp.id, job_id=job.id)
+    session.commit()
+    return job_out(job)
 
 
 @router.post("/jobs/{job_id}/reschedule", response_model=JobOut)

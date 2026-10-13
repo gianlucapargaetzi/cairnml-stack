@@ -1,4 +1,4 @@
-"""MinIO/S3 access: presigned URLs for artifacts, STS credentials for DVC."""
+"""RustFS/S3 access: presigned URLs for artifacts, STS credentials for DVC."""
 
 from __future__ import annotations
 
@@ -83,7 +83,7 @@ class StorageService:
         prefix = f"{project_slug}/"
         policy = dataset_policy(self._datasets, prefix, write)
         response = self._sts.assume_role(
-            RoleArn="arn:minio:iam:::role/mlops",
+            RoleArn="arn:rustfs:iam:::role/mlops",
             RoleSessionName=re.sub(r"[^\w+=,.@-]", "-", project_slug)[:60] or "mlops",
             Policy=json.dumps(policy),
             DurationSeconds=self._ttl,

@@ -3,7 +3,7 @@
 Environment:
   MLOPS_E2E=1                   enable the suite (without it every e2e test skips)
   MLOPS_E2E_SERVER              server URL (default http://mlops-server:8000)
-  MLOPS_E2E_ISSUER              Keycloak realm URL (default http://mlops-idp:8080/realms/mlops)
+  MLOPS_E2E_ISSUER              Keycloak realm URL (default http://mlops-idp:8180/realms/mlops)
   MLOPS_E2E_PASSWORD_<USER>     password of the realm user <USER> (ADMIN, DEV, EVE, CAROL).
                                 No password is stored in the repository. A test whose user has
                                 no password here is skipped.
@@ -31,7 +31,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 DEPLOY = ROOT / "deploy"
 SERVER = os.environ.get("MLOPS_E2E_SERVER", "http://mlops-server:8000")
-ISSUER = os.environ.get("MLOPS_E2E_ISSUER", "http://mlops-idp:8080/realms/mlops")
+ISSUER = os.environ.get("MLOPS_E2E_ISSUER", "http://mlops-idp:8180/realms/mlops")
 KEYCLOAK = ISSUER.split("/realms/")[0]
 MLOPS_BIN = str(Path(sys.executable).parent / "mlops")
 PROJECT = "e2e/demo"

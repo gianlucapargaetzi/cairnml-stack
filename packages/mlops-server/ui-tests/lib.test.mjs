@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   fmtDuration, shortSha, safeHttpsUrl, commitUrl, flatten, diffRows, setDiff, parseHash, statusClass, fmtNumber, colorFor,
   createScope, createPageScope, shouldRedirectToLogin, attributeAllowed, linkAllowed, downsample, mergeLogs,
+  dispatchBody,
 } from "../src/mlops_server/ui/static/lib.js";
 
 test("durations", () => {
@@ -142,4 +143,15 @@ test("page scope guards every write made after the route changed", () => {
   // A cleanup registered after disposal runs at once, so nothing can outlive the page.
   scope.onCleanup(() => { cleaned += 1; });
   assert.equal(cleaned, 2);
+});
+
+test("dispatch form becomes a request body without empty resource fields", () => {
+  assert.deepEqual(
+    dispatchBody({ queue: " gpu ", cpu: "", memory_gb: "", gpu: "1", labels: "lab-a, lab-b," }),
+    { queue: "gpu", labels: ["lab-a", "lab-b"], gpu: 1 });
+  assert.deepEqual(
+    dispatchBody({ queue: "", cpu: "2", memory_gb: "0.5", gpu: "", labels: "" }),
+    { queue: "default", labels: [], cpu: 2, memory_gb: 0.5 });
+  assert.throws(() => dispatchBody({ queue: "x", cpu: "-1", memory_gb: "", gpu: "", labels: "" }), /cpu must be/);
+  assert.throws(() => dispatchBody({ queue: "x", cpu: "", memory_gb: "", gpu: "many", labels: "" }), /gpu must be/);
 });

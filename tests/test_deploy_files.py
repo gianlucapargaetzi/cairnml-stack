@@ -74,7 +74,7 @@ def test_realm_has_device_flow_client_and_admin_role_but_no_users():
     assert "credentials" not in text
 
 
-def test_minio_console_is_bound_to_loopback_only():
+def test_rustfs_console_is_bound_to_loopback_only():
     ports = _compose("nas")["services"]["mlops-nas"]["ports"]
     assert "127.0.0.1:9001:9001" in ports
     assert not any(str(p).endswith(":9001") and not str(p).startswith("127.0.0.1:") for p in ports)
@@ -90,13 +90,19 @@ def test_job_containers_do_not_join_the_shared_network():
     server = _compose("server")
     assert "mlops-jobs" in server["services"]["mlops-server"]["networks"]
     assert server["networks"]["mlops-jobs"] == {"name": "mlops-jobs"}
-    # Postgres, MinIO and Keycloak never join the job network
+    # Postgres, RustFS and Keycloak never join the job network
     for role, name in (("server", "mlops-postgres"), ("nas", "mlops-nas"), ("idp", "mlops-idp")):
         assert "mlops-jobs" not in _compose(role)["services"][name]["networks"], name
 
 
+def test_bootstrap_hands_keycloak_volume_to_its_uid_before_start():
+    text = (DEPLOY / "scripts" / "bootstrap.sh").read_text()
+    chown = text.index("chown 1000:1000 /data")
+    assert chown < text.index("up -d --build mlops-idp")
+
+
 def test_nas_init_does_not_swallow_failures():
-    assert "|| true" not in (DEPLOY / "nas" / "init.sh").read_text()
+    assert "|| true" not in (DEPLOY / "nas" / "init.py").read_text()
 
 
 def test_realm_has_the_web_client_and_a_read_only_service_account():

@@ -115,3 +115,21 @@ def test_browser_writes_are_audited_with_the_users_id(browser, lab, app):
     with app.state.session_factory() as s:
         event = s.scalar(select(AuditEvent).where(AuditEvent.action == "job.cancel_requested"))
         assert event.actor.startswith("usr_")
+
+
+def test_a_browser_can_dispatch_an_experiment_with_the_csrf_token(browser, lab, stub_github):
+    stub_github.commits.add(("org/repo", "b" * 40))
+    alice = lab["alice"].http
+    exp = lab["exp"]["id"]
+    alice.patch(
+        f"/api/v1/experiments/{exp}",
+        json={"git": {"repo": "org/repo", "commit": "b" * 40}, "script": "train.py",
+              "argv": ["train.py"], "python_version": "3.11.9"},
+    )
+    me = login_browser(browser)
+    url = f"/api/v1/experiments/{exp}/dispatch"
+    body = {"queue": "gpu", "gpu": 1}
+    assert browser.post(url, json=body).status_code == 403
+    done = browser.post(url, json=body, headers={"X-CSRF-Token": me["csrf"]})
+    assert done.status_code == 200, done.text
+    assert done.json()["queue"] == "gpu" and done.json()["status"] == "queued"

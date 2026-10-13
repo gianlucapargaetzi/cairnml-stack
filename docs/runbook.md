@@ -77,12 +77,12 @@ deploy/scripts/bootstrap.sh
 - checks Docker, Compose, `openssl` and `uv`, and the hosts line from step 2;
 - creates the `mlops` Docker network if missing;
 - creates `deploy/secrets/signing.pem` (the key the server signs access tokens with) if missing;
-- creates `deploy/.env` from `deploy/.env.example`, with generated passwords for Keycloak, MinIO, the MinIO service user and PostgreSQL, and builds the client wheels into `$MLOPS_AGENT_HOME/wheels`;
-- starts the IdP, MinIO, PostgreSQL and the server.
+- creates `deploy/.env` from `deploy/.env.example`, with generated passwords for Keycloak, RustFS, the RustFS service user and PostgreSQL, and builds the client wheels into `$MLOPS_AGENT_HOME/wheels`;
+- starts the IdP, RustFS, PostgreSQL and the server.
 
-**The realm admin user.** The committed Keycloak realm contains no users. `bootstrap.sh` creates the realm user `admin` with the realm role `mlops-admin` and prints a generated password **once**. Write it down; it is not stored in any tracked file, and you need it for step 5. If the script reports that `admin` already exists, its password is unchanged and you must use the password you already have, or reset it in the Keycloak console.
+**The admin login.** The committed Keycloak realm contains no users. `bootstrap.sh` creates the realm user named by `KC_ADMIN` (default `kcadmin`) with the realm role `mlops-admin`, and sets its password to `KC_ADMIN_PASSWORD`. The same name and password also sign in to the Keycloak console (`master` realm). Both live in `deploy/.env`. Bootstrap re-applies them on every run, so `.env` is the source of truth. Use them in step 5.
 
-**Other users are created by you.** Open the Keycloak admin console at `http://mlops-idp:8080`, sign in to the `master` realm with `KC_ADMIN` and `KC_ADMIN_PASSWORD` from `deploy/.env`, and switch to the realm **mlops**. Under **Users**, create the user, set a password under **Credentials** (turn off "Temporary"), and for administrators add the realm role **mlops-admin** under **Role mapping**. A user can be added to a project only after running `mlops enroll` once (step 5), because the server creates the user record at enrollment. Until then `mlops admin project-add-member` answers `404 user not found`. Roles are kept in step with the IdP by the directory sync (once a minute, or at once with `mlops admin sync-users`, section 14), so a role change needs no re-enrollment.
+**Other users are created by you.** Open the Keycloak admin console at `http://mlops-idp:8180`, sign in to the `master` realm with `KC_ADMIN` and `KC_ADMIN_PASSWORD` from `deploy/.env`, and switch to the realm **mlops**. Under **Users**, create the user, set a password under **Credentials** (turn off "Temporary"), and for administrators add the realm role **mlops-admin** under **Role mapping**. A user can be added to a project only after running `mlops enroll` once (step 5), because the server creates the user record at enrollment. Until then `mlops admin project-add-member` answers `404 user not found`. Roles are kept in step with the IdP by the directory sync (once a minute, or at once with `mlops admin sync-users`, section 14), so a role change needs no re-enrollment.
 
 The bootstrap script ends by waiting for the server health check. Check it yourself:
 
@@ -96,7 +96,7 @@ curl -fsS http://mlops-server:8000/api/v1/healthz
 uv run mlops enroll --server http://mlops-server:8000
 ```
 
-A browser opens for the IdP login. Sign in as `admin` with the password printed in step 4 (or as your own user). The client generates a key, sends the public key to the server, and stores the key as `key.pem` under `~/.config/mlops/` (or `$MLOPS_CONFIG_DIR`). The private key never leaves this machine.
+A browser opens for the IdP login. Sign in as `KC_ADMIN` with `KC_ADMIN_PASSWORD` from `deploy/.env` (or as your own user). The client generates a key, sends the public key to the server, and stores the key as `key.pem` under `~/.config/mlops/` (or `$MLOPS_CONFIG_DIR`). The private key never leaves this machine.
 
 Then:
 
@@ -216,7 +216,7 @@ Outside an agent this dispatches the script's experiment and ends the local proc
 **Compose-based jobs.** A job with runtime type `compose` runs `docker compose up --build --abort-on-container-exit --exit-code-from <service>` in the job's workspace. Compose only receives the agent environment that the agent passes (`PATH`, `HOME`, Docker settings), plus the job variables. The service must forward these variables in its `environment:` list, and must join the job network:
 
 - `MLOPS_SERVER_URL`, `MLOPS_RUN_TOKEN`, `MLOPS_EXPERIMENT_ID`, `MLOPS_JOB_ID`, `MLOPS_PARAMS`;
-- the external Docker network **`mlops-jobs`**, not `mlops`. The agent is configured so that job containers join only `mlops-jobs`, which the server also joins. Postgres, MinIO and Keycloak are on `mlops`, and jobs must not reach them.
+- the external Docker network **`mlops-jobs`**, not `mlops`. The agent is configured so that job containers join only `mlops-jobs`, which the server also joins. Postgres, RustFS and Keycloak are on `mlops`, and jobs must not reach them.
 
 ```yaml
 services:
@@ -256,8 +256,8 @@ The default setup runs every role on one machine. Each role can move to its own 
 
 | Role | Machine | Compose file | `.env` values it needs | Open ports |
 |---|---|---|---|---|
-| Identity | machine 5 | `deploy/idp/compose.yaml` | `KC_ADMIN`, `KC_ADMIN_PASSWORD` | 8080 |
-| NAS | machine 3 | `deploy/nas/compose.yaml` | `MINIO_ROOT_*`, `MLOPS_S3_*` | 9000 |
+| Identity | machine 5 | `deploy/idp/compose.yaml` | `KC_ADMIN`, `KC_ADMIN_PASSWORD` | 8180 |
+| NAS | machine 3 | `deploy/nas/compose.yaml` | `RUSTFS_ROOT_*`, `MLOPS_S3_*` | 9000 |
 | Server | machine 2 | `deploy/server/compose.yaml` | `POSTGRES_PASSWORD`, `MLOPS_*_URL`, `GITHUB_*`, `MLOPS_S3_*`, `deploy/secrets/` | 8000 |
 | Agent | machine 4 | `deploy/agent/compose.yaml` | `MLOPS_SERVER_URL`, `MLOPS_AGENT_*` | none inbound |
 | Client | machine 1 | `pip install mlops-client` (or the wheel from `deploy/scripts/build-wheels.sh`) | none (`mlops enroll`) | none |
@@ -274,8 +274,8 @@ The dashboard (section 13) is served by the Server, so it moves with the server 
 **Not solved by moving roles:**
 
 - **Job network is single-host.** Job containers join the `mlops-jobs` Docker network. A Docker network exists on one host only, so the agent and the server must run on the same Docker host for jobs to reach the server. Job networking across hosts is not built.
-- **TLS is not configured.** All URLs are plain HTTP. Before you expose anything beyond one trusted LAN, put TLS in front of the server, the IdP and MinIO (a reverse proxy per stack), and change the Keycloak realm users and passwords.
-- **Keycloak runs in development mode** (`start-dev`), and its port 8080 is published on all host interfaces. The MinIO S3 API (9000) is on the LAN; the MinIO console (9001) is on loopback only.
+- **TLS is not configured.** All URLs are plain HTTP. Before you expose anything beyond one trusted LAN, put TLS in front of the server, the IdP and RustFS (a reverse proxy per stack), and change the Keycloak realm users and passwords.
+- **Keycloak runs in development mode** (`start-dev`), and its port 8180 is published on all host interfaces. The RustFS S3 API (9000) is on the LAN; the RustFS console (9001) is on loopback only.
 
 ## 13. Dashboard *(not yet verified live)*
 
@@ -285,7 +285,7 @@ The dashboard is a web view served by the server. Open it in a browser:
 http://mlops-server:8000/ui/
 ```
 
-The hosts entry from step 2 is enough. With no session, the page sends you to the Keycloak login. Log in with a realm user: the `admin` user from step 4, or any user you created there. There is no separate dashboard account. The session lasts 8 hours; **Log out** in the header ends it.
+The hosts entry from step 2 is enough. With no session, the page sends you to the Keycloak login. Log in with a realm user: the `KC_ADMIN` user from step 4, or any user you created there. There is no separate dashboard account. The session lasts 8 hours; **Log out** in the header ends it. To run a recorded experiment on an agent, open it and use **Run on an agent** (queue, CPU, memory, GPU, labels). It creates a job, the same as `mlops dispatch`.
 
 The dashboard has four tabs, plus the overview at the front:
 
@@ -311,7 +311,7 @@ Users are managed in the IdP. The server follows the IdP through a directory syn
 
 **Disable a user.**
 
-1. Open the Keycloak admin console at `http://mlops-idp:8080`. Sign in to the `master` realm as `kcadmin`, with the password `KC_ADMIN_PASSWORD` from `deploy/.env`.
+1. Open the Keycloak admin console at `http://mlops-idp:8180`. Sign in to the `master` realm as `kcadmin`, with the password `KC_ADMIN_PASSWORD` from `deploy/.env`.
 2. Switch to the realm **mlops**, open **Users**, open the user, switch **Enabled** off and save.
 3. Either wait up to one minute, or run this as an admin on an enrolled machine:
 
@@ -460,7 +460,7 @@ Server errors quoted here are the exact messages.
 | `422 GitHub App is not installed on <repo>` | Install the GitHub App (step 3) on that repository. |
 | `503 GitHub is not configured` | Set `GITHUB_APP_ID` and place the key at `deploy/secrets/github-app.pem` (step 3), then force-recreate the server. |
 | `502 GitHub request failed` | The server could not reach GitHub or the GitHub Enterprise API. Check `GITHUB_API_URL` and the network. |
-| `503 storage is not configured` | The server has no MinIO credentials. Check `MLOPS_S3_*` and that the `mlops-nas` service is up. |
+| `503 storage is not configured` | The server has no RustFS credentials. Check `MLOPS_S3_*` and that the `mlops-nas` service is up. |
 | `404 user not found` from `project-add-member` | The user has not run `mlops enroll` yet (step 5). |
 | Agent enrollment rejected, or `mlops-agent: not enrolled and MLOPS_AGENT_ENROLL_TOKEN is empty` | The token expired (900 seconds by default) or was already used. Create a new one with `mlops admin agent-token` (step 7). |
 | `sync-users` answers `503` | `IDP_SYNC_SECRET` is missing in the server environment (the server reads it as `MLOPS_IDP_SYNC_CLIENT_SECRET`). Set `IDP_SYNC_SECRET` in `deploy/.env` (bootstrap.sh generates it), then `docker compose -f deploy/compose.yaml up -d --force-recreate mlops-server`. |

@@ -1,8 +1,8 @@
-import { api } from "../api.js";
+import { api, writes } from "../api.js";
 import { keyValues, refreshError, statusBadge, table } from "../components.js";
 import { lineChart } from "../charts.js";
 import { h } from "../dom.js";
-import { TERMINAL_STATUSES, colorFor, commitUrl, downsample, fmtDuration, fmtNumber, fmtTime, mergeLogs, shortSha } from "../lib.js";
+import { TERMINAL_STATUSES, colorFor, commitUrl, dispatchBody, downsample, fmtDuration, fmtNumber, fmtTime, mergeLogs, shortSha } from "../lib.js";
 
 const MAX_LOG_LINES = 2000;
 const MAX_CHART_POINTS = 500;
@@ -35,6 +35,7 @@ export default async function experiment(root, route, ctx) {
   const logBox = h("pre", { class: "log", "aria-label": "logs" });
   const sections = h("div");
   const artifacts = h("div");
+  const dispatchBox = h("div");
 
   // Metrics: the first load fetches every point; later loads fetch only points after sinceId.
   // Each series keeps all its points, and its chart is updated in place.
@@ -53,6 +54,53 @@ export default async function experiment(root, route, ctx) {
     for (const entry of series.values()) entry.chart.destroy();
     series.clear();
   });
+
+  // Dispatch schedules this experiment as a job on an agent, like `mlops dispatch`. The form is built
+  // once, so the polls do not reset what the user typed.
+  function renderDispatch() {
+    const queue = h("input", { value: "default", "aria-label": "queue" });
+    const cpu = h("input", { type: "number", "aria-label": "cpu" });
+    const memory = h("input", { type: "number", "aria-label": "memory GB" });
+    const gpu = h("input", { type: "number", "aria-label": "gpu" });
+    cpu.min = "0"; memory.min = "0"; memory.step = "any"; gpu.min = "0"; // set as properties, like jobs.js
+    const labels = h("input", { "aria-label": "labels", placeholder: "comma separated" });
+    const feedback = h("p", { class: "muted", role: "status" });
+    const submit = h("button", { type: "submit" }, "Dispatch as job");
+
+    async function onsubmit(event) {
+      event.preventDefault();
+      let body;
+      try {
+        body = dispatchBody({
+          queue: queue.value, cpu: cpu.value, memory_gb: memory.value, gpu: gpu.value, labels: labels.value,
+        });
+      } catch (error) {
+        feedback.className = "error";
+        feedback.textContent = `Could not dispatch: ${error.message}`;
+        return;
+      }
+      submit.disabled = true;
+      feedback.className = "muted";
+      feedback.textContent = "Queueing…";
+      try {
+        const job = await writes.dispatchExperiment(id, body);
+        feedback.replaceChildren("Queued job ", h("span", { class: "mono" }, job.id), ". Follow it in the ",
+          h("a", { href: "#/jobs" }, "Jobs tab"), ".");
+      } catch (error) {
+        feedback.className = "error";
+        feedback.textContent = `Could not dispatch: ${error.message}`;
+      }
+      submit.disabled = false;
+    }
+
+    dispatchBox.replaceChildren(h("form", { class: "editor", onsubmit },
+      h("label", {}, "Queue ", queue), " ",
+      h("label", {}, "CPU ", cpu), " ",
+      h("label", {}, "Memory GB ", memory), " ",
+      h("label", {}, "GPU ", gpu), " ",
+      h("label", {}, "Labels ", labels), " ",
+      submit), feedback);
+  }
 
   function renderHeader() {
     ctx.render(() => header.replaceChildren(
@@ -196,10 +244,12 @@ export default async function experiment(root, route, ctx) {
   ctx.render(() => root.replaceChildren(
     notice.el,
     header,
+    h("h2", {}, "Run on an agent"), dispatchBox,
     h("h2", {}, "Metrics"), charts,
     h("h2", {}, "Logs"), logBox,
     sections,
     h("h2", {}, "Artifacts"), artifacts));
+  renderDispatch();
   await Promise.all([renderMetrics(), renderLogs(), renderArtifacts()]);
 
   // Once the run is finished the poll keeps its timer but makes no requests.
