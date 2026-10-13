@@ -15,10 +15,10 @@ from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.orm import Session, object_session
 
 from mlops_server.ids import new_id
-from mlops_server.models import Experiment, MetricPoint, Project, Task, User
+from mlops_server.models import Run, MetricPoint, Project, Experiment, User
 from mlops_server.security.deps import READERS, Principal, get_session, require
 from mlops_server.services import access
-from mlops_server.services.tasks import DEFAULT_TASK, get_or_create_task
+from mlops_server.services.tasks import DEFAULT_EXPERIMENT, get_or_create_experiment
 
 router = APIRouter()
 any_principal = require("client", "agent", "run")
@@ -27,18 +27,18 @@ read_principal = require("client", "agent", "run", "web")
 NULLABLE_FIELDS = {"git", "python_version", "platform", "script", "notes"}
 
 
-def experiment_out(session: Session, exp: Experiment) -> ExperimentOut:
-    project = session.get(Project, exp.project_id)
-    owner = session.get(User, exp.owner_id)
-    task = session.get(Task, exp.task_id) if exp.task_id else None
+def run_out(session: Session, run: Run) -> ExperimentOut:
+    project = session.get(Project, run.project_id)
+    owner = session.get(User, run.owner_id)
+    experiment = session.get(Experiment, run.experiment_id) if run.experiment_id else None
     return ExperimentOut(
-        id=exp.id, project=project.slug, name=exp.name, status=exp.status, source=exp.source,
-        owner=owner.username, task=task.name if task else DEFAULT_TASK,
-        parent_id=exp.parent_id, job_id=exp.job_id, config=exp.config,
-        params=exp.params, git=exp.git, datasets=exp.datasets, requirements=exp.requirements,
-        argv=exp.argv, env=exp.env, python_version=exp.python_version, platform=exp.platform,
-        script=exp.script, notes=exp.notes, created_at=exp.created_at,
-        started_at=exp.started_at, finished_at=exp.finished_at,
+        id=run.id, project=project.slug, name=run.name, status=run.status, source=run.source,
+        owner=owner.username, task=experiment.name if experiment else DEFAULT_EXPERIMENT,
+        parent_id=run.parent_id, job_id=run.job_id, config=run.config,
+        params=run.params, git=run.git, datasets=run.datasets, requirements=run.requirements,
+        argv=run.argv, env=run.env, python_version=run.python_version, platform=run.platform,
+        script=run.script, notes=run.notes, created_at=run.created_at,
+        started_at=run.started_at, finished_at=run.finished_at,
     )
 
 

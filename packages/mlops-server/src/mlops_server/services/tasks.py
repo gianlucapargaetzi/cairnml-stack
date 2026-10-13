@@ -1,4 +1,4 @@
-"""Tasks: one aspect of a project (training, augmentation, testing, ...)."""
+"""Experiments: one aspect of a project (training, augmentation, testing, ...)."""
 
 from __future__ import annotations
 
@@ -7,9 +7,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from mlops_server.ids import new_id
-from mlops_server.models import Task
+from mlops_server.models import Experiment
 
-DEFAULT_TASK = "general"
+DEFAULT_EXPERIMENT = "general"
 # Checked in order: the first keyword found in the lower-cased name decides the kind.
 _KINDS = [
     ("train", "training"), ("augment", "augmentation"), ("test", "testing"),
@@ -26,26 +26,37 @@ def guess_kind(name: str) -> str:
     return "other"
 
 
+def get_or_create_experiment(
+    session: Session,
+    project_id: str,
+    name: str,
+    primary_metric: str | None = None,
+    direction: str | None = None,
+) -> Experiment:
+    query = select(Experiment).where(Experiment.project_id == project_id, Experiment.name == name)
+    experiment = session.scalar(query)
+    if experiment is None:
+        try:
+            with session.begin_nested():
+                experiment = Experiment(
+                    id=new_id("exp"), project_id=project_id, name=name, kind=guess_kind(name),
+                    primary_metric=primary_metric,
+                    direction=direction if primary_metric else None,
+                )
+                session.add(experiment)
+        except IntegrityError:  # another request created the same experiment at the same moment
+            experiment = session.scalar(query)
+    elif primary_metric and not experiment.primary_metric:
+        experiment.primary_metric, experiment.direction = primary_metric, direction
+    return experiment
+
+
 def get_or_create_task(
     session: Session,
     project_id: str,
     name: str,
     primary_metric: str | None = None,
     direction: str | None = None,
-) -> Task:
-    query = select(Task).where(Task.project_id == project_id, Task.name == name)
-    task = session.scalar(query)
-    if task is None:
-        try:
-            with session.begin_nested():
-                task = Task(
-                    id=new_id("tsk"), project_id=project_id, name=name, kind=guess_kind(name),
-                    primary_metric=primary_metric,
-                    direction=direction if primary_metric else None,
-                )
-                session.add(task)
-        except IntegrityError:  # another request created the same task at the same moment
-            task = session.scalar(query)
-    elif primary_metric and not task.primary_metric:
-        task.primary_metric, task.direction = primary_metric, direction
-    return task
+) -> Experiment:
+    """Deprecated alias for backward compatibility during migration."""
+    return get_or_create_experiment(session, project_id, name, primary_metric, direction)

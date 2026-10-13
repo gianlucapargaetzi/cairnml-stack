@@ -7,7 +7,7 @@ from mlops_common.schemas import TERMINAL_STATUSES
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from mlops_server.models import Experiment, Job, Project, ProjectMember, ProjectRepo
+from mlops_server.models import Run, Job, Project, ProjectMember, ProjectRepo, Experiment
 from mlops_server.security.deps import Principal
 
 
@@ -55,33 +55,40 @@ def ensure_linked(session: Session, project: Project, repo: str) -> ProjectRepo:
     return link
 
 
-def load_experiment(
-    session: Session, principal: Principal, experiment_id: str, write: bool
-) -> Experiment:
-    """Return the experiment if `principal` may read (or write) it, else 404."""
+def load_run(
+    session: Session, principal: Principal, run_id: str, write: bool
+) -> Run:
+    """Return the run if `principal` may read (or write) it, else 404."""
     if write:
         # Lock the row so a concurrent status change cannot interleave with this write.
-        exp = session.get(Experiment, experiment_id, with_for_update=True, populate_existing=True)
+        run = session.get(Run, run_id, with_for_update=True, populate_existing=True)
     else:
-        exp = session.get(Experiment, experiment_id)
-    if exp is None:
-        raise HTTPException(404, "experiment not found")
+        run = session.get(Run, run_id)
+    if run is None:
+        raise HTTPException(404, "run not found")
     if principal.kind == "run":
-        allowed = exp.id == principal.experiment_id
-        if write and exp.status in TERMINAL_STATUSES:
+        allowed = run.id == principal.experiment_id
+        if write and run.status in TERMINAL_STATUSES:
             allowed = False  # a finished run's token can no longer change its record
     elif principal.kind == "agent":
-        job = session.get(Job, exp.job_id) if exp.job_id else None
+        job = session.get(Job, run.job_id) if run.job_id else None
         allowed = job is not None and job.agent_id == principal.id
-        if write and exp.status in TERMINAL_STATUSES:
+        if write and run.status in TERMINAL_STATUSES:
             allowed = False
     else:
-        project = session.get(Project, exp.project_id)
+        project = session.get(Project, run.project_id)
         allowed = is_member(session, principal, project)
         if allowed and write:
             allowed = principal.kind == "client" and (
-                exp.owner_id == principal.user_id or principal.is_admin
+                run.owner_id == principal.user_id or principal.is_admin
             )
     if not allowed:
-        raise HTTPException(404, "experiment not found")
-    return exp
+        raise HTTPException(404, "run not found")
+    return run
+
+
+def load_experiment(
+    session: Session, principal: Principal, experiment_id: str, write: bool
+) -> Run:
+    """Deprecated alias for backward compatibility during migration. Use load_run instead."""
+    return load_run(session, principal, experiment_id, write)
