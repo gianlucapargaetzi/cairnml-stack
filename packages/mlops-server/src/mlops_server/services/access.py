@@ -92,7 +92,8 @@ def load_run(
         project = session.get(Project, exp.project_id)
         allowed = is_member(session, principal, project)
         if allowed and write:
-            allowed = principal.kind == "client" and (
+            # A client or a browser session writes as its person: the owner, or an admin.
+            allowed = principal.kind in ("client", "web") and (
                 exp.owner_id == principal.user_id or principal.is_admin
             )
     if not allowed:

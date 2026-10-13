@@ -135,3 +135,25 @@ def test_a_browser_can_dispatch_an_run_with_the_csrf_token(browser, lab, stub_gi
     done = browser.post(url, json=body, headers={"X-CSRF-Token": me["csrf"]})
     assert done.status_code == 200, done.text
     assert done.json()["queue"] == "gpu" and done.json()["status"] == "queued"
+
+
+def test_a_browser_session_can_tag_a_run_its_owner_started(
+    browser, server, enroll_client, make_project
+):
+    """A signed-in member can attach a tag to a run they own from the browser, with the CSRF token."""
+    dev = enroll_client("dev")
+    make_project("vision/seg", members=["dev"])
+    run = dev.http.post("/api/v1/runs", json={"project": "vision/seg", "name": "tagged"}).json()["id"]
+    browser.idp["username"] = "dev"
+    me = login_browser(browser)
+    headers = {"X-CSRF-Token": me["csrf"]}
+    project_id = next(
+        p["id"] for p in browser.get("/api/v1/projects").json() if p["slug"] == "vision/seg"
+    )
+    tag = browser.post(
+        f"/api/v1/explorer/projects/{project_id}/tags", json={"name": "baseline"}, headers=headers
+    ).json()
+    attached = browser.post(f"/api/v1/explorer/runs/{run}/tags/{tag['id']}", headers=headers)
+    assert attached.status_code == 200
+    info = dev.http.get(f"/api/v1/explorer/runs/{run}/info").json()
+    assert info["props"]["tags"] == [{"id": tag["id"], "name": "baseline", "color": None}]
