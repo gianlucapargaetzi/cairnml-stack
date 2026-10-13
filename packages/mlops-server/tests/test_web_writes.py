@@ -10,15 +10,17 @@ def lab(server, enroll_client, make_project, new_job):
         alice=alice,
         job=new_job(alice.http),
         exp=alice.http.post(
-            "/api/v1/experiments", json={"project": "vision/seg", "name": "x", "task": "training"}
+            "/api/v1/runs", json={"project": "vision/seg", "name": "x", "experiment": "training"}
         ).json(),
     )
 
 
-def _task_id(lab):
+def _experiment_id(lab):
     return next(
         t
-        for t in lab["alice"].http.get("/api/v1/tasks", params={"project": "vision/seg"}).json()
+        for t in lab["alice"].http.get(
+            "/api/v1/experiments", params={"project": "vision/seg"}
+        ).json()
         if t["name"] == "training"
     )["id"]
 
@@ -47,9 +49,9 @@ def test_a_browser_without_an_origin_header_still_needs_the_token(browser, lab):
     assert ok.status_code == 200
 
 
-def test_a_browser_can_edit_a_task(browser, lab):
+def test_a_browser_can_edit_a_experiment(browser, lab):
     me = login_browser(browser)
-    url = f"/api/v1/tasks/{_task_id(lab)}"
+    url = f"/api/v1/experiments/{_experiment_id(lab)}"
     assert browser.patch(url, json={"description": "x"}).status_code == 403
     done = browser.patch(
         url,
@@ -71,7 +73,7 @@ def test_other_users_projects_stay_untouchable(browser, lab, enroll_client, make
     )
     assert (
         browser.patch(
-            f"/api/v1/tasks/{_task_id(lab)}",
+            f"/api/v1/experiments/{_experiment_id(lab)}",
             json={"description": "x"},
             headers={"X-CSRF-Token": me["csrf"]},
         ).status_code
@@ -87,9 +89,9 @@ def test_other_users_projects_stay_untouchable(browser, lab, enroll_client, make
             "/api/v1/jobs",
             {"name": "x", "project": "vision/seg", "runtime": {"type": "image", "image": "a"}},
         ),
-        ("post", "/api/v1/experiments", {"project": "vision/seg", "name": "x"}),
-        ("patch", "/api/v1/experiments/{exp}", {"notes": "x"}),
-        ("post", "/api/v1/tasks", {"project": "vision/seg", "name": "new"}),
+        ("post", "/api/v1/runs", {"project": "vision/seg", "name": "x"}),
+        ("patch", "/api/v1/runs/{exp}", {"notes": "x"}),
+        ("post", "/api/v1/experiments", {"project": "vision/seg", "name": "new"}),
         ("post", "/api/v1/storage/sts", {"project": "vision/seg"}),
         ("post", "/api/v1/admin/sync-users", None),
     ],
@@ -117,17 +119,17 @@ def test_browser_writes_are_audited_with_the_users_id(browser, lab, app):
         assert event.actor.startswith("usr_")
 
 
-def test_a_browser_can_dispatch_an_experiment_with_the_csrf_token(browser, lab, stub_github):
+def test_a_browser_can_dispatch_an_run_with_the_csrf_token(browser, lab, stub_github):
     stub_github.commits.add(("org/repo", "b" * 40))
     alice = lab["alice"].http
     exp = lab["exp"]["id"]
     alice.patch(
-        f"/api/v1/experiments/{exp}",
+        f"/api/v1/runs/{exp}",
         json={"git": {"repo": "org/repo", "commit": "b" * 40}, "script": "train.py",
               "argv": ["train.py"], "python_version": "3.11.9"},
     )
     me = login_browser(browser)
-    url = f"/api/v1/experiments/{exp}/dispatch"
+    url = f"/api/v1/runs/{exp}/dispatch"
     body = {"queue": "gpu", "gpu": 1}
     assert browser.post(url, json=body).status_code == 403
     done = browser.post(url, json=body, headers={"X-CSRF-Token": me["csrf"]})

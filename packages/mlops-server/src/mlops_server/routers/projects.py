@@ -11,12 +11,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from mlops_server.ids import new_id
-from mlops_server.models import Experiment, Project, ProjectMember, ProjectRepo, Task, User
+from mlops_server.models import Experiment, Project, ProjectMember, ProjectRepo, Run, User
 from mlops_server.security.deps import READERS, Principal, get_session, require
 from mlops_server.services import access, audit
+from mlops_server.services.experiments import DEFAULT_EXPERIMENT
 from mlops_server.services.github import GitHubError, RepoNotAccessible, valid_repo
 from mlops_server.services.repo_graph import build_graph
-from mlops_server.services.tasks import DEFAULT_TASK
 
 router = APIRouter()
 
@@ -285,17 +285,17 @@ def repo_graph(
         raise HTTPException(404, "GitHub App is not installed on this repository") from None
     except GitHubError:
         raise HTTPException(502, "GitHub request failed") from None
-    # Experiment annotations depend on the project, not the cache key, so they are read per request.
+    # Run annotations depend on the project, not the cache key, so they are read per request.
     shown = {c["sha"] for c in graph["commits"]}
     runs: dict[str, list[dict]] = {}
     query = (
-        select(Experiment, Task.name)
-        .outerjoin(Task, Task.id == Experiment.task_id)
-        .where(Experiment.project_id == proj.id)
-        .order_by(Experiment.created_at.desc(), Experiment.id.desc())
+        select(Run, Experiment.name)
+        .outerjoin(Experiment, Experiment.id == Run.experiment_id)
+        .where(Run.project_id == proj.id)
+        .order_by(Run.created_at.desc(), Run.id.desc())
         .limit(2000)
     )
-    for exp, task_name in session.execute(query):
+    for exp, experiment_name in session.execute(query):
         git = exp.git or {}
         commit = git.get("commit")
         if git.get("repo") != repo or commit not in shown:
@@ -307,7 +307,7 @@ def repo_graph(
                     "id": exp.id,
                     "name": exp.name,
                     "status": exp.status,
-                    "task": task_name or DEFAULT_TASK,
+                    "experiment": experiment_name or DEFAULT_EXPERIMENT,
                 }
             )
-    return {**graph, "experiments": runs}
+    return {**graph, "runs": runs}

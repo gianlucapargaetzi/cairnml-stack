@@ -25,12 +25,12 @@ def test_a_dirty_local_run_is_reproduced_on_the_agent(
     assert local.returncode == 0, local.stderr
     api = dev.api()
     exp = next(
-        e for e in api.list_experiments(project) if e["name"] == "repro" and e["source"] == "local"
+        e for e in api.list_runs(project) if e["name"] == "repro" and e["source"] == "local"
     )
     assert exp["git"]["dirty"] is True and exp["git"]["repo"] == REPO
     local_series = [
         p["value"]
-        for p in api._http.get(f"/api/v1/experiments/{exp['id']}/metrics").json()["score"]
+        for p in api._http.get(f"/api/v1/runs/{exp['id']}/metrics").json()["score"]
     ]
     assert local_series == [5.0, 6.0, 7.0]
 
@@ -44,10 +44,10 @@ def test_a_dirty_local_run_is_reproduced_on_the_agent(
     job = api.get_job(job_id)
     assert job["status"] == "finished", job
 
-    remote = next(e for e in api.list_experiments(project) if e["job_id"] == job_id)
+    remote = next(e for e in api.list_runs(project) if e["job_id"] == job_id)
     remote_series = [
         p["value"]
-        for p in api._http.get(f"/api/v1/experiments/{remote['id']}/metrics").json()["score"]
+        for p in api._http.get(f"/api/v1/runs/{remote['id']}/metrics").json()["score"]
     ]
     assert remote_series == local_series  # same commit, same patch, same environment, same result
     texts = [line["text"] for c in api.get_logs(remote["id"]) for line in c["lines"]]

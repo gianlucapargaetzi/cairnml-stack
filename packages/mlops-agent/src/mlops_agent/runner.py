@@ -87,7 +87,7 @@ class JobRunner:
             **a.spec.env,
             "MLOPS_SERVER_URL": self._settings.job_server_url or self._settings.server_url or "",
             "MLOPS_RUN_TOKEN": token,
-            "MLOPS_EXPERIMENT_ID": a.experiment_id,
+            "MLOPS_RUN_ID": a.run_id,
             "MLOPS_JOB_ID": a.job_id,
             "MLOPS_PARAMS": json.dumps(a.spec.params),
         }
@@ -129,7 +129,7 @@ class JobRunner:
             return text
 
         def post(stream: str):
-            return lambda s, seq, lines: self._api.post_logs(a.experiment_id, s, seq, lines)
+            return lambda s, seq, lines: self._api.post_logs(a.run_id, s, seq, lines)
 
         out = LogShipper(post("stdout"), "stdout", scrub=scrub)
         err = LogShipper(post("stderr"), "stderr", scrub=scrub)
@@ -171,7 +171,7 @@ class JobRunner:
                 timer.start()
             ctx = RunContext(
                 a.job_id,
-                a.experiment_id,
+                a.run_id,
                 a.spec,
                 root,
                 workdir,

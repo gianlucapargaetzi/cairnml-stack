@@ -10,7 +10,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from mlops_server.db import utcnow
-from mlops_server.models import Agent, Experiment, Job
+from mlops_server.models import Agent, Job, Run
 from mlops_server.services.audit import record
 
 log = logging.getLogger(__name__)
@@ -29,19 +29,19 @@ def reap_lost_agents(session: Session, now: datetime, timeout_s: int) -> list[st
     ).all()
     reaped = []
     for job in jobs:
-        # Same lock order as set_status: job first, then experiment. A job whose agent
+        # Same lock order as set_status: job first, then run. A job whose agent
         # holds the row is skipped and picked up on the next pass.
         if job.status not in ("assigned", "running"):
             continue
-        experiment = session.get(
-            Experiment, job.experiment_id, with_for_update=True, populate_existing=True
+        run = session.get(
+            Run, job.run_id, with_for_update=True, populate_existing=True
         )
         job.status = "failed"
         job.message = "agent lost contact"
         job.finished_at = now
-        if experiment.status not in ("finished", "failed", "cancelled"):
-            experiment.status = "failed"
-            experiment.finished_at = now
+        if run.status not in ("finished", "failed", "cancelled"):
+            run.status = "failed"
+            run.finished_at = now
         record(session, "reaper", "job.reaped", None, job_id=job.id, agent_id=job.agent_id)
         reaped.append(job.id)
     return reaped

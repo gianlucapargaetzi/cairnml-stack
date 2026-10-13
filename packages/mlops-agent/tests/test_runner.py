@@ -40,7 +40,7 @@ class FakeApi:
     def artifact_url(self, job_id, key):
         return f"http://nas/{key}"
 
-    def post_logs(self, experiment_id, stream, seq, lines):
+    def post_logs(self, run_id, stream, seq, lines):
         self.logs.append((stream, [entry["text"] for entry in lines]))
 
 
@@ -75,7 +75,7 @@ def _assignment(web, sha, **overrides):
         "env": {"USER_VAR": "v"},
         **overrides,
     }
-    return JobAssignment(job_id="job_9", experiment_id="exp_9", spec=JobSpec.model_validate(spec))
+    return JobAssignment(job_id="job_9", run_id="run_9", spec=JobSpec.model_validate(spec))
 
 
 def _runner(tmp_path, api, executor, web, **kw):
@@ -102,7 +102,7 @@ def test_successful_job_pipeline(tmp_path):
         env["MLOPS_RUN_TOKEN"] == "RUN-TOKEN-456"
         and env["MLOPS_SERVER_URL"] == "http://mlops-server:8000"
     )
-    assert env["MLOPS_EXPERIMENT_ID"] == "exp_9" and env["MLOPS_JOB_ID"] == "job_9"
+    assert env["MLOPS_RUN_ID"] == "run_9" and env["MLOPS_JOB_ID"] == "job_9"
     assert env["MLOPS_PARAMS"] == '{"lr": 0.1}' and env["USER_VAR"] == "v"
     assert not settings.paths.work.joinpath("job_9").exists()
 
@@ -217,8 +217,8 @@ def test_inputs_are_downloaded_into_the_workspace(tmp_path):
         web,
         download_fn=lambda url, dest, *a, **k: fetched.append((url, dest.name)),
     )
-    runner.run(_assignment(web, sha, inputs=[{"key": "p/q/exp_1/data.csv", "dest": "in/data.csv"}]))
-    assert fetched == [("http://nas/p/q/exp_1/data.csv", "data.csv")]
+    runner.run(_assignment(web, sha, inputs=[{"key": "p/q/run_1/data.csv", "dest": "in/data.csv"}]))
+    assert fetched == [("http://nas/p/q/run_1/data.csv", "data.csv")]
 
 
 def _http_error(status):

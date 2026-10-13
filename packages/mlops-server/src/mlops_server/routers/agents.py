@@ -59,7 +59,7 @@ def poll(
                 s.commit()
                 return JobAssignment(
                     job_id=job.id,
-                    experiment_id=job.experiment_id,
+                    run_id=job.run_id,
                     spec=JobSpec.model_validate(job.spec),
                 )
             s.commit()

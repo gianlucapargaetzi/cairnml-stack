@@ -130,7 +130,9 @@ class Run(Base):
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
     owner_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
-    experiment_id: Mapped[str | None] = mapped_column(ForeignKey("experiments.id"), nullable=True, index=True)
+    experiment_id: Mapped[str | None] = mapped_column(
+        ForeignKey("experiments.id"), nullable=True, index=True
+    )
     name: Mapped[str] = mapped_column(String(200))
     status: Mapped[str] = mapped_column(String(20), default="created")
     source: Mapped[str] = mapped_column(String(10), default="local")

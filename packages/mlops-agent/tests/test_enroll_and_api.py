@@ -53,8 +53,8 @@ def test_api_full_job_cycle(server, enroll_client, make_project, new_job, agent_
     assert api.run_token(job["id"]).count(".") == 2  # a JWT
     assert api.git_token(job["id"], "org/repo") == "ghs_stub"
     assert api.sts(job["id"]).prefix == "vision/seg/"
-    api.post_logs(job["experiment_id"], "stdout", 0, [{"ts": 1.0, "text": "hi"}])
+    api.post_logs(job["run_id"], "stdout", 0, [{"ts": 1.0, "text": "hi"}])
     assert api.heartbeat([job["id"]]) == []
     api.set_status(job["id"], "finished", exit_code=0)
-    logs = dev.http.get(f"/api/v1/experiments/{job['experiment_id']}/logs").json()
+    logs = dev.http.get(f"/api/v1/runs/{job['run_id']}/logs").json()
     assert logs[0]["lines"][0]["text"] == "hi"

@@ -8,6 +8,6 @@ _sdk_log = _logging.getLogger("mlops")
 _sdk_log.addHandler(_logging.NullHandler())
 _sdk_log.propagate = False
 
-from mlops.experiment import Experiment, ExperimentError, current_experiment, init  # noqa: E402
+from mlops.run import Run, RunError, current_run, init  # noqa: E402
 
-__all__ = ["Experiment", "ExperimentError", "current_experiment", "init", "__version__"]
+__all__ = ["Run", "RunError", "current_run", "init", "__version__"]

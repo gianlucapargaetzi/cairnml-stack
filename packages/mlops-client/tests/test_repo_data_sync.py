@@ -122,7 +122,7 @@ def test_dvc_failure_is_scrubbed(sdk, tmp_path):
     )
 
 
-def _offline_task(tmp_path, monkeypatch, **init_options):
+def _offline_experiment(tmp_path, monkeypatch, **init_options):
     def down(request):
         raise httpx.ConnectError("refused")
 
@@ -135,20 +135,20 @@ def _offline_task(tmp_path, monkeypatch, **init_options):
     try:
         # capture_git=False: the script lives in this (possibly dirty) checkout, and a dirty
         # state would add an uncommitted.patch artifact that the assertions do not expect.
-        experiment = mlops.init(
+        run = mlops.init(
             "vision/seg", "offline-run", {"lr": 0.1}, capture_git=False, **init_options
         )
-        experiment.log_metric("loss", 0.25, 3)
+        run.log_metric("loss", 0.25, 3)
         print("offline line")
-        experiment.upload_artifact("out.txt", obj="saved while offline")
-        experiment.close()
+        run.upload_artifact("out.txt", obj="saved while offline")
+        run.close()
     finally:
         runtime.set_api_override(previous)
-    return experiment
+    return run
 
 
 def test_sync_replays_an_offline_run_exactly_once(sdk, tmp_path, monkeypatch):
-    experiment = _offline_task(tmp_path, monkeypatch)
+    run = _offline_experiment(tmp_path, monkeypatch)
     puts = []
 
     def record(url, source, http=None):
@@ -157,14 +157,14 @@ def test_sync_replays_an_offline_run_exactly_once(sdk, tmp_path, monkeypatch):
 
     synced = sync_all(sdk.api, put=record)
     assert len(synced) == 1
-    exp = sdk.api.get_experiment(synced[0])
+    exp = sdk.api.get_run(synced[0])
     assert (
         exp["name"] == "offline-run"
         and exp["config"] == {"lr": 0.1}
         and exp["status"] == "finished"
     )
     assert (
-        sdk.dev.http.get(f"/api/v1/experiments/{synced[0]}/metrics").json()["loss"][0]["value"]
+        sdk.dev.http.get(f"/api/v1/runs/{synced[0]}/metrics").json()["loss"][0]["value"]
         == 0.25
     )
     texts = [line["text"] for chunk in sdk.api.get_logs(synced[0]) for line in chunk["lines"]]
@@ -173,31 +173,31 @@ def test_sync_replays_an_offline_run_exactly_once(sdk, tmp_path, monkeypatch):
     names = [a["name"] for a in sdk.api.list_artifacts(synced[0])]
     assert names.count("out.txt") == 1
     assert puts.count(b"saved while offline") == 1
-    assert not (spool_root() / experiment.id).exists()
+    assert not (spool_root() / run.id).exists()
     assert sync_all(sdk.api, put=lambda *a, **k: None) == []  # nothing left, nothing duplicated
 
 
 def test_sync_keeps_the_spool_when_the_server_is_still_down(sdk, tmp_path, monkeypatch):
-    experiment = _offline_task(tmp_path, monkeypatch)
+    run = _offline_experiment(tmp_path, monkeypatch)
 
     def down(request):
         raise httpx.ConnectError("refused")
 
     broken = ApiClient(httpx.Client(base_url="http://x", transport=httpx.MockTransport(down)))
     assert sync_all(broken) == []
-    assert (spool_root() / experiment.id / "events.jsonl").exists()
+    assert (spool_root() / run.id / "events.jsonl").exists()
 
 
 def test_sync_completes_a_degraded_online_spool(sdk, tmp_path, monkeypatch):
-    exp = sdk.api.create_experiment("vision/seg", "degraded")
-    spool = Spool(spool_root() / exp["id"], {"experiment_id": exp["id"]})
+    exp = sdk.api.create_run("vision/seg", "degraded")
+    spool = Spool(spool_root() / exp["id"], {"run_id": exp["id"]})
     spool.append("metrics", {"points": [{"name": "loss", "value": 1.0, "step": 0, "ts": 1.0}]})
     assert sync_all(sdk.api) == [exp["id"]]
-    assert "loss" in sdk.dev.http.get(f"/api/v1/experiments/{exp['id']}/metrics").json()
+    assert "loss" in sdk.dev.http.get(f"/api/v1/runs/{exp['id']}/metrics").json()
 
 
 def test_cli_sync_and_repo_init(sdk, stub_github, tmp_path, monkeypatch):
-    _offline_task(tmp_path, monkeypatch)
+    _offline_experiment(tmp_path, monkeypatch)
     monkeypatch.setattr("mlops.transfer.put_file", lambda url, source, http=None: None)
     result = CliRunner().invoke(cli, ["sync"])
     assert result.exit_code == 0 and "synced 1" in result.output
@@ -210,10 +210,10 @@ def test_cli_sync_and_repo_init(sdk, stub_github, tmp_path, monkeypatch):
     assert out.exit_code == 1 and "dvc" in out.output
 
 
-def test_sync_retry_reuses_the_experiment_and_registers_each_artifact_once(
+def test_sync_retry_reuses_the_run_and_registers_each_artifact_once(
     sdk, tmp_path, monkeypatch
 ):
-    _offline_task(tmp_path, monkeypatch)
+    _offline_experiment(tmp_path, monkeypatch)
     failed: list[str] = []
 
     def broken_put(url, source, http=None):
@@ -225,12 +225,12 @@ def test_sync_retry_reuses_the_experiment_and_registers_each_artifact_once(
     assert len(synced) == 1
     names = [a["name"] for a in sdk.api.list_artifacts(synced[0])]
     assert names.count("out.txt") == 1
-    runs = [e for e in sdk.api.list_experiments("vision/seg") if e["name"] == "offline-run"]
+    runs = [e for e in sdk.api.list_runs("vision/seg") if e["name"] == "offline-run"]
     assert [e["id"] for e in runs] == synced
 
 
 def test_artifact_put_failure_never_reports_the_presigned_url(sdk, tmp_path, monkeypatch):
-    _offline_task(tmp_path, monkeypatch)
+    _offline_experiment(tmp_path, monkeypatch)
     urls: list[str] = []
 
     def forbidden(request):
@@ -251,7 +251,7 @@ def test_artifact_put_failure_never_reports_the_presigned_url(sdk, tmp_path, mon
 
 
 def test_a_spool_that_cannot_be_removed_is_reported_not_silently_kept(sdk, tmp_path, monkeypatch):
-    _offline_task(tmp_path, monkeypatch)
+    _offline_experiment(tmp_path, monkeypatch)
 
     def refuse(path, *args, **kwargs):
         raise PermissionError("read-only spool")
@@ -264,13 +264,15 @@ def test_a_spool_that_cannot_be_removed_is_reported_not_silently_kept(sdk, tmp_p
     assert shutil  # the real rmtree is back for the next sync
 
 
-def test_sync_keeps_the_task_of_an_offline_run(sdk, tmp_path, monkeypatch):
-    _offline_task(tmp_path, monkeypatch, task="training", primary_metric="loss", direction="min")
+def test_sync_keeps_the_experiment_of_an_offline_run(sdk, tmp_path, monkeypatch):
+    _offline_experiment(
+        tmp_path, monkeypatch, experiment="training", primary_metric="loss", direction="min"
+    )
     synced = sync_all(sdk.api, put=lambda url, source, http=None: None)
     assert len(synced) == 1
-    assert sdk.api.get_experiment(synced[0])["task"] == "training"
-    tasks = {t["name"]: t for t in sdk.api.list_tasks("vision/seg")}
-    assert tasks["training"]["primary_metric"] == "loss"
+    assert sdk.api.get_run(synced[0])["experiment"] == "training"
+    experiments = {t["name"]: t for t in sdk.api.list_experiments("vision/seg")}
+    assert experiments["training"]["primary_metric"] == "loss"
 
 
 def test_init_repo_reraises_server_errors_other_than_not_installed(

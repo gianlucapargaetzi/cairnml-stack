@@ -1,4 +1,4 @@
-"""Experiment lifecycle for local, offline and job runs."""
+"""Run lifecycle for local, offline and job runs."""
 
 from __future__ import annotations
 
@@ -33,15 +33,15 @@ from mlops.stdio import TeeStream
 from mlops.uplink import Uplink
 
 log = logging.getLogger("mlops")
-_current: Experiment | None = None
+_current: Run | None = None
 _NETWORK = (httpx.TransportError, OSError)
 
 
-class ExperimentError(Exception):
+class RunError(Exception):
     pass
 
 
-def current_experiment() -> Experiment | None:
+def current_run() -> Run | None:
     return _current
 
 
@@ -51,11 +51,11 @@ def _transient(exc: Exception) -> bool:
     return isinstance(exc, _NETWORK)
 
 
-class Experiment:
+class Run:
     def __init__(
         self,
         *,
-        exp_id: str,
+        run_id: str,
         project: str,
         name: str,
         api,
@@ -63,11 +63,11 @@ class Experiment:
         spool: Spool,
         git: GitState | None = None,
     ) -> None:
-        self.id, self.project, self.name, self.mode = exp_id, project, name, mode
+        self.id, self.project, self.name, self.mode = run_id, project, name, mode
         self._api = api if mode != "offline" else None
         self._spool = spool
         self._git = git
-        self._uplink = Uplink(self._api, None if mode == "offline" else exp_id, spool)
+        self._uplink = Uplink(self._api, None if mode == "offline" else run_id, spool)
         self._datasets: list[DatasetRef] = []
         self._overrides: dict = {}
         self._failed = False
@@ -89,12 +89,12 @@ class Experiment:
             self._spill("patch", {"fields": fields})
             return
         try:
-            self._api.patch_experiment(self.id, **fields)
+            self._api.patch_run(self.id, **fields)
         except Exception as exc:
             if _transient(exc):
                 self._spill("patch", {"fields": fields})
             else:
-                log.warning("server rejected experiment update: %s", exc)
+                log.warning("server rejected run update: %s", exc)
 
     # ----- public API -----
     def log_metric(self, name: str, value: float, step: int | None = None) -> None:
@@ -171,24 +171,24 @@ class Experiment:
         self, queue: str = "default", resources: dict | None = None, exit_process: bool = True
     ) -> dict | None:
         """Re-run this script on an agent. In job mode (already on an agent) it returns None."""
-        from mlops.dispatch import dispatch_experiment
+        from mlops.dispatch import dispatch_run
 
         if self.mode == "job":
             return None
         if self.mode == "offline":
-            raise ExperimentError("cannot dispatch while the server is unreachable")
+            raise RunError("cannot dispatch while the server is unreachable")
         self._uplink.flush()
         try:
-            job = dispatch_experiment(self._api, self.id, queue=queue, resources=resources)
+            job = dispatch_run(self._api, self.id, queue=queue, resources=resources)
         except Exception as exc:
             # Close as failed so the run is not recorded as "finished" when the caller
             # catches the error. Re-raise: the caller decides what happens next.
             self._patch(notes=f"dispatch failed: {exc}")
             self.close(status="failed")
             raise
-        self._patch(notes=f"continued remotely as {job['experiment_id']}")
+        self._patch(notes=f"continued remotely as {job['run_id']}")
         self.close(status="cancelled")
-        print(f"dispatched as job {job['id']} (experiment {job['experiment_id']})")
+        print(f"dispatched as job {job['id']} (run {job['run_id']})")
         if exit_process:
             raise SystemExit(0)
         return job
@@ -217,7 +217,7 @@ class Experiment:
         except Exception:
             pass
 
-    def __enter__(self) -> Experiment:
+    def __enter__(self) -> Run:
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
@@ -291,22 +291,22 @@ def init(
     capture_git: bool = True,
     datasets: list[str] | None = None,
     api=None,
-    task: str = "general",
+    experiment: str = "general",
     primary_metric: str | None = None,
     direction: str | None = None,
-) -> Experiment:
-    """Start recording. In a job run the task comes from the experiment record instead."""
+) -> Run:
+    """Start recording. In a job run the experiment comes from the run record instead."""
     global _current
-    token, exp_id = os.environ.get("MLOPS_RUN_TOKEN"), os.environ.get("MLOPS_EXPERIMENT_ID")
-    if token and exp_id:
-        experiment = _init_job(project, name, token, exp_id, capture_args)
+    token, run_id = os.environ.get("MLOPS_RUN_TOKEN"), os.environ.get("MLOPS_RUN_ID")
+    if token and run_id:
+        run = _init_job(project, name, token, run_id, capture_args)
     else:
-        experiment = _init_local(
+        run = _init_local(
             project, name, config, script, capture_stdout, capture_args, capture_git, datasets, api,
-            task, primary_metric, direction,
+            experiment, primary_metric, direction,
         )
-    _current = experiment
-    return experiment
+    _current = run
+    return run
 
 
 def _job_overrides() -> dict:
@@ -322,25 +322,25 @@ def _job_overrides() -> dict:
     return overrides
 
 
-def _init_job(project, name, token, exp_id, capture_args) -> Experiment:
+def _init_job(project, name, token, run_id, capture_args) -> Run:
     api = runtime.make_api(token, os.environ.get("MLOPS_SERVER_URL"))
-    experiment = Experiment(
-        exp_id=exp_id,
+    run = Run(
+        run_id=run_id,
         project=project,
         name=name,
         api=api,
         mode="job",
-        spool=Spool(spool_root() / exp_id, {"experiment_id": exp_id}),
+        spool=Spool(spool_root() / run_id, {"run_id": run_id}),
     )
-    experiment._overrides = _job_overrides()
-    experiment._install_hooks(capture_stdout=False, capture_args=capture_args)
-    return experiment
+    run._overrides = _job_overrides()
+    run._install_hooks(capture_stdout=False, capture_args=capture_args)
+    return run
 
 
 def _init_local(
     project, name, config, script, capture_stdout, capture_args, want_git, datasets, api,
-    task="general", primary_metric=None, direction=None,
-) -> Experiment:
+    experiment="general", primary_metric=None, direction=None,
+) -> Run:
     # NotEnrolled from make_api() is deliberately not guarded: no enrollment is a setup error.
     api = api or runtime.make_api()
     probe = _capture_step("script location", find_script, script)
@@ -348,59 +348,59 @@ def _init_local(
     git = _capture_step("git state", capture_git, start) if want_git else None
     script_info = _capture_step("script location", find_script, script, git)
 
-    mode, exp_id = "local", None
+    mode, run_id = "local", None
     try:
-        exp_id = api.create_experiment(
-            project, name, config or {}, task=task, primary_metric=primary_metric,
+        run_id = api.create_run(
+            project, name, config or {}, experiment=experiment, primary_metric=primary_metric,
             direction=direction,
         )["id"]
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code < 500:
-            raise ExperimentError(
-                f"could not create experiment in project {project!r}: {_error_detail(exc.response)}"
+            raise RunError(
+                f"could not create run in project {project!r}: {_error_detail(exc.response)}"
             ) from None
         mode = "offline"
     except (ValueError, KeyError, TypeError) as exc:  # 2xx with a non-JSON or unexpected body
-        raise ExperimentError(f"unreadable reply creating experiment: {exc}") from None
+        raise RunError(f"unreadable reply creating run: {exc}") from None
     except _NETWORK:
         mode = "offline"
     if mode == "offline":
-        exp_id = f"offline_{uuid.uuid4().hex[:12]}"
+        run_id = f"offline_{uuid.uuid4().hex[:12]}"
         log.warning("server unreachable: running offline, data is spooled (run `mlops sync` later)")
     meta = {
-        "local_id": exp_id,
-        "experiment_id": None if mode == "offline" else exp_id,
+        "local_id": run_id,
+        "run_id": None if mode == "offline" else run_id,
         "project": project,
         "name": name,
         "config": config or {},
-        "task": task,
+        "experiment": experiment,
         "primary_metric": primary_metric,
         "direction": direction,
         "created_at": datetime.now(UTC).isoformat(),
     }
-    experiment = Experiment(
-        exp_id=exp_id,
+    run = Run(
+        run_id=run_id,
         project=project,
         name=name,
         api=api,
         mode=mode,
-        spool=Spool(spool_root() / exp_id, meta),
+        spool=Spool(spool_root() / run_id, meta),
         git=git,
     )
 
-    fields = _reproduction_fields(experiment, git, script_info)
+    fields = _reproduction_fields(run, git, script_info)
     for dataset in datasets or []:
         ref = _capture_step("dataset", resolve_dataset, dataset, git)
         if ref is not None:
-            experiment._datasets.append(ref)
-    if experiment._datasets:
-        fields["datasets"] = [d.model_dump() for d in experiment._datasets]
-    experiment._patch(**fields, status="running")
-    experiment._install_hooks(capture_stdout, capture_args)
-    return experiment
+            run._datasets.append(ref)
+    if run._datasets:
+        fields["datasets"] = [d.model_dump() for d in run._datasets]
+    run._patch(**fields, status="running")
+    run._install_hooks(capture_stdout, capture_args)
+    return run
 
 
-def _reproduction_fields(experiment: Experiment, git: GitState | None, script) -> dict:
+def _reproduction_fields(run: Run, git: GitState | None, script) -> dict:
     fields: dict = {}
     requirements = _capture_step("requirements", capture_requirements)
     if requirements is not None:
@@ -414,24 +414,24 @@ def _reproduction_fields(experiment: Experiment, git: GitState | None, script) -
         fields["platform"] = env["platform"]
         fields["env"] = {"cpu_count": str(env["cpu_count"]), "gpus": ", ".join(env["gpus"])}
     if git is not None:
-        git_fields = _capture_step("git state", _git_fields, experiment, git, script)
+        git_fields = _capture_step("git state", _git_fields, run, git, script)
         if git_fields is not None:
             fields["git"] = git_fields
     if script is not None:
-        script_field = _capture_step("script", _script_field, experiment, script)
+        script_field = _capture_step("script", _script_field, run, script)
         if script_field is not None:
             fields["script"] = script_field
     return fields
 
 
-def _git_fields(experiment: Experiment, git: GitState, script) -> dict:
+def _git_fields(run: Run, git: GitState, script) -> dict:
     patch_key = None
     if git.dirty:
         patch = _capture_step("uncommitted changes", build_patch, git.root)
         if patch is not None:
-            patch_key = experiment.upload_artifact("uncommitted.patch", obj=patch, kind="patch")
+            patch_key = run.upload_artifact("uncommitted.patch", obj=patch, kind="patch")
             if patch_key is None:
-                patch_key = f"{experiment.project}/{experiment.id}/uncommitted.patch"
+                patch_key = f"{run.project}/{run.id}/uncommitted.patch"
     return {
         "repo": git.repo,
         "remote_url": git.remote_url,
@@ -443,8 +443,8 @@ def _git_fields(experiment: Experiment, git: GitState, script) -> dict:
     }
 
 
-def _script_field(experiment: Experiment, script) -> str:
+def _script_field(run: Run, script) -> str:
     if script.in_repo:
         return script.rel
-    experiment.upload_artifact(script.path.name, path=script.path, kind="script")
+    run.upload_artifact(script.path.name, path=script.path, kind="script")
     return script.path.name

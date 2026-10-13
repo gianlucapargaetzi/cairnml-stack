@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from mlops_server.models import Client, Experiment, Job, User, WebSession
+from mlops_server.models import Client, Job, Run, User, WebSession
 from mlops_server.services.audit import record
 from mlops_server.services.directory import Directory, DirectoryError
 
@@ -45,7 +45,7 @@ def disable_user(session: Session, user: User, now: datetime) -> dict:
         client.revoked_at = now
     sessions = _delete_sessions(session, user.id)
     cancelled = stopping = 0
-    # Row locks in the same order as set_status and the reaper: job first, then experiment.
+    # Row locks in the same order as set_status and the reaper: job first, then run.
     jobs = session.scalars(
         select(Job)
         .where(Job.created_by == user.id, Job.status.in_(("queued", "assigned", "running")))
@@ -55,11 +55,11 @@ def disable_user(session: Session, user: User, now: datetime) -> dict:
     for job in jobs:
         if job.status == "queued":
             job.status, job.finished_at, job.message = "cancelled", now, "owner was disabled"
-            experiment = session.get(
-                Experiment, job.experiment_id, with_for_update=True, populate_existing=True
+            run = session.get(
+                Run, job.run_id, with_for_update=True, populate_existing=True
             )
-            if experiment.status not in TERMINAL:
-                experiment.status, experiment.finished_at = "cancelled", now
+            if run.status not in TERMINAL:
+                run.status, run.finished_at = "cancelled", now
             cancelled += 1
         else:
             job.cancel_requested = True

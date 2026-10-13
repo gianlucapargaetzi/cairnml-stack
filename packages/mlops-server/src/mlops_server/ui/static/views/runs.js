@@ -1,5 +1,5 @@
 import { api } from "../api.js";
-import { experimentColumns, refreshError, table } from "../components.js";
+import { runColumns, refreshError, table } from "../components.js";
 import { h } from "../dom.js";
 
 const PAGE = 50;
@@ -8,9 +8,9 @@ const MAX_COMPARE = 10;
 const STATUSES = ["", "running", "queued", "created", "finished", "failed", "cancelled"];
 const SORTS = [["created_at:desc", "newest first"], ["created_at:asc", "oldest first"], ["name:asc", "name A-Z"], ["status:asc", "status"]];
 
-export default async function experiments(root, route, ctx) {
+export default async function runs(root, route, ctx) {
   if (route.parts[1]) {
-    const detail = await import("./experiment.js");
+    const detail = await import("./run.js");
     return detail.default(root, route, ctx);
   }
 
@@ -40,9 +40,9 @@ export default async function experiments(root, route, ctx) {
 
   async function render() {
     const mine = ++renderSeq;
-    const { json: rows, total } = await api.experiments({ ...state, limit: PAGE });
+    const { json: rows, total } = await api.runs({ ...state, limit: PAGE });
     if (mine !== renderSeq) return;
-    const columns = experimentColumns({
+    const columns = runColumns({
       selected,
       onToggle: (id, on) => {
         if (on) selected.add(id); else selected.delete(id);
@@ -61,7 +61,7 @@ export default async function experiments(root, route, ctx) {
         type: "button", disabled: state.offset + PAGE >= total,
         onclick: () => { state.offset += PAGE; refresh(); },
       }, "Next"));
-    ctx.render(() => body.replaceChildren(table(columns, rows, "No experiments match."), pager));
+    ctx.render(() => body.replaceChildren(table(columns, rows, "No runs match."), pager));
     notice.clear();
   }
   const failed = (error) => notice.show(error);
@@ -98,7 +98,7 @@ export default async function experiments(root, route, ctx) {
 
   const control = (label, el) => h("label", { class: "control" }, label, " ", el);
   ctx.render(() => root.replaceChildren(
-    h("h1", {}, "Experiments"),
+    h("h1", {}, "Runs"),
     notice.el,
     h("div", { class: "toolbar" },
       control("Project", projectSelect),

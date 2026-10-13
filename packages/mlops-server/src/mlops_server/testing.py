@@ -50,7 +50,7 @@ class FakeIdp:
         roles: tuple[str, ...] | list[str] = (),
         azp: str = "mlops-cli",
         iss: str | None = None,
-        exp_in: int = 300,
+        run_in: int = 300,
         key=None,
         extra: dict | None = None,
     ) -> str:
@@ -61,7 +61,7 @@ class FakeIdp:
             "preferred_username": username,
             "azp": azp,
             "iat": now,
-            "exp": now + exp_in,
+            "exp": now + run_in,
             "realm_access": {"roles": list(roles)},
             **(extra or {}),
         }

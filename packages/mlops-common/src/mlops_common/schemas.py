@@ -87,7 +87,7 @@ class MemberAdd(BaseModel):
     username: str
 
 
-ExperimentStatus = Literal["created", "queued", "running", "finished", "failed", "cancelled"]
+RunStatus = Literal["created", "queued", "running", "finished", "failed", "cancelled"]
 TERMINAL_STATUSES = {"finished", "failed", "cancelled"}
 
 
@@ -123,54 +123,54 @@ class DatasetRef(BaseModel):
         return None if value is None else _valid_repo(value)
 
 
-TASK_NAME = r"^[a-z0-9][a-z0-9._-]{0,63}$"
-TaskKind = Literal[
+EXPERIMENT_NAME = r"^[a-z0-9][a-z0-9._-]{0,63}$"
+ExperimentKind = Literal[
     "training", "data-preparation", "augmentation", "evaluation", "testing", "compilation",
     "inference", "other",
 ]
 Direction = Literal["min", "max"]
 
 
-class TaskCreate(BaseModel):
+class ExperimentCreate(BaseModel):
     project: str
-    name: str = Field(pattern=TASK_NAME)
-    kind: TaskKind = "other"
+    name: str = Field(pattern=EXPERIMENT_NAME)
+    kind: ExperimentKind = "other"
     description: str | None = Field(default=None, max_length=2000)
     primary_metric: str | None = Field(default=None, max_length=200)
     direction: Direction | None = None
 
 
-class TaskPatch(BaseModel):
-    kind: TaskKind | None = None
+class ExperimentPatch(BaseModel):
+    kind: ExperimentKind | None = None
     description: str | None = Field(default=None, max_length=2000)
     primary_metric: str | None = Field(default=None, max_length=200)
     direction: Direction | None = None
 
 
-class TaskOut(BaseModel):
+class ExperimentOut(BaseModel):
     id: str
     project: str
     name: str
-    kind: TaskKind
+    kind: ExperimentKind
     description: str | None
     primary_metric: str | None
     direction: Direction | None
     created_at: datetime
 
 
-class ExperimentCreate(BaseModel):
+class RunCreate(BaseModel):
     project: str
     name: str = Field(min_length=1, max_length=200)
     config: dict[str, Any] = {}
     source: Literal["local", "job"] = "local"
     parent_id: str | None = None
-    task: str = Field(default="general", pattern=TASK_NAME)
+    experiment: str = Field(default="general", pattern=EXPERIMENT_NAME)
     primary_metric: str | None = Field(default=None, max_length=200)
     direction: Direction | None = None
 
 
-class ExperimentPatch(BaseModel):
-    status: ExperimentStatus | None = None
+class RunPatch(BaseModel):
+    status: RunStatus | None = None
     params: dict[str, Any] | None = None
     config: dict[str, Any] | None = None
     git: GitInfo | None = None
@@ -184,14 +184,14 @@ class ExperimentPatch(BaseModel):
     notes: str | None = None
 
 
-class ExperimentOut(BaseModel):
+class RunOut(BaseModel):
     id: str
     project: str
     name: str
-    status: ExperimentStatus
+    status: RunStatus
     source: str
     owner: str
-    task: str = "general"
+    experiment: str = "general"
     parent_id: str | None
     job_id: str | None
     config: dict[str, Any]
@@ -381,7 +381,7 @@ class JobSpec(BaseModel):
     runtime: JobRuntime
     resources: ResourceRequest = ResourceRequest()
     queue: str = Field(default="default", min_length=1, max_length=100)
-    task: str = Field(default="general", pattern=TASK_NAME)
+    experiment: str = Field(default="general", pattern=EXPERIMENT_NAME)
     params: dict[str, Any] = {}
     env: dict[str, str] = {}
     timeout_s: int | None = Field(default=None, ge=60, le=7 * 86400)
@@ -414,7 +414,7 @@ JobStatus = Literal["queued", "assigned", "running", "finished", "failed", "canc
 
 class JobOut(BaseModel):
     id: str
-    experiment_id: str
+    run_id: str
     status: JobStatus
     queue: str
     agent_id: str | None
@@ -425,7 +425,7 @@ class JobOut(BaseModel):
 
 class JobAssignment(BaseModel):
     job_id: str
-    experiment_id: str
+    run_id: str
     spec: JobSpec
 
 

@@ -16,8 +16,8 @@ function edgePath(e, x, y) {
   return `M ${x1} ${y1} C ${x1} ${y1 + bend}, ${x2} ${y2 - bend}, ${x2} ${y2}`;
 }
 
-// Draws the commit graph into container. data: {commits, branches, default_branch, experiments}
-// where experiments maps a sha to the experiments that ran on it. onSelect({commit, experiments})
+// Draws the commit graph into container. data: {commits, branches, default_branch, runs}
+// where runs maps a sha to the runs that ran on it. onSelect({commit, runs})
 // runs when a commit is clicked or activated with Enter.
 export function renderGraph(container, data, onSelect) {
   const { nodes, edges, laneCount } = layoutGraph(data.commits, data.branches);
@@ -38,7 +38,7 @@ export function renderGraph(container, data, onSelect) {
   }
 
   for (const node of nodes) {
-    const runs = (data.experiments || {})[node.sha] || [];
+    const runs = (data.runs || {})[node.sha] || [];
     const cx = x(node.lane), cy = y(node.row);
     const group = svg("g", { class: "commit", tabindex: 0, "data-sha": node.sha });
     group.append(svg("title", {}, `${node.commit.message}\n${node.commit.author} · ${node.commit.date}`));
@@ -51,9 +51,9 @@ export function renderGraph(container, data, onSelect) {
       cursor += name.length * 7 + 14;
     }
     const message = String(node.commit.message || "").split("\n")[0].slice(0, 70);
-    const count = runs.length ? `  (${runs.length} experiment${runs.length === 1 ? "" : "s"})` : "";
+    const count = runs.length ? `  (${runs.length} run${runs.length === 1 ? "" : "s"})` : "";
     group.append(svg("text", { x: cursor, y: cy + 4, class: "commit-label" }, `${node.sha.slice(0, 8)}  ${message}${count}`));
-    const select = () => onSelect({ commit: node.commit, experiments: runs });
+    const select = () => onSelect({ commit: node.commit, runs: runs });
     group.addEventListener("click", select);
     group.addEventListener("keydown", (ev) => { if (ev.key === "Enter") select(); });
     stage.append(group);

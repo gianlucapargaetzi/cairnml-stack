@@ -8,16 +8,16 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from mlops_server.models import Agent, Experiment, Job, Project, ProjectRepo, Task, User
-from mlops_server.routers.experiments import experiment_out
-from mlops_server.routers.tasks import load_task, task_out
+from mlops_server.models import Agent, Experiment, Job, Project, ProjectRepo, Run, User
+from mlops_server.routers.experiments import experiment_out, load_experiment
+from mlops_server.routers.runs import run_out
 from mlops_server.security.deps import READERS, Principal, get_session, require
 from mlops_server.services import access, resources
-from mlops_server.services.task_stats import last_values, task_stats
+from mlops_server.services.experiment_stats import experiment_stats, last_values
 
 router = APIRouter()
 JOB_WINDOW = 2000  # the overview derives job counts and containers from the newest jobs only
-SUMMARY_WINDOW = 200  # a task summary lists its newest experiments only
+SUMMARY_WINDOW = 200  # a experiment summary lists its newest runs only
 
 
 @router.get("/overview")
@@ -41,26 +41,26 @@ def overview(
         project_id: (count, running, last)
         for project_id, count, running, last in session.execute(
             select(
-                Experiment.project_id,
+                Run.project_id,
                 func.count(),
-                func.count().filter(Experiment.status == "running"),
-                func.max(Experiment.created_at),
+                func.count().filter(Run.status == "running"),
+                func.max(Run.created_at),
             )
-            .where(Experiment.project_id.in_(ids))
-            .group_by(Experiment.project_id)
+            .where(Run.project_id.in_(ids))
+            .group_by(Run.project_id)
         )
     }
     cutoff = datetime.now(UTC) - timedelta(seconds=request.app.state.settings.agent_timeout)
     agents = session.scalars(select(Agent).where(Agent.revoked_at.is_(None))).all()
     recent = session.scalars(
-        select(Experiment)
-        .where(Experiment.project_id.in_(ids))
-        .order_by(Experiment.created_at.desc(), Experiment.id.desc())
+        select(Run)
+        .where(Run.project_id.in_(ids))
+        .order_by(Run.created_at.desc(), Run.id.desc())
         .limit(10)
     )
     return {
         "jobs": jobs,
-        "experiments_running": sum(running for _, running, _ in per_project.values()),
+        "runs_running": sum(running for _, running, _ in per_project.values()),
         "agents": {
             "online": sum(1 for a in agents if a.last_seen and a.last_seen >= cutoff),
             "total": len(agents),
@@ -69,7 +69,7 @@ def overview(
             {
                 "slug": p.slug,
                 "name": p.name,
-                "experiments": per_project.get(p.id, (0, 0, None))[0],
+                "runs": per_project.get(p.id, (0, 0, None))[0],
                 "running": per_project.get(p.id, (0, 0, None))[1],
                 "last_activity": (
                     per_project[p.id][2].isoformat() if p.id in per_project else None
@@ -77,7 +77,7 @@ def overview(
             }
             for p in projects
         ],
-        "recent": [experiment_out(session, e).model_dump(mode="json") for e in recent],
+        "recent": [run_out(session, e).model_dump(mode="json") for e in recent],
     }
 
 
@@ -119,10 +119,10 @@ def project_overview(
     session: Annotated[Session, Depends(get_session)],
 ) -> dict:
     proj = access.ensure_member(session, principal, project)
-    tasks = session.scalars(
-        select(Task).where(Task.project_id == proj.id).order_by(Task.name)
+    experiments = session.scalars(
+        select(Experiment).where(Experiment.project_id == proj.id).order_by(Experiment.name)
     ).all()
-    stats = task_stats(session, tasks)
+    stats = experiment_stats(session, experiments)
     jobs = list(
         session.scalars(
             select(Job)
@@ -132,14 +132,14 @@ def project_overview(
         )
     )
     total, running = session.execute(
-        select(func.count(), func.count().filter(Experiment.status == "running")).where(
-            Experiment.project_id == proj.id
+        select(func.count(), func.count().filter(Run.status == "running")).where(
+            Run.project_id == proj.id
         )
     ).one()
     recent = session.scalars(
-        select(Experiment)
-        .where(Experiment.project_id == proj.id)
-        .order_by(Experiment.created_at.desc(), Experiment.id.desc())
+        select(Run)
+        .where(Run.project_id == proj.id)
+        .order_by(Run.created_at.desc(), Run.id.desc())
         .limit(8)
     )
     repos = session.scalars(
@@ -152,7 +152,7 @@ def project_overview(
             "created_at": proj.created_at.isoformat(),
         },
         "repos": [{"repo": r.repo, "role": r.role} for r in repos],
-        "tasks": [
+        "experiments": [
             {
                 "id": t.id,
                 "name": t.name,
@@ -162,45 +162,45 @@ def project_overview(
                 "direction": t.direction,
                 **stats[t.id],
             }
-            for t in tasks
+            for t in experiments
         ],
         "containers": _containers(jobs),
         "counts": {
-            "experiments": total,
+            "runs": total,
             "running": running,
             "jobs": dict(Counter(job.status for job in jobs)),
         },
-        "recent": [experiment_out(session, e).model_dump(mode="json") for e in recent],
+        "recent": [run_out(session, e).model_dump(mode="json") for e in recent],
     }
 
 
-@router.get("/tasks/{task_id}/summary")
-def task_summary(
-    task_id: str,
+@router.get("/experiments/{experiment_id}/summary")
+def experiment_summary(
+    experiment_id: str,
     principal: Annotated[Principal, Depends(require(*READERS))],
     session: Annotated[Session, Depends(get_session)],
 ) -> dict:
-    task = load_task(session, principal, task_id)
-    stats = task_stats(session, [task])[task.id]
-    experiments = session.scalars(
-        select(Experiment)
-        .where(Experiment.task_id == task.id)
-        .order_by(Experiment.created_at.desc(), Experiment.id.desc())
+    experiment = load_experiment(session, principal, experiment_id)
+    stats = experiment_stats(session, [experiment])[experiment.id]
+    runs = session.scalars(
+        select(Run)
+        .where(Run.experiment_id == experiment.id)
+        .order_by(Run.created_at.desc(), Run.id.desc())
         .limit(SUMMARY_WINDOW)
     ).all()
     values = (
-        last_values(session, [e.id for e in experiments], task.primary_metric)
-        if task.primary_metric
+        last_values(session, [e.id for e in runs], experiment.primary_metric)
+        if experiment.primary_metric
         else {}
     )
-    owner_ids = list({e.owner_id for e in experiments})
+    owner_ids = list({e.owner_id for e in runs})
     owners = (
         {u.id: u.username for u in session.scalars(select(User).where(User.id.in_(owner_ids)))}
         if owner_ids
         else {}
     )
     rows = []
-    for e in experiments:
+    for e in runs:
         git = e.git or {}
         args = (e.params or {}).get("args") or {}
         params = {k: v for k, v in (e.params or {}).items() if k != "args"}
@@ -220,9 +220,9 @@ def task_summary(
             }
         )
     return {
-        "task": task_out(session, task).model_dump(mode="json"),
+        "experiment": experiment_out(session, experiment).model_dump(mode="json"),
         "stats": stats,
-        "experiments": rows,
+        "runs": rows,
     }
 
 

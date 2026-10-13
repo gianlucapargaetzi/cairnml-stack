@@ -1,62 +1,53 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from mlops_common.schemas import (
-    TERMINAL_STATUSES,
-    ExperimentCreate,
-    ExperimentOut,
-    ExperimentPatch,
-)
-from sqlalchemy import func, select
-from sqlalchemy.dialects.postgresql import distinct_on
-from sqlalchemy.orm import Session, object_session
+from fastapi import APIRouter, Depends, HTTPException
+from mlops_common.schemas import ExperimentCreate, ExperimentOut, ExperimentPatch
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from mlops_server.ids import new_id
-from mlops_server.models import Run, MetricPoint, Project, Experiment, User
-from mlops_server.security.deps import READERS, Principal, get_session, require
+from mlops_server.models import Experiment, Project
+from mlops_server.security.deps import READERS, Principal, get_session, require, require_writer
 from mlops_server.services import access
-from mlops_server.services.tasks import DEFAULT_EXPERIMENT, get_or_create_experiment
 
 router = APIRouter()
-any_principal = require("client", "agent", "run")
-read_principal = require("client", "agent", "run", "web")
-# Fields that may be explicitly cleared with null; every other null in a PATCH body is ignored.
-NULLABLE_FIELDS = {"git", "python_version", "platform", "script", "notes"}
 
 
-def run_out(session: Session, run: Run) -> ExperimentOut:
-    project = session.get(Project, run.project_id)
-    owner = session.get(User, run.owner_id)
-    experiment = session.get(Experiment, run.experiment_id) if run.experiment_id else None
+def experiment_out(session: Session, experiment: Experiment) -> ExperimentOut:
     return ExperimentOut(
-        id=run.id, project=project.slug, name=run.name, status=run.status, source=run.source,
-        owner=owner.username, task=experiment.name if experiment else DEFAULT_EXPERIMENT,
-        parent_id=run.parent_id, job_id=run.job_id, config=run.config,
-        params=run.params, git=run.git, datasets=run.datasets, requirements=run.requirements,
-        argv=run.argv, env=run.env, python_version=run.python_version, platform=run.platform,
-        script=run.script, notes=run.notes, created_at=run.created_at,
-        started_at=run.started_at, finished_at=run.finished_at,
+        id=experiment.id, project=session.get(Project, experiment.project_id).slug,
+        name=experiment.name, kind=experiment.kind, description=experiment.description,
+        primary_metric=experiment.primary_metric, direction=experiment.direction,
+        created_at=experiment.created_at,
     )
 
 
-def apply_status(exp: Experiment, status: str) -> None:
-    """Shared by the PATCH endpoint and the job lifecycle (Task 18).
+def load_experiment(session: Session, principal: Principal, experiment_id: str) -> Experiment:
+    experiment = session.get(Experiment, experiment_id)
+    project = session.get(Project, experiment.project_id) if experiment else None
+    if experiment is None or not access.is_member(session, principal, project):
+        raise HTTPException(404, "experiment not found")
+    return experiment
 
-    Locks the row and re-reads it, so concurrent status changes serialise. The caller
-    must commit; the lock is held until then.
-    """
-    object_session(exp).refresh(exp, with_for_update=True)
-    if exp.status in TERMINAL_STATUSES:
-        raise HTTPException(409, f"experiment already {exp.status}")
-    now = datetime.now(UTC)
-    if status == "running" and exp.started_at is None:
-        exp.started_at = now
-    if status in TERMINAL_STATUSES and exp.finished_at is None:
-        exp.finished_at = now
-    exp.status = status
+
+@router.get("/experiments", response_model=list[ExperimentOut])
+def list_experiments(
+    principal: Annotated[Principal, Depends(require(*READERS))],
+    session: Annotated[Session, Depends(get_session)],
+    project: str | None = None,
+):
+    if project:
+        ids = [access.ensure_member(session, principal, project).id]
+    else:
+        projects = session.scalars(select(Project))
+        ids = [p.id for p in projects if access.is_member(session, principal, p)]
+    rows = session.scalars(
+        select(Experiment).where(Experiment.project_id.in_(ids)).order_by(Experiment.name)
+    )
+    return [experiment_out(session, t) for t in rows]
 
 
 @router.post("/experiments", response_model=ExperimentOut)
@@ -66,161 +57,40 @@ def create_experiment(
     session: Annotated[Session, Depends(get_session)],
 ):
     project = access.ensure_member(session, principal, body.project)
-    task = get_or_create_task(
-        session, project.id, body.task, body.primary_metric, body.direction
+    experiment = Experiment(
+        id=new_id("exp"), project_id=project.id, name=body.name, kind=body.kind,
+        description=body.description, primary_metric=body.primary_metric,
+        direction=body.direction,
     )
-    exp = Experiment(
-        id=new_id("exp"), project_id=project.id, owner_id=principal.user_id, name=body.name,
-        source=body.source, parent_id=body.parent_id, config=body.config, task_id=task.id,
-    )
-    session.add(exp)
-    session.commit()
-    return experiment_out(session, exp)
-
-
-SORTS = {"created_at": Experiment.created_at, "name": Experiment.name, "status": Experiment.status}
-MAX_COMPARE, MAX_POINTS = 10, 500
-
-
-def _accessible_project_ids(session: Session, principal: Principal) -> list[str]:
-    projects = session.scalars(select(Project))
-    return [p.id for p in projects if access.is_member(session, principal, p)]
-
-
-@router.get("/experiments", response_model=list[ExperimentOut])
-def list_experiments(
-    response: Response,
-    principal: Annotated[Principal, Depends(require(*READERS))],
-    session: Annotated[Session, Depends(get_session)],
-    project: str | None = None,
-    task: str | None = None,
-    status: str | None = None,
-    q: str | None = None,
-    sort: str = Query("created_at", pattern="^(created_at|name|status)$"),
-    order: str = Query("desc", pattern="^(asc|desc)$"),
-    limit: int = Query(50, ge=1, le=500),
-    offset: int = Query(0, ge=0),
-):
-    ids = _accessible_project_ids(session, principal)
-    if project:
-        ids = [access.ensure_member(session, principal, project).id]
-    query = select(Experiment).where(Experiment.project_id.in_(ids))
-    if task:
-        query = query.join(Task, Task.id == Experiment.task_id).where(Task.name == task)
-    if status:
-        query = query.where(Experiment.status == status)
-    if q:
-        query = query.where(Experiment.name.icontains(q, autoescape=True))
-    total = session.scalar(select(func.count()).select_from(query.subquery()))
-    column = SORTS[sort]
-    query = query.order_by(column.desc() if order == "desc" else column.asc(), Experiment.id)
-    response.headers["X-Total-Count"] = str(total)
-    return [
-        experiment_out(session, e) for e in session.scalars(query.limit(limit).offset(offset))
-    ]
-
-
-def _sample_ranks(count: int) -> list[int]:
-    """1-based ranks of at most MAX_POINTS evenly spaced points, first and last included."""
-    if count <= MAX_POINTS:
-        return list(range(1, count + 1))
-    span = count - 1
-    return sorted({round(i * span / (MAX_POINTS - 1)) + 1 for i in range(MAX_POINTS)})
-
-
-def _series(session: Session, experiment_id: str, name: str, count: int) -> list[list]:
-    rank = func.row_number().over(
-        order_by=(MetricPoint.step, MetricPoint.ts, MetricPoint.id)
-    ).label("rn")
-    inner = (
-        select(MetricPoint.step, MetricPoint.value, rank)
-        .where(MetricPoint.experiment_id == experiment_id, MetricPoint.name == name)
-        .subquery()
-    )
-    query = select(inner.c.step, inner.c.value, inner.c.rn).where(
-        inner.c.rn.in_(_sample_ranks(count))
-    )
-    return [
-        [step if step is not None else rn, value]
-        for step, value, rn in session.execute(query.order_by(inner.c.rn))
-    ]
-
-
-@router.get("/experiments/compare")
-def compare(
-    ids: str,
-    principal: Annotated[Principal, Depends(require(*READERS))],
-    session: Annotated[Session, Depends(get_session)],
-):
-    wanted = list(dict.fromkeys(i for i in ids.split(",") if i))
-    if not 2 <= len(wanted) <= MAX_COMPARE:
-        raise HTTPException(422, f"compare between 2 and {MAX_COMPARE} experiments")
-    experiments = [access.load_experiment(session, principal, i, False) for i in wanted]
-    out = []
-    for exp in experiments:
-        stats = session.execute(
-            select(
-                MetricPoint.name, func.count(), func.min(MetricPoint.value),
-                func.max(MetricPoint.value),
-            )
-            .where(MetricPoint.experiment_id == exp.id)
-            .group_by(MetricPoint.name)
-        ).all()
-        last = {
-            row.name: row.value
-            for row in session.execute(
-                select(MetricPoint.name, MetricPoint.value)
-                .where(MetricPoint.experiment_id == exp.id)
-                .ext(distinct_on(MetricPoint.name))
-                .order_by(
-                    MetricPoint.name, MetricPoint.step.desc().nulls_last(), MetricPoint.ts.desc()
-                )
-            )
-        }
-        metrics = {
-            name: {
-                "count": count, "min": low, "max": high, "last": last[name],
-                "series": _series(session, exp.id, name, count),
-            }
-            for name, count, low, high in stats
-        }
-        out.append({**experiment_out(session, exp).model_dump(mode="json"), "metrics": metrics})
-    return {"experiments": out}
+    session.add(experiment)
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(409, "experiment already exists") from None
+    return experiment_out(session, experiment)
 
 
 @router.get("/experiments/{experiment_id}", response_model=ExperimentOut)
 def get_experiment(
     experiment_id: str,
-    principal: Annotated[Principal, Depends(read_principal)],
+    principal: Annotated[Principal, Depends(require(*READERS))],
     session: Annotated[Session, Depends(get_session)],
 ):
-    return experiment_out(session, access.load_experiment(session, principal, experiment_id, False))
+    return experiment_out(session, load_experiment(session, principal, experiment_id))
 
 
 @router.patch("/experiments/{experiment_id}", response_model=ExperimentOut)
 def patch_experiment(
     experiment_id: str,
     body: ExperimentPatch,
-    principal: Annotated[Principal, Depends(any_principal)],
+    principal: Annotated[Principal, Depends(require_writer("client"))],
     session: Annotated[Session, Depends(get_session)],
 ):
-    exp = access.load_experiment(session, principal, experiment_id, True)
-    fields = {
-        name: value
-        for name, value in body.model_dump(exclude_unset=True).items()
-        if value is not None or name in NULLABLE_FIELDS
-    }
-    if "status" in fields:
-        if principal.kind != "client":
-            raise HTTPException(403, "only clients may set the status directly")
-        if exp.job_id is not None:
-            # The job is authoritative: a client status write here could block its agent's
-            # terminal report (apply_status 409s on terminal experiments).
-            raise HTTPException(403, "status of a job experiment is controlled by its job")
-        apply_status(exp, fields.pop("status"))
-    if "params" in fields:
-        exp.params = {**exp.params, **fields.pop("params")}
-    for name, value in fields.items():
-        setattr(exp, name, value)
+    experiment = load_experiment(session, principal, experiment_id)
+    for name, value in body.model_dump(exclude_unset=True).items():
+        if name == "kind" and value is None:
+            continue  # the kind is required; an explicit null leaves it as it is
+        setattr(experiment, name, value)
     session.commit()
-    return experiment_out(session, exp)
+    return experiment_out(session, experiment)

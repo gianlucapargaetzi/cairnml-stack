@@ -14,12 +14,12 @@ SCRIPT = '''
 import mlops, sys
 name = sys.argv[1]
 lr = float(sys.argv[2])
-experiment = mlops.init("e2e/demo", name, {"lr": lr})
+run = mlops.init("e2e/demo", name, {"lr": lr})
 for step in range(5):
-    experiment.log_metric("loss", lr * (5 - step), step)
+    run.log_metric("loss", lr * (5 - step), step)
 print("dashboard line one")
 print("<script>window.__xss = 1</script> in a log line", file=sys.stderr)
-experiment.upload_artifact("note.txt", obj="hello")
+run.upload_artifact("note.txt", obj="hello")
 '''
 
 
@@ -33,7 +33,7 @@ def runs(dev, project, tmp_path_factory):
         result = dev.python(script, name, lr, cwd=folder)
         assert result.returncode == 0, result.stderr
     api = dev.api()
-    found = {e["name"]: e["id"] for e in api.list_experiments("e2e/demo", limit=200)}
+    found = {e["name"]: e["id"] for e in api.list_runs("e2e/demo", limit=200)}
     return found
 
 
@@ -54,9 +54,9 @@ def test_unauthenticated_visitors_are_sent_to_the_login(page, direct_grants):
     assert page.locator("#username").count() == 1
 
 
-def test_experiment_list_filters_and_detail_page(logged_in, runs):
+def test_run_list_filters_and_detail_page(logged_in, runs):
     page = logged_in
-    page.goto(BASE + "#/experiments?project=e2e%2Fdemo")
+    page.goto(BASE + "#/runs?project=e2e%2Fdemo")
     expect(page.get_by_role("link", name="dash-a")).to_be_visible()
     page.get_by_placeholder("name contains...").fill("dash-b")
     expect(page.get_by_role("link", name="dash-a")).to_have_count(0)
@@ -70,7 +70,7 @@ def test_experiment_list_filters_and_detail_page(logged_in, runs):
 
 def test_data_from_runs_is_rendered_as_text_never_as_html(logged_in, runs):
     page = logged_in
-    page.goto(BASE + "#/experiments?project=e2e%2Fdemo")
+    page.goto(BASE + "#/runs?project=e2e%2Fdemo")
     expect(page.get_by_text("<img src=x onerror=window.__xss=1>").first).to_be_visible()
     page.get_by_role("link", name="<img src=x onerror=window.__xss=1>").click()
     expect(page.locator("pre.log[aria-label='logs']")).to_contain_text(
@@ -82,11 +82,11 @@ def test_data_from_runs_is_rendered_as_text_never_as_html(logged_in, runs):
 
 def test_comparing_runs_shows_differences(logged_in, runs):
     page = logged_in
-    page.goto(BASE + "#/experiments?project=e2e%2Fdemo")
+    page.goto(BASE + "#/runs?project=e2e%2Fdemo")
     page.get_by_label("select dash-a").check()
     page.get_by_label("select dash-b").check()
     page.get_by_role("button", name=re.compile("Compare selected")).click()
-    expect(page.get_by_role("heading", name="Compare experiments")).to_be_visible()
+    expect(page.get_by_role("heading", name="Compare runs")).to_be_visible()
     expect(page.locator("canvas[aria-label='compare loss']")).to_be_visible()
     expect(page.locator("tr.differs th", has_text="lr")).to_be_visible()
     expect(page.locator("td.best").first).to_be_visible()

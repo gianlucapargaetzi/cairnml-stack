@@ -25,7 +25,7 @@ def _ctx(tmp_path, spec_extra=None, settings=None):
     root.mkdir()
     return RunContext(
         "job_2",
-        "exp_2",
+        "run_2",
         spec,
         root,
         root,

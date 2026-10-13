@@ -87,9 +87,9 @@ class AgentApi:
         return self._post(f"/api/v1/jobs/{job_id}/artifact-url", {"key": key}).json()["url"]
 
     def post_logs(
-        self, experiment_id: str, stream: str, seq: int, lines: list[dict[str, Any]]
+        self, run_id: str, stream: str, seq: int, lines: list[dict[str, Any]]
     ) -> None:
         self._post(
-            f"/api/v1/experiments/{experiment_id}/logs",
+            f"/api/v1/runs/{run_id}/logs",
             {"stream": stream, "seq": seq, "lines": lines},
         )

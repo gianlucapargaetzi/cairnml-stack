@@ -7,7 +7,7 @@ def _setup(enroll_client, make_project):
     return dev
 
 
-def test_dispatch_creates_job_and_experiment(
+def test_dispatch_creates_job_and_run(
     server, enroll_client, make_project, new_job
 ):
     dev = _setup(enroll_client, make_project)
@@ -16,7 +16,7 @@ def test_dispatch_creates_job_and_experiment(
         resources={"cpu": 4, "memory_gb": 8, "gpu": 1, "labels": ["a100"]},
     )
     assert job["status"] == "queued" and job["queue"] == "default"
-    exp = dev.http.get(f"/api/v1/experiments/{job['experiment_id']}").json()
+    exp = dev.http.get(f"/api/v1/runs/{job['run_id']}").json()
     assert exp["source"] == "job" and exp["status"] == "queued" and exp["job_id"] == job["id"]
     assert exp["git"]["commit"] == "a" * 40 and exp["params"] == {"lr": 0.1}
     assert exp["python_version"] == "3.11" and exp["argv"] == ["python", "train.py"]
@@ -71,7 +71,7 @@ def test_referenced_artifacts_must_exist_and_belong_to_project(
     server, enroll_client, make_project, stub_github
 ):
     dev = _setup(enroll_client, make_project)
-    created = dev.http.post("/api/v1/experiments", json={"project": "vision/seg", "name": "local"})
+    created = dev.http.post("/api/v1/runs", json={"project": "vision/seg", "name": "local"})
     exp = created.json()["id"]
     key = f"vision/seg/{exp}/uncommitted.patch"
     stub_github.commits.add(("org/repo", "a" * 40))
@@ -79,7 +79,7 @@ def test_referenced_artifacts_must_exist_and_belong_to_project(
             "code": {"repo": "org/repo", "commit": "a" * 40, "patch_key": key},
             "runtime": {"type": "python", "command": ["python", "t.py"]}}
     assert dev.http.post("/api/v1/jobs", json=spec).status_code == 422  # not registered yet
-    dev.http.post(f"/api/v1/experiments/{exp}/artifacts",
+    dev.http.post(f"/api/v1/runs/{exp}/artifacts",
                   json={"name": "uncommitted.patch", "key": key, "kind": "patch"})
     assert dev.http.post("/api/v1/jobs", json=spec).status_code == 200
     spec["code"]["patch_key"] = "other/project/x/uncommitted.patch"

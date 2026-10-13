@@ -7,12 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from mlops_server.models import Experiment, Project, ProjectRepo, Task
+from mlops_server.models import Experiment, Project, ProjectRepo, Run
 from mlops_server.security.deps import READERS, Principal, get_session, require
 from mlops_server.services import access
 from mlops_server.services.datasets import catalog, dataset_detail
+from mlops_server.services.experiments import DEFAULT_EXPERIMENT
 from mlops_server.services.github import GitHubError, RepoNotAccessible, valid_repo
-from mlops_server.services.tasks import DEFAULT_TASK
 
 router = APIRouter()
 _SAFE = re.compile(r"[A-Za-z0-9._/-]{1,255}")
@@ -91,25 +91,25 @@ def datasets(
 
 def _used_by(session: Session, proj: Project, repo: str, path: str) -> dict:
     query = (
-        select(Experiment, Task.name)
-        .outerjoin(Task, Task.id == Experiment.task_id)
-        .where(Experiment.project_id == proj.id)
-        .order_by(Experiment.created_at.desc())
+        select(Run, Experiment.name)
+        .outerjoin(Experiment, Experiment.id == Run.experiment_id)
+        .where(Run.project_id == proj.id)
+        .order_by(Run.created_at.desc())
         .limit(USED_BY_SCAN)
     )
     users = []
-    for exp, task_name in session.execute(query):
+    for exp, experiment_name in session.execute(query):
         if any(d.get("path") == path and d.get("repo") in (None, repo) for d in exp.datasets or []):
             users.append(
                 {
                     "id": exp.id,
                     "name": exp.name,
                     "status": exp.status,
-                    "task": task_name or DEFAULT_TASK,
+                    "experiment": experiment_name or DEFAULT_EXPERIMENT,
                     "created_at": exp.created_at.isoformat(),
                 }
             )
-    return {"count": len(users), "experiments": users[:USED_BY_LIMIT]}
+    return {"count": len(users), "runs": users[:USED_BY_LIMIT]}
 
 
 @router.get("/datasets/detail")

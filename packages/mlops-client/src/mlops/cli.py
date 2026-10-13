@@ -16,7 +16,7 @@ from mlops import runtime
 from mlops.config import NotEnrolled
 from mlops.data import dvc_command
 from mlops.dataset_card import check_dataset_path, parse_dvc_file, printable, write_card
-from mlops.dispatch import DispatchError, dispatch_experiment, server_detail
+from mlops.dispatch import DispatchError, dispatch_run, server_detail
 from mlops.enroll import enroll as do_enroll
 from mlops.enroll import whoami as do_whoami
 from mlops.idp import LoginFailed
@@ -27,8 +27,8 @@ app = typer.Typer(help="mlops client", no_args_is_help=True)
 job_app = typer.Typer(help="inspect and cancel jobs", no_args_is_help=True)
 repo_app = typer.Typer(help="project repository setup", no_args_is_help=True)
 data_app = typer.Typer(help="DVC data helpers using temporary credentials", no_args_is_help=True)
-task_app = typer.Typer(
-    help="tasks of a project (training, augmentation, ...)", no_args_is_help=True
+experiment_app = typer.Typer(
+    help="experiments of a project (training, augmentation, ...)", no_args_is_help=True
 )
 app.add_typer(job_app, name="job")
 app.add_typer(repo_app, name="repo")
@@ -39,7 +39,7 @@ dataset_app = typer.Typer(
 card_app = typer.Typer(
     help="dataset cards: Markdown with YAML front matter, stored in Git", no_args_is_help=True
 )
-app.add_typer(task_app, name="task")
+app.add_typer(experiment_app, name="experiment")
 app.add_typer(dataset_app, name="dataset")
 dataset_app.add_typer(card_app, name="card")
 
@@ -113,7 +113,7 @@ def _remote(api) -> Iterator[None]:
 
 @app.command()
 def dispatch(
-    experiment_id: str = typer.Argument(None, help="Experiment to re-run on an agent"),
+    run_id: str = typer.Argument(None, help="Run to re-run on an agent"),
     queue: str = typer.Option("default", help="Queue to submit to"),
     cpu: int = typer.Option(None, help="CPU cores to request"),
     memory_gb: float = typer.Option(None, help="Memory in GB to request"),
@@ -121,7 +121,7 @@ def dispatch(
     label: list[str] | None = typer.Option(None, help="Agent label the job needs (repeatable)"),  # noqa: B008
     file: Path | None = typer.Option(None, help="Dispatch an explicit job spec (YAML) instead"),  # noqa: B008
 ) -> None:
-    """Run a recorded experiment, or a job spec file, on an agent."""
+    """Run a recorded run, or a job spec file, on an agent."""
     api = _api()
     with _remote(api):
         try:
@@ -131,29 +131,29 @@ def dispatch(
                 except (OSError, yaml.YAMLError) as exc:
                     _fail(f"cannot read job spec {file}: {exc}")
                 job = api.create_job(spec)
-            elif experiment_id:
+            elif run_id:
                 requested = {"cpu": cpu, "memory_gb": memory_gb, "gpu": gpu}
                 resources = {k: v for k, v in requested.items() if v is not None}
                 if label:
                     resources["labels"] = label
-                job = dispatch_experiment(api, experiment_id, queue=queue, resources=resources)
+                job = dispatch_run(api, run_id, queue=queue, resources=resources)
             else:
-                _fail("give an experiment id or --file")
+                _fail("give an run id or --file")
         except DispatchError as exc:
             _fail(str(exc))
-    typer.echo(f"dispatched {job['id']} (experiment {job['experiment_id']}) status={job['status']}")
+    typer.echo(f"dispatched {job['id']} (run {job['run_id']}) status={job['status']}")
 
 
 @app.command("ls")
-def list_experiments(
+def list_runs(
     project: str = typer.Option(None, help="Only this project"),
     status: str = typer.Option(None, help="Only this status"),
 ) -> None:
-    """List recent experiments."""
+    """List recent runs."""
     api = _api()
     with _remote(api):
-        experiments = api.list_experiments(project, status)
-    for exp in experiments:
+        runs = api.list_runs(project, status)
+    for exp in runs:
         typer.echo(f"{exp['id']}  {exp['status']:<9} {exp['project']:<20} {exp['name']}")
 
 
@@ -216,27 +216,27 @@ def job_reschedule(
             changed = {"cpu": cpu, "memory_gb": memory_gb, "gpu": gpu}
             overrides["resources"] = {**base, **{k: v for k, v in changed.items() if v is not None}}
         job = api.reschedule_job(job_id, overrides)
-    typer.echo(f"queued {job['id']} (experiment {job['experiment_id']}) copied from {job_id}")
+    typer.echo(f"queued {job['id']} (run {job['run_id']}) copied from {job_id}")
 
 
 @app.command()
 def logs(
-    experiment_id: str,
+    run_id: str,
     follow: bool = typer.Option(False, "--follow", "-f", help="Keep printing until the run ends"),
 ) -> None:
-    """Print the captured stdout and stderr of an experiment."""
+    """Print the captured stdout and stderr of an run."""
     api = _api()
     seen: dict[str, int] = {}
     with _remote(api):
         while True:
-            for chunk in api.get_logs(experiment_id):
+            for chunk in api.get_logs(run_id):
                 if chunk["seq"] > seen.get(chunk["stream"], -1):
                     seen[chunk["stream"]] = chunk["seq"]
                     for line in chunk["lines"]:
                         typer.echo(line["text"])
             if not follow:
                 return
-            if api.get_experiment(experiment_id)["status"] in TERMINAL_STATUSES:
+            if api.get_run(run_id)["status"] in TERMINAL_STATUSES:
                 return
             time.sleep(2)
 
@@ -306,34 +306,36 @@ def sync() -> None:
         synced = sync_all(api, failed=failed)
     for failure in failed:
         typer.echo(f"error: {failure}", err=True)
-    typer.echo(f"synced {len(synced)} experiment(s)")
+    typer.echo(f"synced {len(synced)} run(s)")
     if failed:
         _fail(f"{len(failed)} run(s) not synced; their spool is kept, run `mlops sync` again")
 
 
-@task_app.command("ls")
-def task_ls(project: str = typer.Option(None, help="Only this project")) -> None:  # noqa: B008
-    """List tasks and their primary metric."""
+@experiment_app.command("ls")
+def experiment_ls(project: str = typer.Option(None, help="Only this project")) -> None:  # noqa: B008
+    """List experiments and their primary metric."""
     api = _api()
     with _remote(api):
-        tasks = api.list_tasks(project)
-    for task in tasks:
-        metric = (
-            f"{task['primary_metric']} ({task['direction']})" if task["primary_metric"] else "-"
+        experiments = api.list_experiments(project)
+    for experiment in experiments:
+        primary = experiment["primary_metric"]
+        metric = f"{primary} ({experiment['direction']})" if primary else "-"
+        typer.echo(
+            f"{experiment['project']:<24} {experiment['name']:<20} {experiment['kind']:<16} "
+            f"metric={metric}"
         )
-        typer.echo(f"{task['project']:<24} {task['name']:<20} {task['kind']:<16} metric={metric}")
 
 
-@task_app.command("set")
-def task_set(
+@experiment_app.command("set")
+def experiment_set(
     project: str = typer.Argument(..., help="Project slug"),
-    name: str = typer.Argument(..., help="Task name"),
+    name: str = typer.Argument(..., help="Experiment name"),
     metric: str = typer.Option(None, help="Primary metric"),  # noqa: B008
     direction: str = typer.Option(None, help="min or max"),  # noqa: B008
-    kind: str = typer.Option(None, help="Task kind"),  # noqa: B008
+    kind: str = typer.Option(None, help="Experiment kind"),  # noqa: B008
     description: str = typer.Option(None, help="Description"),  # noqa: B008
 ) -> None:
-    """Change a task's metric, direction, kind or description."""
+    """Change a experiment's metric, direction, kind or description."""
     api = _api()
     fields = {
         k: v for k, v in {
@@ -342,10 +344,10 @@ def task_set(
         }.items() if v is not None
     }
     with _remote(api):
-        matches = [t for t in api.list_tasks(project) if t["name"] == name]
+        matches = [t for t in api.list_experiments(project) if t["name"] == name]
         if not matches:
-            _fail(f"no task {name!r} in project {project}")
-        api.patch_task(matches[0]["id"], **fields)
+            _fail(f"no experiment {name!r} in project {project}")
+        api.patch_experiment(matches[0]["id"], **fields)
     typer.echo(f"updated {project}/{name}")
 
 
@@ -370,7 +372,7 @@ def dataset_show(
     project: str = typer.Option(..., help="Project slug"),
     repo: str = typer.Option(None, help="Repository (needed when the path is in several)"),  # noqa: B008
 ) -> None:
-    """Show a dataset's card, DVC hash and experiments that used it."""
+    """Show a dataset's card, DVC hash and runs that used it."""
     api = _api()
     with _remote(api):
         repo = repo or next(
@@ -384,7 +386,7 @@ def dataset_show(
     title = printable(card.get("title") or path)
     typer.echo(f"{title} ({printable(card.get('type', '-'))}, license {printable(license_name)})")
     used = detail["used_by"]["count"]
-    typer.echo(f"hash {printable(detail['dvc']['dvc_hash'])}  used by {used} experiment(s)")
+    typer.echo(f"hash {printable(detail['dvc']['dvc_hash'])}  used by {used} run(s)")
     typer.echo(printable(card.get("body") or f"No card yet: run `mlops dataset card init {path}`."))
 
 

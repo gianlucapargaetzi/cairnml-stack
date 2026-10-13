@@ -28,7 +28,7 @@ def _ctx(tmp_path, runtime=None, resources=None, settings=None, workdir="."):
     (root / workdir).mkdir(parents=True, exist_ok=True)
     ctx = RunContext(
         "job_1",
-        "exp_1",
+        "run_1",
         spec,
         root,
         (root / workdir).resolve(),

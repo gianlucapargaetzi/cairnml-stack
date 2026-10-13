@@ -38,7 +38,7 @@ def _ctx(tmp_path, file="compose.yaml"):
     out, err = [], []
     ctx = RunContext(
         "job_3",
-        "exp_3",
+        "run_3",
         spec,
         root,
         root,

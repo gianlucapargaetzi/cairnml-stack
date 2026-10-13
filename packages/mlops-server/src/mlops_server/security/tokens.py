@@ -23,7 +23,7 @@ class TokenClaims:
     uid: str | None
     exp: int
     jti: str
-    experiment_id: str | None
+    run_id: str | None
     job_id: str | None
 
 
@@ -39,7 +39,7 @@ class TokenService:
         sub: str,
         kind: str,
         uid: str | None = None,
-        experiment_id: str | None = None,
+        run_id: str | None = None,
         job_id: str | None = None,
         ttl: int | None = None,
     ) -> tuple[str, int]:
@@ -57,8 +57,8 @@ class TokenService:
         }
         if uid:
             claims["uid"] = uid
-        if experiment_id:
-            claims["exp_id"] = experiment_id
+        if run_id:
+            claims["run_id"] = run_id
         if job_id:
             claims["job_id"] = job_id
         return jwt.encode(claims, self._key, algorithm="EdDSA"), lifetime
@@ -82,6 +82,6 @@ class TokenService:
             uid=claims.get("uid"),
             exp=claims["exp"],
             jti=claims["jti"],
-            experiment_id=claims.get("exp_id"),
+            run_id=claims.get("run_id"),
             job_id=claims.get("job_id"),
         )

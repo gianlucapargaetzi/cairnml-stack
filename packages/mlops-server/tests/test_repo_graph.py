@@ -48,23 +48,23 @@ def test_graph_has_branches_commits_and_parents(lab):
     )
 
 
-def test_experiments_are_attached_to_the_commits_they_ran_on(lab):
+def test_runs_are_attached_to_the_commits_they_ran_on(lab):
     http = lab["dev"].http
     exp = http.post(
-        "/api/v1/experiments", json={"project": "vision/seg", "name": "e1", "task": "training"}
+        "/api/v1/runs", json={"project": "vision/seg", "name": "e1", "experiment": "training"}
     ).json()
     http.patch(
-        f"/api/v1/experiments/{exp['id']}",
+        f"/api/v1/runs/{exp['id']}",
         json={"git": {"repo": "org/code", "commit": lab["sha"](3), "dirty": False}},
     )
-    other = http.post("/api/v1/experiments", json={"project": "vision/seg", "name": "e2"}).json()
+    other = http.post("/api/v1/runs", json={"project": "vision/seg", "name": "e2"}).json()
     http.patch(
-        f"/api/v1/experiments/{other['id']}",
+        f"/api/v1/runs/{other['id']}",
         json={"git": {"repo": "someone/else", "commit": lab["sha"](3)}},
     )
-    runs = _graph(lab["dev"]).json()["experiments"]
+    runs = _graph(lab["dev"]).json()["runs"]
     assert [e["name"] for e in runs[lab["sha"](3)]] == ["e1"] and runs[lab["sha"](3)][0][
-        "task"
+        "experiment"
     ] == "training"
     assert lab["sha"](4) not in runs
 

@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from mlops_server.db import utcnow
-from mlops_server.models import Agent, Experiment, Job
+from mlops_server.models import Agent, Job, Run
 from mlops_server.services.reaper import reap_lost_agents
 
 
@@ -33,7 +33,7 @@ def test_job_of_a_silent_agent_is_failed_and_resources_freed(
     with app.state.session_factory() as s:
         assert s.get(Job, job["id"]).status == "failed"
         assert s.get(Job, job["id"]).message == "agent lost contact"
-        assert s.get(Experiment, job["experiment_id"]).status == "failed"
+        assert s.get(Run, job["run_id"]).status == "failed"
     new = new_job(dev.http, resources={"cpu": 2})
     assert agent.http.post("/api/v1/agents/poll", json={"wait_s": 0}).json()["job_id"] == new["id"]
 

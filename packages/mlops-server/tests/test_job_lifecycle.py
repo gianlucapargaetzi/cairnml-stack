@@ -19,14 +19,14 @@ def _status(agent, job, status, **extra):
     return agent.http.post(f"/api/v1/jobs/{job['id']}/status", json={"status": status, **extra})
 
 
-def test_status_transitions_update_the_experiment(server, make_agent, dev, new_job):
+def test_status_transitions_update_the_run(server, make_agent, dev, new_job):
     agent, job = _assigned(dev, make_agent, new_job)
     assert _status(agent, job, "running").json()["status"] == "running"
-    exp = dev.http.get(f"/api/v1/experiments/{job['experiment_id']}").json()
+    exp = dev.http.get(f"/api/v1/runs/{job['run_id']}").json()
     assert exp["status"] == "running" and exp["started_at"]
     done = _status(agent, job, "finished", exit_code=0).json()
     assert done["status"] == "finished" and done["exit_code"] == 0
-    final = dev.http.get(f"/api/v1/experiments/{job['experiment_id']}").json()
+    final = dev.http.get(f"/api/v1/runs/{job['run_id']}").json()
     assert final["status"] == "finished"
 
 
@@ -47,21 +47,21 @@ def test_other_agents_cannot_touch_the_job(server, make_agent, dev, new_job):
         assert r.status_code == 404, path
 
 
-def test_run_token_is_scoped_to_its_experiment(server, make_agent, dev, new_job, app):
+def test_run_token_is_scoped_to_its_run(server, make_agent, dev, new_job, app):
     agent, job = _assigned(dev, make_agent, new_job)
     _status(agent, job, "running")
     token = agent.http.post(f"/api/v1/jobs/{job['id']}/run-token").json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
     me = server.get("/api/v1/me", headers=headers).json()
     assert me["kind"] == "run"
-    exp = job["experiment_id"]
-    ok = server.post(f"/api/v1/experiments/{exp}/metrics", headers=headers,
+    exp = job["run_id"]
+    ok = server.post(f"/api/v1/runs/{exp}/metrics", headers=headers,
                      json={"points": [{"name": "x", "value": 1.0, "ts": 1.0}]})
     assert ok.status_code == 200
     other = dev.http.post(
-        "/api/v1/experiments", json={"project": "vision/seg", "name": "other"}
+        "/api/v1/runs", json={"project": "vision/seg", "name": "other"}
     ).json()["id"]
-    denied = server.post(f"/api/v1/experiments/{other}/metrics", headers=headers,
+    denied = server.post(f"/api/v1/runs/{other}/metrics", headers=headers,
                          json={"points": [{"name": "x", "value": 1.0, "ts": 1.0}]})
     assert denied.status_code == 404
     created = server.post("/api/v1/projects", headers=headers, json={"slug": "a", "name": "a"})
@@ -88,11 +88,11 @@ def test_sts_is_read_only_for_the_job_project(server, make_agent, dev, new_job, 
 
 def test_artifact_url_only_for_spec_keys(server, make_agent, dev, new_job, stub_github):
     exp = dev.http.post(
-        "/api/v1/experiments", json={"project": "vision/seg", "name": "l"}
+        "/api/v1/runs", json={"project": "vision/seg", "name": "l"}
     ).json()["id"]
     key = f"vision/seg/{exp}/uncommitted.patch"
     dev.http.post(
-        f"/api/v1/experiments/{exp}/artifacts",
+        f"/api/v1/runs/{exp}/artifacts",
         json={"name": "uncommitted.patch", "key": key, "kind": "patch"},
     )
     agent = make_agent()
@@ -114,7 +114,7 @@ def test_cancel_queued_and_running(server, make_agent, dev, new_job, app):
     queued = new_job(dev.http)
     cancelled = dev.http.post(f"/api/v1/jobs/{queued['id']}/cancel").json()
     assert cancelled["status"] == "cancelled"
-    exp = dev.http.get(f"/api/v1/experiments/{queued['experiment_id']}").json()
+    exp = dev.http.get(f"/api/v1/runs/{queued['run_id']}").json()
     assert exp["status"] == "cancelled"
     assert dev.http.post(f"/api/v1/jobs/{queued['id']}/cancel").status_code == 409
 
@@ -134,14 +134,14 @@ def test_non_members_cannot_see_or_cancel_jobs(server, make_agent, dev, new_job,
     assert eve.http.post(f"/api/v1/jobs/{job['id']}/cancel").status_code == 404
 
 
-def test_client_cannot_set_status_of_a_job_experiment(server, make_agent, dev, new_job):
+def test_client_cannot_set_status_of_a_job_run(server, make_agent, dev, new_job):
     agent, job = _assigned(dev, make_agent, new_job)
     _status(agent, job, "running")
-    exp_id = job["experiment_id"]
+    run_id = job["run_id"]
     for status in ("finished", "cancelled"):
-        r = dev.http.patch(f"/api/v1/experiments/{exp_id}", json={"status": status})
+        r = dev.http.patch(f"/api/v1/runs/{run_id}", json={"status": status})
         assert r.status_code == 403
-        assert r.json()["detail"] == "status of a job experiment is controlled by its job"
+        assert r.json()["detail"] == "status of a job run is controlled by its job"
     assert dev.http.get(f"/api/v1/jobs/{job['id']}").json()["status"] == "running"
     assert _status(agent, job, "finished", exit_code=0).status_code == 200
 

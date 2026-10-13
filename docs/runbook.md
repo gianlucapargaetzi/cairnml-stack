@@ -4,7 +4,7 @@ From an empty machine to a reproduced experiment. Each step names the command to
 
 **Status.** The steps below were checked against the command help (`--help`) and the source code. The live compose stack has not been run from this runbook yet. Every step that needs the running stack is marked *(not yet verified live)*. If a step fails, fix the runbook together with the code.
 
-Terms: an **agent** runs jobs, a **project** groups **tasks**, an **experiment** is one run with one set of parameters, a **job** is a request to run an experiment on an agent. See ARCHITECTURE.md section 0.
+Terms: an **agent** runs jobs, a **project** groups **experiments**, a **run** is one execution with one set of parameters, a **job** is a request to execute a run on an agent. See ARCHITECTURE.md section 0.
 
 ---
 
@@ -211,11 +211,11 @@ From inside the script, the same thing as a call at the point where the run shou
 exp.execute_remotely("default")
 ```
 
-Outside an agent this dispatches the script's experiment and ends the local process; inside an agent it does nothing.
+Outside an agent this dispatches the script's run and ends the local process; inside an agent it does nothing.
 
 **Compose-based jobs.** A job with runtime type `compose` runs `docker compose up --build --abort-on-container-exit --exit-code-from <service>` in the job's workspace. Compose only receives the agent environment that the agent passes (`PATH`, `HOME`, Docker settings), plus the job variables. The service must forward these variables in its `environment:` list, and must join the job network:
 
-- `MLOPS_SERVER_URL`, `MLOPS_RUN_TOKEN`, `MLOPS_EXPERIMENT_ID`, `MLOPS_JOB_ID`, `MLOPS_PARAMS`;
+- `MLOPS_SERVER_URL`, `MLOPS_RUN_TOKEN`, `MLOPS_RUN_ID`, `MLOPS_JOB_ID`, `MLOPS_PARAMS`;
 - the external Docker network **`mlops-jobs`**, not `mlops`. The agent is configured so that job containers join only `mlops-jobs`, which the server also joins. Postgres, RustFS and Keycloak are on `mlops`, and jobs must not reach them.
 
 ```yaml
@@ -225,7 +225,7 @@ services:
     environment:
       - MLOPS_SERVER_URL
       - MLOPS_RUN_TOKEN
-      - MLOPS_EXPERIMENT_ID
+      - MLOPS_RUN_ID
       - MLOPS_JOB_ID
       - MLOPS_PARAMS
     networks: [jobs]
@@ -290,7 +290,7 @@ The hosts entry from step 2 is enough. With no session, the page sends you to th
 The dashboard has four tabs, plus the overview at the front:
 
 - **Overview:** job counts by status, and projects with their run counts and last activity.
-- **Projects:** the projects you may see, as a tree by slug (`group/name`). A project page shows its tasks with their best results, the commit graph of the linked repository (click a commit to see the experiments that ran on it), the linked datasets and the containers used. Section 15 explains tasks.
+- **Projects:** the projects you may see, as a tree by slug (`group/name`). A project page shows its experiments with their best results, the commit graph of the linked repository (click a commit to see the runs that ran on it), the linked datasets and the containers used. Section 15 explains experiments.
 - **Datasets:** each dataset with its card (content, type, license, schema, splits), its DVC versions and the experiments that used it. Section 17 explains cards.
 - **Jobs:** scheduled, running and finished jobs. Cancel a job, or copy and reschedule it (section 18).
 - **Resources:** each agent with its allocated and actual load, and each queue with its waiting jobs (section 19).
@@ -301,7 +301,7 @@ Also reachable from these pages:
 - **Comparison:** in the experiment list, tick 2 to 10 experiments and press **Compare selected**. The comparison shows their metrics, parameters and environment side by side.
 - **Admin:** read-only lists of users and agents, for admins only.
 
-The dashboard writes only three things: it cancels a job, copies and reschedules a job, and edits a task. It cannot start a brand-new job and cannot edit dataset cards. Use the CLI for those (sections 8, 10 and 17).
+The dashboard writes only three things: it cancels a job, copies and reschedules a job, and edits an experiment. It cannot start a brand-new job and cannot edit dataset cards. Use the CLI for those (sections 8, 10 and 17).
 
 The end-to-end browser tests (`tests/e2e`) log in as the realm users `admin`, `dev`, `eve` and `carol`. Their passwords are not in the repository: the tests read them from `MLOPS_E2E_PASSWORD_<USER>` in the environment, for example `MLOPS_E2E_PASSWORD_DEV`. Set those variables to the passwords you gave the users.
 
@@ -342,27 +342,27 @@ uv run mlops enroll --server http://mlops-server:8000 --force
 
 The window between a change in the IdP and its effect is at most one interval.
 
-## 15. Projects, tasks and experiments *(not yet verified live)*
+## 15. Projects, experiments and runs *(not yet verified live)*
 
-A **project** has **tasks**: one aspect of the project, such as training, augmentation or evaluation. Each experiment belongs to one task. An experiment without a task belongs to the task `general`.
+A **project** has **experiments**: one aspect of the project, such as training, augmentation or evaluation. Each run belongs to one experiment. A run without an experiment belongs to the experiment `general`.
 
-Name the task when the run starts:
+Name the experiment when the run starts:
 
 ```python
-exp = mlops.init(project="vision/seg", name="lr-0.1", task="training",
+run = mlops.init(project="vision/seg", name="lr-0.1", experiment="training",
                  primary_metric="score", direction="max")
 ```
 
-A task name is lower case: letters, digits, `.`, `_` and `-`, at most 64 characters. `primary_metric` names the metric that ranks the experiments of the task, and `direction` is `min` or `max`. A job spec file takes the same name as its `task:` key.
+An experiment name is lower case: letters, digits, `.`, `_` and `-`, at most 64 characters. `primary_metric` names the metric that ranks the runs of the experiment, and `direction` is `min` or `max`. A job spec file takes the same name as its `experiment:` key.
 
-Change a task after it exists:
+Change an experiment after it exists:
 
 ```
-uv run mlops task ls --project vision/seg
-uv run mlops task set vision/seg training --metric score --direction max --kind training --description "Segmentation training"
+uv run mlops experiment ls --project vision/seg
+uv run mlops experiment set vision/seg training --metric score --direction max --kind training --description "Segmentation training"
 ```
 
-`--kind` is one of `training`, `data-preparation`, `augmentation`, `evaluation`, `testing`, `compilation`, `inference` or `other`. `task set` changes only the metric, direction, kind and description. The Projects tab shows the best experiments of each task by its primary metric and direction. The dashboard can make the same edit (section 13).
+`--kind` is one of `training`, `data-preparation`, `augmentation`, `evaluation`, `testing`, `compilation`, `inference` or `other`. `experiment set` changes only the metric, direction, kind and description. The Projects tab shows the best runs of each experiment by its primary metric and direction. The dashboard can make the same edit (section 13).
 
 ## 16. Link repositories *(not yet verified live)*
 

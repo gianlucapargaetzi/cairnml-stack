@@ -1,7 +1,7 @@
 """Upload runs that were recorded while the server was unreachable (`mlops sync`).
 
 Exactly-once rules:
-- The experiment is created once and its id is written to the spool meta before any
+- The run is created once and its id is written to the spool meta before any
   event is replayed, so a retry reuses it.
 - Log lines carry a seq, so the server ignores a replayed batch it already has.
 - Each artifact's ordinal is written to the meta once it is registered, so a retry does
@@ -48,7 +48,7 @@ def _artifact_error(exc: Exception) -> str:
 
 
 def _sync_artifacts(
-    api, spool: Spool, directory: Path, meta: dict, experiment_id: str, put
+    api, spool: Spool, directory: Path, meta: dict, run_id: str, put
 ) -> None:
     done = set(meta.get("artifacts_registered", []))
     errors: list[str] = []
@@ -61,10 +61,10 @@ def _sync_artifacts(
             continue
         payload = event["payload"]
         try:
-            presigned = api.presign(experiment_id, payload["name"])
+            presigned = api.presign(run_id, payload["name"])
             put(presigned["upload_url"], spool.file_path(payload["name"]))
             api.register_artifact(
-                experiment_id,
+                run_id,
                 payload["name"],
                 presigned["key"],
                 payload["size"],
@@ -84,28 +84,28 @@ def _sync_artifacts(
 def _sync_one(api, directory: Path, put) -> str:
     spool = Spool(directory)
     meta = spool.meta()
-    experiment_id = meta.get("experiment_id")
-    if experiment_id is None:
-        created = api.create_experiment(
+    run_id = meta.get("run_id")
+    if run_id is None:
+        created = api.create_run(
             meta["project"], meta["name"], meta.get("config") or {},
-            task=meta.get("task") or "general",
+            experiment=meta.get("experiment") or "general",
             primary_metric=meta.get("primary_metric"),
             direction=meta.get("direction"),
         )
-        experiment_id = created["id"]
-        meta = {**meta, "experiment_id": experiment_id}
-        _write_meta(directory, meta)  # before any replay, so a retry reuses this experiment
+        run_id = created["id"]
+        meta = {**meta, "run_id": run_id}
+        _write_meta(directory, meta)  # before any replay, so a retry reuses this run
 
-    replay(spool, api, experiment_id, keep_rejected=True)
+    replay(spool, api, run_id, keep_rejected=True)
     undelivered = sum(1 for event in spool.events() if event["kind"] != "artifact")
     if undelivered:
         raise RuntimeError(f"{undelivered} event(s) not delivered; the spool is kept")
-    _sync_artifacts(api, spool, directory, meta, experiment_id, put)
-    return experiment_id
+    _sync_artifacts(api, spool, directory, meta, run_id, put)
+    return run_id
 
 
 def sync_all(api, root: Path | None = None, put=None, failed: list[str] | None = None) -> list[str]:
-    """Replay every spooled run. Returns the experiment ids that were fully synced.
+    """Replay every spooled run. Returns the run ids that were fully synced.
 
     A run that fails keeps its spool; its error is appended to `failed` when given.
     """
@@ -116,7 +116,7 @@ def sync_all(api, root: Path | None = None, put=None, failed: list[str] | None =
         return synced
     for directory in sorted(p for p in root.iterdir() if p.is_dir()):
         try:
-            experiment_id = _sync_one(api, directory, put)
+            run_id = _sync_one(api, directory, put)
         except Exception as exc:
             log.warning("could not sync %s, keeping its spool: %s", directory.name, exc)
             if failed is not None:
@@ -132,5 +132,5 @@ def sync_all(api, root: Path | None = None, put=None, failed: list[str] | None =
             if failed is not None:
                 failed.append(f"{directory.name}: could not remove the spool: {exc}")
             continue
-        synced.append(experiment_id)
+        synced.append(run_id)
     return synced

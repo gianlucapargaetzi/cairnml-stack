@@ -28,7 +28,7 @@ def test_enroll_creates_user_and_client(server, idp, app):
 
 def test_enroll_requires_valid_idp_token(server, idp):
     assert _enroll(server, idp, azp="other")[0].status_code == 401
-    assert _enroll(server, idp, exp_in=-5)[0].status_code == 401
+    assert _enroll(server, idp, run_in=-5)[0].status_code == 401
     bare = server.post("/api/v1/enroll/client", json={"name": "x", "public_key": "k"})
     assert bare.status_code == 401
 

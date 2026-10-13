@@ -9,8 +9,8 @@ const ROUTES = [
   ["datasets", () => import("./views/datasets.js"), "Datasets"],
   ["jobs", () => import("./views/jobs.js"), "Jobs"],
   ["resources", () => import("./views/resources.js"), "Resources"],
-  ["task", () => import("./views/task.js"), null],
-  ["experiments", () => import("./views/experiments.js"), null],
+  ["experiment", () => import("./views/experiment.js"), null],
+  ["runs", () => import("./views/runs.js"), null],
   ["compare", () => import("./views/compare.js"), null],
   ["admin", () => import("./views/admin.js"), "Admin"],
 ];

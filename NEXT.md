@@ -24,9 +24,9 @@ All 69 planned tasks are implemented in eight phases:
 8. Projects, tasks, datasets and resources (task entity, repo links and history, commit graph, dataset cards, reschedule, resource usage, four-tab navigation, e2e tests).
 
 Test status at the last run:
-- `uv run pytest -q`: 621 passed, 32 deselected (the live and docker tests), 1 xfailed.
+- `uv run pytest -q`: 627 passed, 14 deselected (the live and docker tests), 2 skipped.
 - `uv run ruff check .`: clean.
-- `node --test packages/mlops-server/ui-tests/*.mjs`: 38 passed.
+- `node --test packages/mlops-server/ui-tests/*.mjs`: 39 passed.
 
 ## What is NOT verified
 
@@ -69,4 +69,4 @@ Test status at the last run:
 - Commit messages carry no AI attribution (no `Co-Authored-By`, no "Generated with"). `CLAUDE.md` says so.
 - Stage explicit paths only. Never `git add -A`: `.claude/` must stay out of commits.
 - Views use text nodes and `h()` only. No `innerHTML`, no inline `style` attributes; the CSP forbids them. The forbidden-API test in `tests/test_ui_static.py` enforces this.
-- Vocabulary follows `docs/glossary.md`: Agent, Project, Task, Experiment, Job, Dataset, Resource.
+- Vocabulary follows `docs/glossary.md`: Agent, Project, Experiment (a grouping of runs), Run (one execution), Job, Dataset, Resource.

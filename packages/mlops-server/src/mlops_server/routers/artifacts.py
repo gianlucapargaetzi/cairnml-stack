@@ -36,15 +36,15 @@ def _checked_name(name: str) -> str:
         raise HTTPException(422, "invalid artifact name") from None
 
 
-@router.post("/experiments/{experiment_id}/artifacts/presign", response_model=PresignResponse)
+@router.post("/runs/{run_id}/artifacts/presign", response_model=PresignResponse)
 def presign(
-    experiment_id: str,
+    run_id: str,
     body: PresignRequest,
     request: Request,
     principal: Annotated[Principal, Depends(any_principal)],
     session: Annotated[Session, Depends(get_session)],
 ):
-    exp = access.load_experiment(session, principal, experiment_id, True)
+    exp = access.load_run(session, principal, run_id, True)
     key = _prefix(session, exp) + _checked_name(body.name)
     return PresignResponse(
         upload_url=_storage(request).presign_put(key, PRESIGN_EXPIRES),
@@ -53,20 +53,20 @@ def presign(
     )
 
 
-@router.post("/experiments/{experiment_id}/artifacts", response_model=ArtifactOut)
+@router.post("/runs/{run_id}/artifacts", response_model=ArtifactOut)
 def register(
-    experiment_id: str,
+    run_id: str,
     body: ArtifactRegister,
     principal: Annotated[Principal, Depends(any_principal)],
     session: Annotated[Session, Depends(get_session)],
 ):
-    exp = access.load_experiment(session, principal, experiment_id, True)
+    exp = access.load_run(session, principal, run_id, True)
     name = _checked_name(body.name)
     if body.key != _prefix(session, exp) + name:
-        raise HTTPException(422, "artifact key must be <project>/<experiment>/<name>")
+        raise HTTPException(422, "artifact key must be <project>/<run>/<name>")
     artifact = Artifact(
         id=new_id("art"),
-        experiment_id=exp.id,
+        run_id=exp.id,
         name=name,
         key=body.key,
         size=body.size,
@@ -85,16 +85,16 @@ def register(
     )
 
 
-@router.get("/experiments/{experiment_id}/artifacts", response_model=list[ArtifactOut])
+@router.get("/runs/{run_id}/artifacts", response_model=list[ArtifactOut])
 def list_artifacts(
-    experiment_id: str,
+    run_id: str,
     principal: Annotated[Principal, Depends(read_any)],
     session: Annotated[Session, Depends(get_session)],
 ):
-    access.load_experiment(session, principal, experiment_id, False)
+    access.load_run(session, principal, run_id, False)
     rows = session.scalars(
         select(Artifact)
-        .where(Artifact.experiment_id == experiment_id)
+        .where(Artifact.run_id == run_id)
         .order_by(Artifact.created_at)
     )
     return [
@@ -103,16 +103,16 @@ def list_artifacts(
     ]
 
 
-@router.get("/experiments/{experiment_id}/artifacts/{artifact_id}/download")
+@router.get("/runs/{run_id}/artifacts/{artifact_id}/download")
 def download(
-    experiment_id: str,
+    run_id: str,
     artifact_id: str,
     request: Request,
     principal: Annotated[Principal, Depends(read_any)],
     session: Annotated[Session, Depends(get_session)],
 ):
-    access.load_experiment(session, principal, experiment_id, False)
+    access.load_run(session, principal, run_id, False)
     artifact = session.get(Artifact, artifact_id)
-    if artifact is None or artifact.experiment_id != experiment_id:
+    if artifact is None or artifact.run_id != run_id:
         raise HTTPException(404, "artifact not found")
     return {"url": _storage(request).presign_get(artifact.key, PRESIGN_EXPIRES)}

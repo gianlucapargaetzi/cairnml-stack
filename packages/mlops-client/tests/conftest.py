@@ -6,7 +6,7 @@ from mlops.api import ApiClient
 
 _RUN_ENV = (
     "MLOPS_RUN_TOKEN",
-    "MLOPS_EXPERIMENT_ID",
+    "MLOPS_RUN_ID",
     "MLOPS_SERVER_URL",
     "MLOPS_PARAMS",
     "MLOPS_JOB_ID",

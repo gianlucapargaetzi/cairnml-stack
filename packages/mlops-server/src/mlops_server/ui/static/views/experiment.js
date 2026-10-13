@@ -1,269 +1,208 @@
 import { api, writes } from "../api.js";
-import { keyValues, refreshError, statusBadge, table } from "../components.js";
 import { lineChart } from "../charts.js";
+import { refreshError, table } from "../components.js";
 import { h } from "../dom.js";
-import { TERMINAL_STATUSES, colorFor, commitUrl, dispatchBody, downsample, fmtDuration, fmtNumber, fmtTime, mergeLogs, shortSha } from "../lib.js";
+import { bestId, colorFor, fmtDuration, fmtNumber, fmtTime, shortSha, sortRows, varyingKeys } from "../lib.js";
 
-const MAX_LOG_LINES = 2000;
-const MAX_CHART_POINTS = 500;
-const POLL_MS = 3000;
+const KINDS = ["training", "data-preparation", "augmentation", "evaluation", "testing", "compilation", "inference", "other"];
+const DIRECTIONS = ["min", "max"];
+const MAX_COMPARE = 10;
+const TOP = 3;
 
-// Presigned download links may be http for local object stores, never another scheme.
-function downloadable(url) {
-  try {
-    const { protocol } = new URL(url);
-    return protocol === "https:" || protocol === "http:" ? url : null;
-  } catch {
-    return null;
+// The summary carries no membership flag, so the form is shown to everyone. The server answers
+// 404 to a non-member and 403 to a read-only session; both are reported in the form.
+function explainSaveError(error) {
+  if (error.status === 404) return "Could not save: only members of this project can change its experiment.";
+  if (error.status === 403) return `Could not save: this session may not change the experiment (${error.message}).`;
+  return `Could not save: ${error.message}`;
+}
+
+const paramText = (value) => (typeof value === "object" && value !== null ? JSON.stringify(value) : String(value));
+
+export default async function experimentPage(root, route, ctx) {
+  const id = route.params.id;
+  if (!id) {
+    root.replaceChildren(h("p", { class: "error" }, "No experiment was given. Open a experiment from its project."));
+    return;
   }
-}
-
-// The fields the configuration, code, data and environment sections are drawn from.
-function detailKey(exp) {
-  return JSON.stringify([exp.config, exp.params, exp.git, exp.datasets, exp.requirements,
-    exp.argv, exp.env, exp.python_version, exp.platform, exp.script]);
-}
-
-export default async function experiment(root, route, ctx) {
-  const id = decodeURIComponent(route.parts[1]);
-  let exp = await api.experiment(id);
-  if (!ctx.active()) return;
-
+  let summary = await api.experimentSummary(id);
+  const selected = new Set();
+  let sortBy = "created_at";
+  let sortDir = "desc";
+  let chart = null;
   const notice = refreshError();
   const header = h("div");
-  const charts = h("div", { class: "chart-grid" });
-  const logBox = h("pre", { class: "log", "aria-label": "logs" });
-  const sections = h("div");
-  const artifacts = h("div");
-  const dispatchBox = h("div");
-
-  // Metrics: the first load fetches every point; later loads fetch only points after sinceId.
-  // Each series keeps all its points, and its chart is updated in place.
-  let sinceId = null;
-  const series = new Map();
-  let placeholder = null;
-
-  // Logs: one cursor per stream, and one fetch at a time so overlapping polls cannot append twice.
-  const lastSeq = { stdout: -1, stderr: -1 };
-  let logsBusy = false;
-  let lines = [];
-
-  let detailsKey = null;
+  const body = h("div");
 
   ctx.onCleanup(() => {
-    for (const entry of series.values()) entry.chart.destroy();
-    series.clear();
+    if (chart) chart.destroy();
+    chart = null;
   });
 
-  // Dispatch schedules this experiment as a job on an agent, like `mlops dispatch`. The form is built
-  // once, so the polls do not reset what the user typed.
-  function renderDispatch() {
-    const queue = h("input", { value: "default", "aria-label": "queue" });
-    const cpu = h("input", { type: "number", "aria-label": "cpu" });
-    const memory = h("input", { type: "number", "aria-label": "memory GB" });
-    const gpu = h("input", { type: "number", "aria-label": "gpu" });
-    cpu.min = "0"; memory.min = "0"; memory.step = "any"; gpu.min = "0"; // set as properties, like jobs.js
-    const labels = h("input", { "aria-label": "labels", placeholder: "comma separated" });
-    const feedback = h("p", { class: "muted", role: "status" });
-    const submit = h("button", { type: "submit" }, "Dispatch as job");
-
-    async function onsubmit(event) {
-      event.preventDefault();
-      let body;
-      try {
-        body = dispatchBody({
-          queue: queue.value, cpu: cpu.value, memory_gb: memory.value, gpu: gpu.value, labels: labels.value,
-        });
-      } catch (error) {
-        feedback.className = "error";
-        feedback.textContent = `Could not dispatch: ${error.message}`;
-        return;
-      }
-      submit.disabled = true;
-      feedback.className = "muted";
-      feedback.textContent = "Queueing…";
-      try {
-        const job = await writes.dispatchExperiment(id, body);
-        feedback.replaceChildren("Queued job ", h("span", { class: "mono" }, job.id), ". Follow it in the ",
-          h("a", { href: "#/jobs" }, "Jobs tab"), ".");
-      } catch (error) {
-        feedback.className = "error";
-        feedback.textContent = `Could not dispatch: ${error.message}`;
-      }
-      submit.disabled = false;
-    }
-
-    dispatchBox.replaceChildren(h("form", { class: "editor", onsubmit },
-      h("label", {}, "Queue ", queue), " ",
-      h("label", {}, "CPU ", cpu), " ",
-      h("label", {}, "Memory GB ", memory), " ",
-      h("label", {}, "GPU ", gpu), " ",
-      h("label", {}, "Labels ", labels), " ",
-      submit), feedback);
-  }
-
   function renderHeader() {
-    ctx.render(() => header.replaceChildren(
-      h("h1", {}, exp.name, " ", statusBadge(exp.status)),
+    const { experiment } = summary;
+    header.replaceChildren(
+      h("h1", {}, experiment.name, " ", h("span", { class: "status" }, experiment.kind)),
       h("p", { class: "muted" },
-        `${exp.project} · ${exp.owner} · ${exp.source} · started ${fmtTime(exp.started_at || exp.created_at)} · ${fmtDuration(exp.started_at, exp.finished_at)}`),
-      exp.notes ? h("p", {}, exp.notes) : null));
+        h("a", { href: `#/projects?project=${encodeURIComponent(experiment.project)}` }, experiment.project),
+        experiment.description ? ` · ${experiment.description}` : ""));
   }
 
-  function renderDetails() {
-    const git = exp.git;
-    const link = commitUrl(git);
-    let commitCell = shortSha(git && git.commit);
-    if (link) {
-      // The remote URL is never shown: it can carry credentials. Only the commit link uses it.
-      const anchor = h("a", { href: link }, shortSha(git.commit));
-      anchor.target = "_blank";
-      anchor.rel = "noopener noreferrer";
-      commitCell = anchor;
+  function renderBody() {
+    const { experiment, stats } = summary;
+    if (chart) {
+      chart.destroy();
+      chart = null;
     }
-    const code = git
-      ? h("dl", { class: "kv" },
-        h("dt", {}, "Repository"), h("dd", {}, git.repo || "–"),
-        h("dt", {}, "Branch"), h("dd", {}, git.branch || "–"),
-        h("dt", {}, "Commit"), h("dd", { class: "mono" }, commitCell),
-        h("dt", {}, "Uncommitted changes"),
-        h("dd", {}, git.dirty ? `yes (patch ${git.patch_key ? git.patch_key.split("/").pop() : "not stored"})` : "no"),
-        h("dt", {}, "Script"), h("dd", { class: "mono" }, `${exp.script || "–"} (in ${git.cwd || "."})`))
-      : h("p", { class: "muted" }, `Not in a git repository. Script: ${exp.script || "–"}`);
-    ctx.render(() => sections.replaceChildren(
-      h("h2", {}, "Configuration"), keyValues({ ...exp.config, ...exp.params }),
-      h("h2", {}, "Code"), code,
-      h("h2", {}, "Data"),
-      table([
-        { title: "Path", class: "mono", render: (d) => d.path },
-        { title: "DVC hash", class: "mono", render: (d) => d.dvc_hash || "–" },
-        { title: "Repo", render: (d) => d.repo || "–" },
-        { title: "Commit", class: "mono", render: (d) => shortSha(d.commit) },
-      ], exp.datasets, "No datasets recorded."),
-      h("h2", {}, "Environment"),
-      keyValues({ python: exp.python_version, platform: exp.platform, arguments: (exp.argv || []).join(" "), ...exp.env }),
-      h("details", {},
-        h("summary", {}, `Installed packages (${exp.requirements.length})`),
-        h("pre", { class: "log" }, exp.requirements.join("\n")))));
-    detailsKey = detailKey(exp);
-  }
+    const rows = sortRows(summary.runs, sortBy, sortDir);
+    const best = bestId(rows, experiment.direction);
+    const keys = varyingKeys(rows);
+    const valued = rows.filter((r) => r.primary_value !== null && r.primary_value !== undefined);
+    const direction = experiment.direction || "min";
 
-  async function renderMetrics() {
-    const incremental = sinceId !== null;
-    const data = await api.metrics(id, incremental ? sinceId : undefined);
-    ctx.render(() => {
-      let maxId = sinceId ?? 0;
-      for (const name of Object.keys(data).sort()) {
-        const fresh = data[name];
-        if (!fresh.length) continue;
-        let entry = series.get(name);
-        if (!entry) {
-          const last = h("span", { class: "muted" });
-          const canvas = h("canvas", { "aria-label": `chart ${name}` });
-          if (placeholder) { placeholder.remove(); placeholder = null; }
-          charts.append(h("section", { class: "chart-box" }, h("h3", {}, name, " ", last), canvas));
-          entry = { points: [], canvas, last, chart: null, color: colorFor(series.size) };
-          series.set(name, entry);
-        }
-        let disordered = false;
-        for (const p of fresh) {
-          const x = p.step ?? entry.points.length + 1;
-          if (entry.points.length && x < entry.points.at(-1)[0]) disordered = true;
-          entry.points.push([x, p.value]);
-          maxId = Math.max(maxId, p.id);
-        }
-        if (disordered) entry.points.sort((a, b) => a[0] - b[0]);
-        const shown = downsample(entry.points, MAX_CHART_POINTS);
-        if (!entry.chart) {
-          entry.chart = lineChart(entry.canvas, [{ label: name, points: shown, color: entry.color }]);
-        } else {
-          entry.chart.data.datasets[0].data = shown.map(([x, y]) => ({ x, y }));
-          entry.chart.update("none");
-        }
-        entry.last.textContent = `last ${fmtNumber(entry.points.at(-1)[1])}`;
-      }
-      sinceId = maxId;
-      if (!series.size && !placeholder) {
-        placeholder = h("p", { class: "muted" }, "No metrics yet.");
-        charts.append(placeholder);
-      }
-    });
-  }
+    const compareSelected = h("button", {
+      type: "button",
+      disabled: selected.size < 2 || selected.size > MAX_COMPARE,
+      onclick: () => { window.location.hash = `#/compare?ids=${encodeURIComponent([...selected].join(","))}`; },
+    }, selected.size ? `Compare selected (${selected.size})` : "Compare selected");
 
-  async function renderLogs() {
-    if (logsBusy) return;
-    logsBusy = true;
-    try {
-      const fresh = [];
-      for (const stream of ["stdout", "stderr"]) {
-        fresh.push(...await api.logs(id, stream, lastSeq[stream]));
-      }
-      ctx.render(() => {
-        for (const chunk of fresh) lastSeq[chunk.stream] = Math.max(lastSeq[chunk.stream], chunk.seq);
-        if (!fresh.length && lines.length) return;
-        lines = lines.concat(mergeLogs(fresh)).sort((a, b) => a.ts - b.ts).slice(-MAX_LOG_LINES);
-        const stick = logBox.scrollTop + logBox.clientHeight >= logBox.scrollHeight - 20;
-        logBox.replaceChildren(...lines.map((l) => h("div", { class: l.stream === "stderr" ? "stderr" : null }, l.text)));
-        if (!lines.length) logBox.append(h("span", { class: "muted" }, "No output yet."));
-        if (stick) logBox.scrollTop = logBox.scrollHeight;
-      });
-    } finally {
-      logsBusy = false;
+    const compareTop = h("button", {
+      type: "button",
+      disabled: valued.length < 2,
+      onclick: () => {
+        const ids = sortRows(valued, "primary_value", direction).slice(0, TOP).map((r) => r.id);
+        window.location.hash = `#/compare?ids=${encodeURIComponent(ids.join(","))}`;
+      },
+    }, `Compare top ${Math.min(TOP, valued.length)}`);
+
+    const sortSelect = h("select", {
+      "aria-label": "sort runs",
+      onchange: (event) => {
+        [sortBy, sortDir] = event.target.value.split(":");
+        renderBody();
+      },
+    }, [
+      ["created_at:desc", "newest first"],
+      ["created_at:asc", "oldest first"],
+      [`primary_value:${direction}`, "best first"],
+    ].map(([value, label]) => h("option", { value }, label)));
+    sortSelect.value = `${sortBy}:${sortDir}`;
+
+    const columns = [
+      {
+        title: "",
+        render: (r) => h("input", {
+          type: "checkbox",
+          "aria-label": `select ${r.name}`,
+          checked: selected.has(r.id),
+          onchange: (event) => {
+            if (event.target.checked) selected.add(r.id); else selected.delete(r.id);
+            renderBody();
+          },
+        }),
+      },
+      { title: "Run", render: (r) => h("a", { href: `#/runs/${encodeURIComponent(r.id)}` }, r.name) },
+      { title: "Status", render: (r) => h("span", { class: `status status-${String(r.status).replace(/[^a-z]/g, "")}` }, r.status) },
+      {
+        title: experiment.primary_metric || "Primary value",
+        class: "num",
+        render: (r) => h("span", { class: r.id === best ? "best" : null }, fmtNumber(r.primary_value)),
+      },
+      ...keys.map((key) => ({
+        title: key,
+        render: (r) => (r.params && key in r.params ? paramText(r.params[key]) : "–"),
+      })),
+      { title: "Started", render: (r) => fmtTime(r.started_at || r.created_at) },
+      { title: "Duration", render: (r) => fmtDuration(r.started_at, r.finished_at) },
+      { title: "Commit", class: "mono", render: (r) => shortSha(r.commit) + (r.dirty ? " +changes" : "") },
+    ];
+
+    const hasValues = valued.length > 0;
+    body.replaceChildren(
+      h("div", { class: "cards" },
+        h("div", { class: "card" },
+          h("div", { class: "card-value" }, stats.best ? fmtNumber(stats.best.value) : "–"),
+          h("div", { class: "card-title" }, stats.best
+            ? h("span", {},
+              `best ${experiment.primary_metric} (${direction}) · `,
+              h("a", { href: `#/runs/${encodeURIComponent(stats.best.run_id)}` }, stats.best.name))
+            : "Set a primary metric to see the best result")),
+        h("div", { class: "card" },
+          h("div", { class: "card-value" }, stats.runs),
+          h("div", { class: "card-title" }, `runs (${stats.running} running)`))),
+      h("h2", {}, "Runs"),
+      h("div", { class: "toolbar" }, h("label", {}, "Sort ", sortSelect), compareSelected, compareTop),
+      table(columns, rows, "No runs in this experiment yet."),
+      hasValues
+        ? h("section", { class: "chart-box" },
+          h("h3", {}, `${experiment.primary_metric} by run`),
+          h("canvas", { "aria-label": "primary metric chart" }))
+        : null);
+
+    const canvas = body.querySelector("canvas");
+    if (canvas) {
+      const points = [...summary.runs].reverse()
+        .map((r, i) => [i + 1, r.primary_value])
+        .filter(([, v]) => v !== null && v !== undefined);
+      chart = lineChart(canvas, [{ label: experiment.primary_metric, points, color: colorFor(0) }]);
     }
   }
 
-  function downloadButton(artifact) {
-    const status = h("span", { class: "error", role: "alert" });
-    const button = h("button", { type: "button" }, "Download");
-    button.addEventListener("click", async () => {
-      status.replaceChildren();
-      try {
-        const { url } = await api.artifactUrl(id, artifact.id);
-        const safe = downloadable(url);
-        if (!safe) throw new Error("the download link has an unsupported scheme");
-        window.open(safe, "_blank", "noopener");
-      } catch (error) {
-        status.replaceChildren(`Download failed: ${error.message}`);
-      }
-    });
-    return h("span", {}, button, " ", status);
-  }
-
-  async function renderArtifacts() {
-    const rows = await api.artifacts(id);
-    ctx.render(() => artifacts.replaceChildren(table([
-      { title: "Name", render: (a) => a.name },
-      { title: "Kind", render: (a) => a.kind },
-      { title: "Size", render: (a) => `${a.size} B` },
-      { title: "", render: (a) => downloadButton(a) },
-    ], rows, "No artifacts.")));
-  }
-
-  renderHeader();
-  renderDetails();
-  ctx.render(() => root.replaceChildren(
-    notice.el,
-    header,
-    h("h2", {}, "Run on an agent"), dispatchBox,
-    h("h2", {}, "Metrics"), charts,
-    h("h2", {}, "Logs"), logBox,
-    sections,
-    h("h2", {}, "Artifacts"), artifacts));
-  renderDispatch();
-  await Promise.all([renderMetrics(), renderLogs(), renderArtifacts()]);
-
-  // Once the run is finished the poll keeps its timer but makes no requests.
-  let finished = TERMINAL_STATUSES.has(exp.status);
-  ctx.poll(async () => {
-    if (finished) return;
-    const next = await api.experiment(id);
-    if (!ctx.active()) return;
-    exp = next;
+  function renderAll() {
     renderHeader();
-    // Details are redrawn only when their data changed, so an open "Installed packages" stays open.
-    if (detailKey(exp) !== detailsKey) renderDetails();
-    await Promise.all([renderMetrics(), renderLogs(), renderArtifacts()]);
-    finished = TERMINAL_STATUSES.has(exp.status);
+    renderBody();
+  }
+
+  function settingsForm() {
+    const { experiment } = summary;
+    const message = h("p", { class: "muted", role: "status" });
+    const kind = h("select", { "aria-label": "kind" }, KINDS.map((k) => h("option", { value: k }, k)));
+    kind.value = experiment.kind;
+    const description = h("textarea", { "aria-label": "description" }, experiment.description || "");
+    const metric = h("input", { "aria-label": "primary metric", value: experiment.primary_metric || "", placeholder: "e.g. val_loss" });
+    const direction = h("select", { "aria-label": "direction" }, DIRECTIONS.map((d) => h("option", { value: d }, d)));
+    direction.value = experiment.direction || "min";
+
+    const form = h("form", {
+      onsubmit: async (event) => {
+        event.preventDefault();
+        message.textContent = "Saving…";
+        try {
+          await writes.patchExperiment(id, {
+            kind: kind.value,
+            description: description.value || null,
+            primary_metric: metric.value || null,
+            direction: metric.value ? direction.value : null,
+          });
+        } catch (error) {
+          message.textContent = explainSaveError(error);
+          return;
+        }
+        message.textContent = "Saved.";
+        try {
+          const fresh = await api.experimentSummary(id);
+          if (!ctx.active()) return;
+          summary = fresh;
+          renderAll();
+        } catch (error) {
+          message.textContent = `Saved, but the page could not refresh: ${error.message}`;
+        }
+      },
+    },
+    h("label", {}, "Kind ", kind),
+    h("label", {}, "Description ", description),
+    h("label", {}, "Primary metric ", metric),
+    h("label", {}, "Better is ", direction),
+    h("div", {}, h("button", { type: "submit" }, "Save")),
+    message);
+    return h("details", { class: "experiment-settings" }, h("summary", {}, "Settings"), form);
+  }
+
+  root.replaceChildren(header, settingsForm(), notice.el, body);
+  renderAll();
+  ctx.poll(async () => {
+    summary = await api.experimentSummary(id);
     notice.clear();
-  }, POLL_MS, notice.show);
+    renderBody();
+  }, 10000, (error) => notice.show(error));
 }

@@ -52,7 +52,7 @@ function agentCard(agent) {
     h("h3", {}, "Running jobs"),
     agent.running_jobs.length
       ? h("ul", {}, agent.running_jobs.map((j) =>
-        h("li", {}, h("a", { href: "#/jobs" }, j.experiment_name), ` (${j.project})`)))
+        h("li", {}, h("a", { href: "#/jobs" }, j.run_name), ` (${j.project})`)))
       : h("p", { class: "muted" }, "Idle."),
     agent.other_running_jobs ? h("p", { class: "muted" }, `${agent.other_running_jobs} more in projects you are not in.`) : null);
 }

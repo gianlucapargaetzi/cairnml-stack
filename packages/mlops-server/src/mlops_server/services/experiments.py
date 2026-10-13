@@ -49,14 +49,3 @@ def get_or_create_experiment(
     elif primary_metric and not experiment.primary_metric:
         experiment.primary_metric, experiment.direction = primary_metric, direction
     return experiment
-
-
-def get_or_create_task(
-    session: Session,
-    project_id: str,
-    name: str,
-    primary_metric: str | None = None,
-    direction: str | None = None,
-) -> Experiment:
-    """Deprecated alias for backward compatibility during migration."""
-    return get_or_create_experiment(session, project_id, name, primary_metric, direction)

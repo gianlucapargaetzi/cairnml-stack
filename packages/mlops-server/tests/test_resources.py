@@ -75,7 +75,7 @@ def test_outsiders_see_anonymous_counts_only(lab, enroll_client):
 
 def test_members_see_their_own_running_jobs(lab):
     agent = lab["dev"].http.get("/api/v1/resources").json()["agents"][0]
-    assert agent["running_jobs"][0]["experiment_name"] == "secret-exp"
+    assert agent["running_jobs"][0]["run_name"] == "secret-exp"
     assert agent["running_jobs"][0]["project"] == "vision/seg"
     assert agent["other_running_jobs"] == 0
 

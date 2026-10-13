@@ -1,4 +1,4 @@
-"""Initial baseline with renamed schema: runs (was experiments) and experiments (was tasks)
+"""Baseline schema: runs (executions) and experiments (groupings of runs).
 
 Revision ID: baseline
 Revises:

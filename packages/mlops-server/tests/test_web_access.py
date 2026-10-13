@@ -8,13 +8,13 @@ def seeded(server, enroll_client, make_project, new_job, make_agent):
     make_project("vision/seg", members=["alice"])
     agent = make_agent()
     job = new_job(dev.http)
-    exp = dev.http.post("/api/v1/experiments", json={"project": "vision/seg", "name": "n"}).json()
+    exp = dev.http.post("/api/v1/runs", json={"project": "vision/seg", "name": "n"}).json()
     return dict(dev=dev, job=job, exp=exp["id"], agent=agent)
 
 
-READS = ["/api/v1/projects", "/api/v1/experiments", "/api/v1/experiments/{exp}",
-         "/api/v1/experiments/{exp}/metrics", "/api/v1/experiments/{exp}/logs",
-         "/api/v1/experiments/{exp}/artifacts", "/api/v1/jobs/{job}"]
+READS = ["/api/v1/projects", "/api/v1/runs", "/api/v1/runs/{exp}",
+         "/api/v1/runs/{exp}/metrics", "/api/v1/runs/{exp}/logs",
+         "/api/v1/runs/{exp}/artifacts", "/api/v1/jobs/{job}"]
 
 
 @pytest.mark.parametrize("path", READS)
@@ -28,17 +28,17 @@ def test_a_browser_only_sees_what_its_user_may_see(browser, seeded):
     browser.idp["username"] = "mallory"
     login_browser(browser)
     assert browser.get("/api/v1/projects").json() == []
-    assert browser.get(f"/api/v1/experiments/{seeded['exp']}").status_code == 404
+    assert browser.get(f"/api/v1/runs/{seeded['exp']}").status_code == 404
     assert browser.get(f"/api/v1/jobs/{seeded['job']['id']}").status_code == 404
 
 
 WRITES = [
-    ("post", "/api/v1/experiments", {"project": "vision/seg", "name": "x"}),
-    ("patch", "/api/v1/experiments/{exp}", {"notes": "x"}),
-    ("post", "/api/v1/experiments/{exp}/metrics", {"points": [{"name": "a", "value": 1, "ts": 1}]}),
-    ("post", "/api/v1/experiments/{exp}/logs",
+    ("post", "/api/v1/runs", {"project": "vision/seg", "name": "x"}),
+    ("patch", "/api/v1/runs/{exp}", {"notes": "x"}),
+    ("post", "/api/v1/runs/{exp}/metrics", {"points": [{"name": "a", "value": 1, "ts": 1}]}),
+    ("post", "/api/v1/runs/{exp}/logs",
      {"stream": "stdout", "seq": 0, "lines": [{"ts": 1, "text": "x"}]}),
-    ("post", "/api/v1/experiments/{exp}/artifacts/presign", {"name": "a"}),
+    ("post", "/api/v1/runs/{exp}/artifacts/presign", {"name": "a"}),
     ("post", "/api/v1/storage/sts", {"project": "vision/seg"}),
     ("post", "/api/v1/projects", {"slug": "a", "name": "a"}),
     ("post", "/api/v1/admin/agent-tokens", {}),
@@ -53,7 +53,7 @@ def test_a_browser_session_can_change_nothing(browser, seeded, method, path, bod
     response = getattr(browser, method)(path.format(exp=seeded["exp"], job=seeded["job"]["id"]),
                                         **({"json": body} if body is not None else {}))
     assert response.status_code in (403, 404), (path, response.status_code)
-    after = seeded["dev"].http.get(f"/api/v1/experiments/{seeded['exp']}").json()
+    after = seeded["dev"].http.get(f"/api/v1/runs/{seeded['exp']}").json()
     assert after["notes"] is None
 
 

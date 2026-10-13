@@ -126,8 +126,8 @@ export default async function jobs(root, route, ctx) {
     list.replaceChildren(
       state.banner,
       table([
-        { title: "Job", render: (j) => h("button", { type: "button", class: "linkish", onclick: () => showDetail(j.id) }, j.experiment_name) },
-        { title: "Task", render: (j) => j.task },
+        { title: "Job", render: (j) => h("button", { type: "button", class: "linkish", onclick: () => showDetail(j.id) }, j.run_name) },
+        { title: "Experiment", render: (j) => j.experiment },
         { title: "Project", render: (j) => j.project },
         { title: "Status", render: (j) => statusBadge(j.status) },
         { title: "Queue", render: (j) => j.queue },
@@ -147,7 +147,7 @@ export default async function jobs(root, route, ctx) {
   }
 
   async function cancel(job) {
-    if (!window.confirm(`Cancel the job for "${job.experiment_name}"?`)) return;
+    if (!window.confirm(`Cancel the job for "${job.run_name}"?`)) return;
     try {
       await writes.cancelJob(job.id);
       state.banner = h("p", { class: "muted", role: "status" }, `Cancel requested for ${job.id}.`);
@@ -164,11 +164,11 @@ export default async function jobs(root, route, ctx) {
     if (!job) { panel.replaceChildren(); return; }
     const spec = state.spec && state.spec.id === job.id ? state.spec.value : null;
     panel.replaceChildren(
-      h("h2", {}, job.experiment_name, " ", statusBadge(job.status)),
+      h("h2", {}, job.run_name, " ", statusBadge(job.status)),
       h("dl", { class: "kv" },
         h("dt", {}, "Job"), h("dd", { class: "mono" }, job.id),
-        h("dt", {}, "Experiment"), h("dd", {}, h("a", { href: `#/experiments/${encodeURIComponent(job.experiment_id)}` }, "open (metrics and logs)")),
-        h("dt", {}, "Task / project"), h("dd", {}, `${job.task} / ${job.project}`),
+        h("dt", {}, "Run"), h("dd", {}, h("a", { href: `#/runs/${encodeURIComponent(job.run_id)}` }, "open (metrics and logs)")),
+        h("dt", {}, "Experiment / project"), h("dd", {}, `${job.experiment} / ${job.project}`),
         h("dt", {}, "State"), h("dd", {}, job.cancel_requested ? `${job.status}, cancelling` : job.status),
         h("dt", {}, "Queue / agent"), h("dd", {}, `${job.queue} / ${job.agent_name || "not assigned"}`),
         h("dt", {}, "Created"), h("dd", {}, fmtTime(job.created_at)),
@@ -269,7 +269,7 @@ export default async function jobs(root, route, ctx) {
       editing = false;
       state.group = "scheduled";
       state.banner = h("p", { class: "muted", role: "status" }, "Queued job ", h("span", { class: "mono" }, created.id), " (",
-        h("a", { href: `#/experiments/${encodeURIComponent(created.experiment_id)}` }, "experiment"), ").");
+        h("a", { href: `#/runs/${encodeURIComponent(created.run_id)}` }, "run"), ").");
       refresh().catch(notice.show);
       showDetail(created.id);
     }

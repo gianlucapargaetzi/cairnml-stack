@@ -101,12 +101,12 @@ async function detailPage(root, { project, repo, path }, ctx) {
       { title: "Change", render: (v) => v.message },
       { title: "DVC hash", class: "mono", render: (v) => (v.dvc_hash && v.dvc_hash === d.dvc.dvc_hash ? `${v.dvc_hash} (current)` : v.dvc_hash || "–") },
     ], d.versions, "No history found."),
-    h("h2", {}, `Used by ${d.used_by.count} experiment(s)`),
+    h("h2", {}, `Used by ${d.used_by.count} run(s)`),
     table([
-      { title: "Experiment", render: (e) => h("a", { href: `#/experiments/${encodeURIComponent(e.id)}` }, e.name) },
-      { title: "Task", render: (e) => e.task },
+      { title: "Run", render: (e) => h("a", { href: `#/runs/${encodeURIComponent(e.id)}` }, e.name) },
+      { title: "Experiment", render: (e) => e.experiment },
       { title: "Status", render: (e) => statusBadge(e.status) },
       { title: "Created", render: (e) => fmtTime(e.created_at) },
-    ], d.used_by.experiments, "Not used by any experiment yet."),
+    ], d.used_by.runs, "Not used by any run yet."),
   ));
 }

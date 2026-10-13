@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from mlops_server.models import Agent, Experiment, Job, Project
+from mlops_server.models import Agent, Job, Project, Run
 from mlops_server.services import scheduler
 
 
@@ -29,14 +29,14 @@ def agents_status(
     ):
         free = scheduler.free_resources(session, agent)
         running = session.execute(
-            select(Job.id, Job.project_id, Experiment.name, Project.slug)
-            .join(Experiment, Experiment.id == Job.experiment_id)
+            select(Job.id, Job.project_id, Run.name, Project.slug)
+            .join(Run, Run.id == Job.run_id)
             .join(Project, Project.id == Job.project_id)
             .where(Job.agent_id == agent.id, Job.status.in_(scheduler.ACTIVE))
             .order_by(Job.created_at, Job.id)
         ).all()
         listed = [
-            {"id": job_id, "experiment_name": name, "project": slug}
+            {"id": job_id, "run_name": name, "project": slug}
             for job_id, project_id, name, slug in running
             if visible_projects is None or project_id in visible_projects
         ]

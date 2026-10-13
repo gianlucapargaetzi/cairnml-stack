@@ -15,15 +15,15 @@ export function table(columns, rows, empty = "Nothing here yet.") {
     h("tbody", {}, rows.map((row) => h("tr", {}, columns.map((c) => h("td", { class: c.class }, c.render(row)))))));
 }
 
-// The best experiment of a task (see task_stats on the server) as "value metric" linked to it.
-export function bestCell(task) {
-  const best = task.best;
+// The best run of a experiment (see experiment_stats on the server) as "value metric" linked to it.
+export function bestCell(experiment) {
+  const best = experiment.best;
   if (!best) return h("span", {}, "–");
-  return h("a", { href: `#/experiments/${encodeURIComponent(best.experiment_id)}` },
-    `${fmtNumber(best.value)} (${task.primary_metric})`);
+  return h("a", { href: `#/runs/${encodeURIComponent(best.run_id)}` },
+    `${fmtNumber(best.value)} (${experiment.primary_metric})`);
 }
 
-export function experimentColumns({ selected, onToggle } = {}) {
+export function runColumns({ selected, onToggle } = {}) {
   const columns = [];
   if (selected) {
     columns.push({
@@ -34,10 +34,10 @@ export function experimentColumns({ selected, onToggle } = {}) {
     });
   }
   columns.push(
-    { title: "Name", render: (e) => h("a", { href: `#/experiments/${encodeURIComponent(e.id)}` }, e.name) },
+    { title: "Name", render: (e) => h("a", { href: `#/runs/${encodeURIComponent(e.id)}` }, e.name) },
     { title: "Project", render: (e) => e.project },
     { title: "Status", render: (e) => statusBadge(e.status) },
-    { title: "Task", render: (e) => e.task },
+    { title: "Experiment", render: (e) => e.experiment },
     { title: "Owner", render: (e) => e.owner },
     { title: "Source", render: (e) => e.source },
     { title: "Started", render: (e) => fmtTime(e.started_at || e.created_at) },
@@ -50,7 +50,7 @@ export function experimentColumns({ selected, onToggle } = {}) {
 export function jobColumns() {
   return [
     { title: "Job", class: "mono", render: (j) => j.id },
-    { title: "Experiment", render: (j) => h("a", { href: `#/experiments/${encodeURIComponent(j.experiment_id)}` }, j.experiment_name) },
+    { title: "Run", render: (j) => h("a", { href: `#/runs/${encodeURIComponent(j.run_id)}` }, j.run_name) },
     { title: "Project", render: (j) => j.project },
     { title: "Status", render: (j) => statusBadge(j.status) },
     { title: "Queue", render: (j) => j.queue },

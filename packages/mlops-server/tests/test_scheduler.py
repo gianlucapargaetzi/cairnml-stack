@@ -22,7 +22,7 @@ def test_poll_assigns_fifo_and_marks_job_assigned(server, make_agent, dev, new_j
     agent = make_agent()
     first, second = new_job(dev.http), new_job(dev.http)
     got = _poll(agent).json()
-    assert got["job_id"] == first["id"] and got["experiment_id"] == first["experiment_id"]
+    assert got["job_id"] == first["id"] and got["run_id"] == first["run_id"]
     assert got["spec"]["runtime"]["type"] == "python"
     with app.state.session_factory() as s:
         job = s.get(Job, first["id"])

@@ -17,7 +17,7 @@ def _spec(tmp_path, command, name="e2e-image"):
 
 def _dispatch(dev, spec):
     out = dev.run("dispatch", "--file", str(spec)).stdout
-    return next(w for w in out.split() if w.startswith("job_")), out.split("experiment ")[1].split(
+    return next(w for w in out.split() if w.startswith("job_")), out.split("run ")[1].split(
         ")"
     )[0]
 
@@ -29,7 +29,7 @@ def _status(dev, job_id):
 def test_image_job_runs_on_the_agent_and_logs_come_back(
     dev, project, agent_ready, wait_for, tmp_path
 ):
-    job_id, exp_id = _dispatch(dev, _spec(tmp_path, "echo hello-from-job; echo to-stderr 1>&2"))
+    job_id, run_id = _dispatch(dev, _spec(tmp_path, "echo hello-from-job; echo to-stderr 1>&2"))
     wait_for(
         lambda: _status(dev, job_id) in ("finished", "failed"),
         timeout=180,
@@ -38,10 +38,10 @@ def test_image_job_runs_on_the_agent_and_logs_come_back(
     assert _status(dev, job_id) == "finished"
     api = dev.api()
     streams = {}
-    for chunk in api.get_logs(exp_id):
+    for chunk in api.get_logs(run_id):
         streams.setdefault(chunk["stream"], []).extend(line["text"] for line in chunk["lines"])
     assert "hello-from-job" in streams["stdout"] and "to-stderr" in streams["stderr"]
-    assert api.get_experiment(exp_id)["status"] == "finished"
+    assert api.get_run(run_id)["status"] == "finished"
 
 
 def test_failing_job_is_reported_failed_with_its_exit_code(

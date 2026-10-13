@@ -17,8 +17,8 @@ def test_public_config_exposes_idp_settings(server, settings):
 
 
 def test_new_id_has_prefix_and_is_unique():
-    a, b = new_id("exp"), new_id("exp")
-    assert a.startswith("exp_") and len(a) == 20 and a != b
+    a, b = new_id("run"), new_id("run")
+    assert a.startswith("run_") and len(a) == 20 and a != b
 
 
 def test_models_roundtrip(server, app):

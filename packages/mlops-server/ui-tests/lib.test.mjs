@@ -35,11 +35,11 @@ test("only https urls become links", () => {
 
 test("flatten and diff rows", () => {
   assert.deepEqual(flatten({ a: 1, b: { c: 2, d: [3] } }), { a: 1, "b.c": 2, "b.d": [3] });
-  const experiments = [
+  const runs = [
     { params: { lr: 0.1, args: { epochs: 3 } } },
     { params: { lr: 0.1, args: { epochs: 5 }, extra: "x" } },
   ];
-  const rows = diffRows(experiments, (e) => e.params);
+  const rows = diffRows(runs, (e) => e.params);
   assert.deepEqual(rows.map((r) => [r.key, r.differs]), [["args.epochs", true], ["extra", true], ["lr", false]]);
   assert.deepEqual(rows[1].values, [undefined, "x"]);
 });
@@ -49,7 +49,7 @@ test("set diff", () => {
 });
 
 test("hash routing", () => {
-  assert.deepEqual(parseHash("#/experiments/exp_1"), { parts: ["experiments", "exp_1"], params: {} });
+  assert.deepEqual(parseHash("#/runs/run_1"), { parts: ["runs", "run_1"], params: {} });
   assert.deepEqual(parseHash("#/compare?ids=a,b"), { parts: ["compare"], params: { ids: "a,b" } });
   assert.deepEqual(parseHash(""), { parts: [], params: {} });
 });
@@ -100,7 +100,7 @@ test("dom attributes are an allowlist and links must be safe", () => {
   for (const name of ["style", "srcdoc", "formaction", "onclick", "innerhtml", "xlink:href"]) {
     assert.equal(attributeAllowed(name), false, name);
   }
-  assert.equal(linkAllowed("href", "#/experiments/exp_1"), true);
+  assert.equal(linkAllowed("href", "#/runs/run_1"), true);
   assert.equal(linkAllowed("href", "https://github.com/o/r"), true);
   assert.equal(linkAllowed("href", "javascript:alert(1)"), false);
   assert.equal(linkAllowed("href", "data:text/html,x"), false);

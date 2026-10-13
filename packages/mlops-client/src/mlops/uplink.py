@@ -20,18 +20,18 @@ def _is_transient(exc: Exception) -> bool:
     return isinstance(exc, _TRANSIENT)
 
 
-def _send_event(api, experiment_id: str, kind: str, payload: dict) -> None:
+def _send_event(api, run_id: str, kind: str, payload: dict) -> None:
     if kind == "metrics":
-        api.post_metrics(experiment_id, payload["points"])
+        api.post_metrics(run_id, payload["points"])
     elif kind == "logs":
-        api.post_logs(experiment_id, payload["stream"], payload["seq"], payload["lines"])
+        api.post_logs(run_id, payload["stream"], payload["seq"], payload["lines"])
     elif kind == "patch":
-        api.patch_experiment(experiment_id, **payload["fields"])
+        api.patch_run(run_id, **payload["fields"])
     else:
         raise ValueError(f"unknown event kind {kind!r}")
 
 
-def replay(spool: Spool, api, experiment_id: str, keep_rejected: bool = False) -> int:
+def replay(spool: Spool, api, run_id: str, keep_rejected: bool = False) -> int:
     """Send spooled events in order. Returns the number the server accepted.
 
     Stops at the first transient failure and keeps the unsent tail. Artifact events
@@ -46,7 +46,7 @@ def replay(spool: Spool, api, experiment_id: str, keep_rejected: bool = False) -
             kept.append(event)  # handled by `mlops sync`
             continue
         try:
-            _send_event(api, experiment_id, event["kind"], event["payload"])
+            _send_event(api, run_id, event["kind"], event["payload"])
         except Exception as exc:
             if _is_transient(exc):
                 spool.rewrite(kept + pending[index:])
@@ -66,14 +66,14 @@ class Uplink:
     def __init__(
         self,
         api,
-        experiment_id: str | None,
+        run_id: str | None,
         spool: Spool,
         *,
         flush_s: float = 2.0,
         max_batch: int = 500,
     ) -> None:
         self._api = api
-        self._exp = experiment_id
+        self._exp = run_id
         self._spool = spool
         self._flush_s = flush_s
         self._max_batch = max_batch

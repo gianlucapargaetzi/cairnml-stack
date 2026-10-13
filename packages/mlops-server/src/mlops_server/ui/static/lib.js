@@ -69,8 +69,8 @@ export function flatten(obj, prefix = "", out = {}) {
   return out;
 }
 
-export function diffRows(experiments, pick) {
-  const flat = experiments.map((e) => flatten(pick(e)));
+export function diffRows(runs, pick) {
+  const flat = runs.map((e) => flatten(pick(e)));
   const keys = [...new Set(flat.flatMap((f) => Object.keys(f)))].sort();
   return keys.map((key) => {
     const values = flat.map((f) => (key in f ? f[key] : undefined));
@@ -148,7 +148,7 @@ export function attributeAllowed(name) {
   return ATTRIBUTES.has(name) || name.startsWith("aria-") || name.startsWith("data-");
 }
 
-// href and src only take a validated https URL or an in-app hash route such as "#/experiments/a".
+// href and src only take a validated https URL or an in-app hash route such as "#/runs/a".
 export function linkAllowed(name, value) {
   if (!LINK_ATTRIBUTES.has(name)) return true;
   const text = String(value);
@@ -272,7 +272,7 @@ export function buildOverrides(original, form) {
   return out;
 }
 
-// The body of a dispatch request from the experiment page's form. Empty resource fields are left
+// The body of a dispatch request from the run page's form. Empty resource fields are left
 // out, so the server applies its defaults. Throws on a value that is not a number of 0 or more.
 export function dispatchBody(form) {
   const body = {

@@ -24,11 +24,11 @@ def test_the_four_tabs_are_there(logged_in):
         expect(nav.get_by_role("link", name=label)).to_be_visible()
 
 
-def test_projects_tab_shows_the_hierarchy_and_tasks(logged_in, dev, project, tmp_path):
+def test_projects_tab_shows_the_hierarchy_and_experiments(logged_in, dev, project, tmp_path):
     script = tmp_path / "t.py"
     script.write_text(
         "import mlops\n"
-        'e = mlops.init("e2e/demo", "lr-0.1", {"lr": 0.1}, task="training", '
+        'e = mlops.init("e2e/demo", "lr-0.1", {"lr": 0.1}, experiment="training", '
         'primary_metric="val_loss", direction="min")\n'
         'e.log_metric("val_loss", 0.4, 1)\n'
     )
@@ -36,7 +36,7 @@ def test_projects_tab_shows_the_hierarchy_and_tasks(logged_in, dev, project, tmp
     logged_in.goto(BASE + "#/projects")
     expect(logged_in.get_by_text("e2e", exact=True).first).to_be_visible()  # the group
     logged_in.get_by_role("link", name="demo").first.click()
-    expect(logged_in.get_by_role("heading", name="Tasks")).to_be_visible()
+    expect(logged_in.get_by_role("heading", name="Experiments")).to_be_visible()
     expect(logged_in.get_by_role("link", name="training")).to_be_visible()
     expect(logged_in.get_by_text("0.4").first).to_be_visible()  # best result
     logged_in.get_by_role("link", name="training").click()
@@ -44,7 +44,7 @@ def test_projects_tab_shows_the_hierarchy_and_tasks(logged_in, dev, project, tmp
     expect(logged_in.get_by_text("lr-0.1").first).to_be_visible()
 
 
-def test_task_settings_can_be_saved_from_the_browser(logged_in):
+def test_experiment_settings_can_be_saved_from_the_browser(logged_in):
     logged_in.goto(BASE + "#/projects?project=e2e%2Fdemo")
     logged_in.get_by_role("link", name="training").click()
     logged_in.get_by_text("Settings", exact=True).click()
@@ -60,7 +60,7 @@ def test_the_commit_graph_and_the_dataset_card(logged_in, dev):
     expect(logged_in.locator("svg.graph")).to_be_visible(timeout=30000)
     logged_in.locator("svg.graph g.commit").first.click()
     expect(logged_in.locator(".graph-detail")).not_to_have_text(
-        "Click a commit to see the experiments that ran on it."
+        "Click a commit to see the runs that ran on it."
     )
     logged_in.get_by_role("link", name="data/sample").first.click()
     expect(logged_in.get_by_role("heading", name=re.compile("sample", re.I))).to_be_visible()
@@ -112,10 +112,10 @@ def test_copy_a_job_change_a_parameter_and_reschedule(
     logged_in.get_by_label("parameter value").last.fill("64")
     logged_in.get_by_role("button", name="Dispatch copy").click()
     expect(logged_in.get_by_text(re.compile("Queued job job_"))).to_be_visible()
-    newest = dev.api().list_experiments("e2e/demo", limit=5)
+    newest = dev.api().list_runs("e2e/demo", limit=5)
     copy = next(e for e in newest if e["name"] == "ui-copy v2")
     assert copy["params"] == {"lr": 0.5, "batch": 64} and copy["parent_id"]
-    assert copy["task"] == "testing"
+    assert copy["experiment"] == "testing"
 
 
 def test_a_failed_reschedule_shows_the_server_message(

@@ -1,4 +1,4 @@
-"""Dispatch a recorded experiment to an agent from the client."""
+"""Dispatch a recorded run to an agent from the client."""
 
 from __future__ import annotations
 
@@ -13,21 +13,21 @@ def server_detail(exc: httpx.HTTPStatusError) -> str:
         return exc.response.text
 
 
-def dispatch_experiment(
+def dispatch_run(
     api,
-    exp_id: str,
+    run_id: str,
     *,
     queue: str = "default",
     resources: dict | None = None,
     env: dict | None = None,
 ) -> dict:
-    exp = api.get_experiment(exp_id)
+    exp = api.get_run(run_id)
     spec = build_job_spec(
-        exp, api.list_artifacts(exp_id), queue=queue, resources=resources, env=env
+        exp, api.list_artifacts(run_id), queue=queue, resources=resources, env=env
     )
     try:
         job = api.create_job(spec)
     except httpx.HTTPStatusError as exc:
         raise DispatchError(server_detail(exc)) from None
-    api.patch_experiment(job["experiment_id"], notes=f"dispatched from {exp_id}")
+    api.patch_run(job["run_id"], notes=f"dispatched from {run_id}")
     return job

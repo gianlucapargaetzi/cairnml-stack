@@ -7,7 +7,7 @@ from mlops_common.schemas import TERMINAL_STATUSES
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from mlops_server.models import Run, Job, Project, ProjectMember, ProjectRepo, Experiment
+from mlops_server.models import Job, Project, ProjectMember, ProjectRepo, Run
 from mlops_server.security.deps import Principal
 
 
@@ -61,34 +61,27 @@ def load_run(
     """Return the run if `principal` may read (or write) it, else 404."""
     if write:
         # Lock the row so a concurrent status change cannot interleave with this write.
-        run = session.get(Run, run_id, with_for_update=True, populate_existing=True)
+        exp = session.get(Run, run_id, with_for_update=True, populate_existing=True)
     else:
-        run = session.get(Run, run_id)
-    if run is None:
+        exp = session.get(Run, run_id)
+    if exp is None:
         raise HTTPException(404, "run not found")
     if principal.kind == "run":
-        allowed = run.id == principal.experiment_id
-        if write and run.status in TERMINAL_STATUSES:
+        allowed = exp.id == principal.run_id
+        if write and exp.status in TERMINAL_STATUSES:
             allowed = False  # a finished run's token can no longer change its record
     elif principal.kind == "agent":
-        job = session.get(Job, run.job_id) if run.job_id else None
+        job = session.get(Job, exp.job_id) if exp.job_id else None
         allowed = job is not None and job.agent_id == principal.id
-        if write and run.status in TERMINAL_STATUSES:
+        if write and exp.status in TERMINAL_STATUSES:
             allowed = False
     else:
-        project = session.get(Project, run.project_id)
+        project = session.get(Project, exp.project_id)
         allowed = is_member(session, principal, project)
         if allowed and write:
             allowed = principal.kind == "client" and (
-                run.owner_id == principal.user_id or principal.is_admin
+                exp.owner_id == principal.user_id or principal.is_admin
             )
     if not allowed:
         raise HTTPException(404, "run not found")
-    return run
-
-
-def load_experiment(
-    session: Session, principal: Principal, experiment_id: str, write: bool
-) -> Run:
-    """Deprecated alias for backward compatibility during migration. Use load_run instead."""
-    return load_run(session, principal, experiment_id, write)
+    return exp

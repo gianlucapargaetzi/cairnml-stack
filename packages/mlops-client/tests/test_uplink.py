@@ -30,13 +30,13 @@ class FakeApi:
         self._maybe_fail()
         self.logs.append((exp, stream, seq, [line["text"] for line in lines]))
 
-    def patch_experiment(self, exp, **fields):
+    def patch_run(self, exp, **fields):
         self._maybe_fail()
 
 
 def _uplink(tmp_path, api, **kw):
     return Uplink(
-        api, "exp_1", Spool(tmp_path / "spool" / "exp_1", {"experiment_id": "exp_1"}), **kw
+        api, "run_1", Spool(tmp_path / "spool" / "run_1", {"run_id": "run_1"}), **kw
     )
 
 
@@ -71,7 +71,7 @@ def test_transient_failure_spools_and_later_replays_in_order(tmp_path):
 
 
 def test_replay_stops_at_first_failure_and_keeps_the_rest(tmp_path):
-    spool = Spool(tmp_path / "s", {"experiment_id": "exp_1"})
+    spool = Spool(tmp_path / "s", {"run_id": "run_1"})
     spool.append("metrics", {"points": [{"name": "a", "value": 1, "step": 0, "ts": 1}]})
     spool.append("logs", {"stream": "stdout", "seq": 0, "lines": [{"ts": 1, "text": "x"}]})
     spool.append("metrics", {"points": [{"name": "b", "value": 2, "step": 1, "ts": 2}]})
@@ -81,12 +81,12 @@ def test_replay_stops_at_first_failure_and_keeps_the_rest(tmp_path):
             raise httpx.ConnectError("down")
 
     api = Flaky()
-    assert replay(spool, api, "exp_1") == 1
+    assert replay(spool, api, "run_1") == 1
     assert [e["kind"] for e in spool.events()] == [
         "logs",
         "metrics",
     ]  # first one is gone, no duplicates later
-    assert replay(spool, FakeApi(), "exp_1") == 2 and not spool.exists()
+    assert replay(spool, FakeApi(), "run_1") == 2 and not spool.exists()
 
 
 def test_client_errors_drop_the_batch_without_spooling(tmp_path):
@@ -132,19 +132,19 @@ def threading_wait():
 
 
 def test_replay_keeps_artifact_events_when_a_later_send_fails(tmp_path):
-    spool = Spool(tmp_path / "s", {"experiment_id": "exp_1"})
+    spool = Spool(tmp_path / "s", {"run_id": "run_1"})
     spool.append("artifact", {"name": "model.bin", "sha256": "abc"})
     spool.append("metrics", {"points": [{"name": "a", "value": 1, "step": 0, "ts": 1}]})
 
-    assert replay(spool, FakeApi(fail=1), "exp_1") == 0
+    assert replay(spool, FakeApi(fail=1), "run_1") == 0
     assert [e["kind"] for e in spool.events()] == ["artifact", "metrics"]
 
-    assert replay(spool, FakeApi(), "exp_1") == 1
+    assert replay(spool, FakeApi(), "run_1") == 1
     assert [e["kind"] for e in spool.events()] == ["artifact"]
 
 
 def test_replay_counts_server_rejected_events_as_dropped(tmp_path):
-    spool = Spool(tmp_path / "s", {"experiment_id": "exp_1"})
+    spool = Spool(tmp_path / "s", {"run_id": "run_1"})
     spool.append("metrics", {"points": [{"name": "bad", "value": 1, "step": 0, "ts": 1}]})
     spool.append("metrics", {"points": [{"name": "ok", "value": 2, "step": 1, "ts": 2}]})
 
@@ -159,7 +159,7 @@ def test_replay_counts_server_rejected_events_as_dropped(tmp_path):
             super().post_metrics(exp, points)
 
     api = Rejects()
-    assert replay(spool, api, "exp_1") == 1
+    assert replay(spool, api, "run_1") == 1
     assert [p[0]["name"] for _, p in api.metrics] == ["ok"]
     assert not spool.exists()
 
@@ -186,7 +186,7 @@ def test_flush_keeps_order_when_the_drain_fails(tmp_path):
 
 
 def test_truncated_last_line_keeps_complete_events(tmp_path):
-    spool = Spool(tmp_path / "s", {"experiment_id": "exp_1"})
+    spool = Spool(tmp_path / "s", {"run_id": "run_1"})
     spool.append("metrics", {"points": [{"name": "a", "value": 1, "step": 0, "ts": 1}]})
     spool.append("logs", {"stream": "stdout", "seq": 0, "lines": [{"ts": 1, "text": "x"}]})
     path = tmp_path / "s" / "events.jsonl"

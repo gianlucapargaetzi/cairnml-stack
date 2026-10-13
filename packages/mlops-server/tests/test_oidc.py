@@ -12,7 +12,7 @@ def test_valid_token_yields_identity(idp):
     [
         {"iss": "http://evil/realms/x"},
         {"azp": "another-client"},
-        {"exp_in": -10},
+        {"run_in": -10},
     ],
 )
 def test_rejects_bad_claims(idp, kwargs):

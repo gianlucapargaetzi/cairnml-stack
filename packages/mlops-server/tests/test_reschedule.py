@@ -9,9 +9,9 @@ def dev(enroll_client, make_project):
 
 
 def test_spec_of_a_job(server, dev, new_job):
-    job = new_job(dev.http, params={"lr": 0.1}, task="training")
+    job = new_job(dev.http, params={"lr": 0.1}, experiment="training")
     spec = dev.http.get(f"/api/v1/jobs/{job['id']}/spec").json()
-    assert spec["params"] == {"lr": 0.1} and spec["task"] == "training"
+    assert spec["params"] == {"lr": 0.1} and spec["experiment"] == "training"
     assert spec["code"]["repo"] == "org/repo"
 
 
@@ -31,8 +31,8 @@ def test_reschedule_copies_and_applies_overrides(server, dev, new_job):
     assert spec["timeout_s"] == 3600
     original = dev.http.get(f"/api/v1/jobs/{job['id']}/spec").json()
     assert spec["code"] == original["code"]  # same code
-    exp = dev.http.get(f"/api/v1/experiments/{new['experiment_id']}").json()
-    assert exp["parent_id"] == job["experiment_id"] and exp["source"] == "job"
+    exp = dev.http.get(f"/api/v1/runs/{new['run_id']}").json()
+    assert exp["parent_id"] == job["run_id"] and exp["source"] == "job"
     assert "copied from" in exp["notes"]
 
 
@@ -60,10 +60,10 @@ def test_reschedule_validation_and_access(server, dev, new_job, enroll_client, s
     assert "push it first" in dev.http.post(url, json={}).json()["detail"]
 
 
-def test_job_list_has_task_and_cancel_flag(server, dev, new_job, make_agent):
+def test_job_list_has_experiment_and_cancel_flag(server, dev, new_job, make_agent):
     agent = make_agent()
-    job = new_job(dev.http, task="training")
+    job = new_job(dev.http, experiment="training")
     agent.http.post("/api/v1/agents/poll", json={"wait_s": 0})
     dev.http.post(f"/api/v1/jobs/{job['id']}/cancel")
     row = dev.http.get("/api/v1/jobs").json()[0]
-    assert row["task"] == "training" and row["cancel_requested"] is True
+    assert row["experiment"] == "training" and row["cancel_requested"] is True

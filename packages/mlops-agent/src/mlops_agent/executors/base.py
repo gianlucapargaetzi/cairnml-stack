@@ -16,7 +16,7 @@ LogSink = Callable[[str], None]
 @dataclass
 class RunContext:
     job_id: str
-    experiment_id: str
+    run_id: str
     spec: JobSpec
     root: Path  # job workspace root (mounted at /work)
     workdir: Path  # directory the command runs in

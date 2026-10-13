@@ -22,12 +22,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from mlops_server.ids import new_id
-from mlops_server.models import Agent, Artifact, Experiment, Job, Project, Task
-from mlops_server.routers.experiments import apply_status, experiment_out
+from mlops_server.models import Agent, Artifact, Experiment, Job, Project, Run
+from mlops_server.routers.runs import apply_status, run_out
 from mlops_server.security.deps import READERS, Principal, get_session, require, require_writer
 from mlops_server.services import access, audit
+from mlops_server.services.experiments import DEFAULT_EXPERIMENT, get_or_create_experiment
 from mlops_server.services.github import GitHubError, RepoNotAccessible
-from mlops_server.services.tasks import DEFAULT_TASK, get_or_create_task
 
 router = APIRouter()
 agent_only = require("agent")
@@ -43,7 +43,7 @@ ALLOWED = {
 
 def job_out(job: Job) -> JobOut:
     return JobOut(
-        id=job.id, experiment_id=job.experiment_id, status=job.status, queue=job.queue,
+        id=job.id, run_id=job.run_id, status=job.status, queue=job.queue,
         agent_id=job.agent_id, exit_code=job.exit_code, message=job.message,
         created_at=job.created_at,
     )
@@ -90,10 +90,10 @@ def create_job(
     session: Session,
     principal: Principal,
     spec: JobSpec,
-    parent_experiment_id: str | None = None,
+    parent_run_id: str | None = None,
     notes: str | None = None,
 ) -> Job:
-    """Check and add a job and its experiment. Callers audit and commit."""
+    """Check and add a job and its run. Callers audit and commit."""
     project = access.ensure_member(session, principal, spec.project)
     _check_commits(request, spec)
     _check_keys(session, project.slug, spec)
@@ -106,24 +106,27 @@ def create_job(
             repo=spec.code.repo, commit=spec.code.commit, cwd=spec.code.workdir,
             dirty=bool(spec.code.patch_key), patch_key=spec.code.patch_key,
         ).model_dump()
-    task = get_or_create_task(session, project.id, spec.task)
-    experiment = Experiment(
-        id=new_id("exp"), project_id=project.id, owner_id=principal.user_id, name=spec.name,
-        status="queued", source="job", params=spec.params, git=git, task_id=task.id,
-        parent_id=parent_experiment_id, notes=notes,
+    experiment = get_or_create_experiment(session, project.id, spec.experiment)
+    run = Run(
+        id=new_id("run"), project_id=project.id, owner_id=principal.user_id, name=spec.name,
+        status="queued", source="job", params=spec.params, git=git, experiment_id=experiment.id,
+        parent_id=parent_run_id, notes=notes,
         datasets=[d.model_dump() for d in spec.data],
         requirements=list(runtime.requirements) if is_python else [],
         argv=list(runtime.command) if is_python else [],
         python_version=runtime.python if is_python else None,
     )
+    # The job's foreign key points at the run; flush the run first so the insert order is certain.
+    session.add(run)
+    session.flush()
     job = Job(
-        id=new_id("job"), experiment_id=experiment.id, project_id=project.id,
+        id=new_id("job"), run_id=run.id, project_id=project.id,
         created_by=principal.user_id, spec=spec.model_dump(mode="json"), queue=spec.queue,
         cpu=spec.resources.cpu, memory_gb=spec.resources.memory_gb, gpu=spec.resources.gpu,
         labels=list(spec.resources.labels),
     )
-    experiment.job_id = job.id
-    session.add_all([experiment, job])
+    run.job_id = job.id
+    session.add(job)
     return job
 
 
@@ -202,8 +205,8 @@ def set_status(
     job = _agent_job(session, principal, job_id, lock=True)
     if body.status not in ALLOWED.get(job.status, set()):
         raise HTTPException(409, f"cannot go from {job.status} to {body.status}")
-    # apply_status locks and refreshes the experiment; it must run before any write to it.
-    apply_status(session.get(Experiment, job.experiment_id), body.status)
+    # apply_status locks and refreshes the run; it must run before any write to it.
+    apply_status(session.get(Run, job.run_id), body.status)
     job.status = body.status
     job.exit_code = body.exit_code
     job.message = body.message
@@ -224,7 +227,7 @@ def run_token(
     job = _active_agent_job(session, principal, job_id)
     # sub must equal job.id: the principal dependency refuses run tokens whose sub differs.
     token, expires_in = request.app.state.tokens.issue(
-        job.id, "run", uid=job.created_by, experiment_id=job.experiment_id,
+        job.id, "run", uid=job.created_by, run_id=job.run_id,
         job_id=job.id, ttl=request.app.state.settings.run_token_ttl,
     )
     audit.record(session, principal.id, "run_token.issued", request, job_id=job.id)
@@ -312,11 +315,11 @@ def list_jobs(
     if project:
         ids = [access.ensure_member(session, principal, project).id]
     query = (
-        select(Job, Experiment.name, Project.slug, Agent.name, Task.name)
-        .join(Experiment, Experiment.id == Job.experiment_id)
+        select(Job, Run.name, Project.slug, Agent.name, Experiment.name)
+        .join(Run, Run.id == Job.run_id)
         .join(Project, Project.id == Job.project_id)
         .outerjoin(Agent, Agent.id == Job.agent_id)
-        .outerjoin(Task, Task.id == Experiment.task_id)
+        .outerjoin(Experiment, Experiment.id == Run.experiment_id)
         .where(Job.project_id.in_(ids))
     )
     if status:
@@ -324,14 +327,15 @@ def list_jobs(
     query = query.order_by(Job.created_at.desc(), Job.id.desc()).limit(limit)
     return [
         {
-            "id": j.id, "experiment_id": j.experiment_id, "experiment_name": name,
+            "id": j.id, "run_id": j.run_id, "run_name": name,
             "project": slug, "status": j.status, "queue": j.queue, "agent_id": j.agent_id,
             "agent_name": agent_name, "cpu": j.cpu, "memory_gb": j.memory_gb, "gpu": j.gpu,
             "labels": j.labels, "exit_code": j.exit_code, "message": j.message,
             "created_at": j.created_at, "assigned_at": j.assigned_at, "finished_at": j.finished_at,
-            "task": task_name or DEFAULT_TASK, "cancel_requested": j.cancel_requested,
+            "experiment": experiment_name or DEFAULT_EXPERIMENT,
+            "cancel_requested": j.cancel_requested,
         }
-        for j, name, slug, agent_name, task_name in session.execute(query)
+        for j, name, slug, agent_name, experiment_name in session.execute(query)
     ]
 
 
@@ -355,7 +359,7 @@ def cancel_job(
     # queued job cannot be assigned to an agent while it is being cancelled.
     job = _client_job(session, principal, job_id, lock=True)
     if job.status == "queued":
-        apply_status(session.get(Experiment, job.experiment_id), "cancelled")
+        apply_status(session.get(Run, job.run_id), "cancelled")
         job.status = "cancelled"
         job.finished_at = datetime.now(UTC)
     elif job.status in ("assigned", "running"):
@@ -385,19 +389,19 @@ class DispatchBody(BaseModel):
     labels: list[str] = []
 
 
-@router.post("/experiments/{experiment_id}/dispatch", response_model=JobOut)
-def dispatch_experiment(
-    experiment_id: str,
+@router.post("/runs/{run_id}/dispatch", response_model=JobOut)
+def dispatch_run(
+    run_id: str,
     body: DispatchBody,
     request: Request,
     principal: Annotated[Principal, Depends(require_writer("client"))],
     session: Annotated[Session, Depends(get_session)],
 ):
-    """Run a recorded experiment on an agent: the same spec the CLI builds, then the same checks."""
-    exp = access.load_experiment(session, principal, experiment_id, False)
+    """Run a recorded run on an agent: the same spec the CLI builds, then the same checks."""
+    exp = access.load_run(session, principal, run_id, False)
     artifacts = [
         {"kind": a.kind, "name": a.name, "key": a.key}
-        for a in session.scalars(select(Artifact).where(Artifact.experiment_id == exp.id))
+        for a in session.scalars(select(Artifact).where(Artifact.run_id == exp.id))
     ]
     requested = {"cpu": body.cpu, "memory_gb": body.memory_gb, "gpu": body.gpu}
     resources = {k: v for k, v in requested.items() if v is not None}
@@ -405,14 +409,14 @@ def dispatch_experiment(
         resources["labels"] = body.labels
     try:
         spec = JobSpec.model_validate(build_job_spec(
-            experiment_out(session, exp).model_dump(mode="json"), artifacts,
+            run_out(session, exp).model_dump(mode="json"), artifacts,
             queue=body.queue, resources=resources,
         ))
     except DispatchError as exc:
         raise HTTPException(422, str(exc)) from None
     job = create_job(request, session, principal, spec, notes=f"dispatched from {exp.id}")
     actor = principal.user_id or principal.id  # browser sessions name the person
-    audit.record(session, actor, "job.dispatched", request, from_experiment=exp.id, job_id=job.id)
+    audit.record(session, actor, "job.dispatched", request, from_run=exp.id, job_id=job.id)
     session.commit()
     return job_out(job)
 
@@ -429,7 +433,7 @@ def reschedule(
     spec = apply_overrides(JobSpec.model_validate(old.spec), overrides)
     job = create_job(
         request, session, principal, spec,
-        parent_experiment_id=old.experiment_id, notes=f"copied from {old.experiment_id}",
+        parent_run_id=old.run_id, notes=f"copied from {old.run_id}",
     )
     actor = principal.user_id or principal.id  # browser sessions name the person
     audit.record(session, actor, "job.rescheduled", request, from_job=old.id, job_id=job.id)

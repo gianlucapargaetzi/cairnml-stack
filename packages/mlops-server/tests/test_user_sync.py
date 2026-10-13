@@ -1,6 +1,6 @@
 import httpx
 import pytest
-from mlops_server.models import Client, Experiment, Job, User
+from mlops_server.models import Client, Job, Run, User
 from mlops_server.services.user_sync import sync_users
 
 
@@ -52,7 +52,7 @@ def test_disabling_a_user_in_the_idp_revokes_everything(world, stub_directory, a
         assert all(c.revoked_at for c in carol_clients)
         # 3) queued jobs are cancelled, running ones are asked to stop
         assert s.get(Job, world["queued"]["id"]).status == "cancelled"
-        assert s.get(Experiment, world["queued"]["experiment_id"]).status == "cancelled"
+        assert s.get(Run, world["queued"]["run_id"]).status == "cancelled"
         assert s.get(Job, world["running"]["id"]).cancel_requested is True
         assert s.get(Job, world["bobs"]["id"]).status == "queued"  # other users untouched
     hb = world["agent"].http.post("/api/v1/agents/heartbeat",

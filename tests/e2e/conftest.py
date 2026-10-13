@@ -342,7 +342,7 @@ def dispatch_image():
         folder.mkdir(exist_ok=True)
         spec = folder / f"{name}.yaml"
         spec.write_text(
-            f"name: {name}\nproject: {PROJECT}\nqueue: {queue}\ntask: testing\n"
+            f"name: {name}\nproject: {PROJECT}\nqueue: {queue}\nexperiment: testing\n"
             "runtime:\n  type: image\n  image: alpine:3.20\n  entrypoint: [/bin/sh, -c]\n"
             f"  command: ['{command}']\nresources: {{cpu: 1, memory_gb: 0.5}}\n"
             "params: {lr: 0.1}\n"

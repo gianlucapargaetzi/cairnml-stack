@@ -1,4 +1,4 @@
-"""Turn a recorded experiment into a job spec an agent can run (shared by client and server)."""
+"""Turn a recorded run into a job spec an agent can run (shared by client and server)."""
 
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ def build_job_spec(
         "project": exp["project"],
         "queue": queue,
         "resources": resources or {},
-        "task": exp.get("task") or "general",
+        "experiment": exp.get("experiment") or "general",
     }
     if env:
         spec["env"] = env
@@ -73,7 +73,7 @@ def build_job_spec(
         spec["runtime"] = {"type": "python", "command": ["python", script, *tail]}
     elif has_repo:
         if not script:
-            raise DispatchError("the experiment has git info but no script to run")
+            raise DispatchError("the run has git info but no script to run")
         workdir = git.get("cwd") or "."
         spec["code"] = {
             "repo": git["repo"],
@@ -84,10 +84,10 @@ def build_job_spec(
         relative = posixpath.relpath(script, workdir)
         spec["runtime"] = {"type": "python", "command": ["python", relative, *tail]}
     elif not script:
-        raise DispatchError("the experiment has no git commit and no script to run")
+        raise DispatchError("the run has no git commit and no script to run")
     else:
         raise DispatchError(
-            "the experiment has no script artifact to run; it was not recorded outside a repo"
+            "the run has no script artifact to run; it was not recorded outside a repo"
         )
     spec["runtime"].update(
         python=_python_minor(exp.get("python_version")),

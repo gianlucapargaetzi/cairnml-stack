@@ -109,11 +109,11 @@ def test_dataset_list(lab):
 def test_dataset_detail_with_versions_and_usage(lab):
     http = lab["dev"].http
     exp = http.post(
-        "/api/v1/experiments",
-        json={"project": "vision/seg", "name": "uses-data", "task": "training"},
+        "/api/v1/runs",
+        json={"project": "vision/seg", "name": "uses-data", "experiment": "training"},
     ).json()
     http.patch(
-        f"/api/v1/experiments/{exp['id']}",
+        f"/api/v1/runs/{exp['id']}",
         json={"datasets": [{"path": "data/train", "dvc_hash": "abc123.dir", "repo": "org/data"}]},
     )
     body = http.get(
@@ -130,7 +130,7 @@ def test_dataset_detail_with_versions_and_usage(lab):
     ]
     assert body["versions"][0]["message"] == "relabel"
     assert (
-        body["used_by"]["count"] == 1 and body["used_by"]["experiments"][0]["name"] == "uses-data"
+        body["used_by"]["count"] == 1 and body["used_by"]["runs"][0]["name"] == "uses-data"
     )
 
 

@@ -73,8 +73,8 @@ def _service(sts=None):
 
 def test_presigned_urls_target_the_public_endpoint():
     svc = _service()
-    put, get = svc.presign_put("vision/seg/exp_1/m.pt"), svc.presign_get("vision/seg/exp_1/m.pt")
-    assert put.startswith("http://mlops-nas:9000/artifacts/vision/seg/exp_1/m.pt?")
+    put, get = svc.presign_put("vision/seg/run_1/m.pt"), svc.presign_get("vision/seg/run_1/m.pt")
+    assert put.startswith("http://mlops-nas:9000/artifacts/vision/seg/run_1/m.pt?")
     assert "X-Amz-Signature=" in put and "X-Amz-Signature=" in get
 
 

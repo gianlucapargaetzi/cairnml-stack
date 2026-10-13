@@ -41,31 +41,31 @@ class ApiClient:
     def me(self) -> dict:
         return self._json(self._http.get("/api/v1/me"))
 
-    def create_experiment(
+    def create_run(
         self,
         project: str,
         name: str,
         config: dict | None = None,
         source: str = "local",
-        task: str = "general",
+        experiment: str = "general",
         primary_metric: str | None = None,
         direction: str | None = None,
     ) -> dict:
         body = {
             "project": project, "name": name, "config": config or {}, "source": source,
-            "task": task,
+            "experiment": experiment,
         }
         if primary_metric:
             body.update(primary_metric=primary_metric, direction=direction)
-        return self._json(self._http.post("/api/v1/experiments", json=body))
+        return self._json(self._http.post("/api/v1/runs", json=body))
 
-    def get_experiment(self, exp_id: str) -> dict:
-        return self._json(self._http.get(f"/api/v1/experiments/{exp_id}"))
+    def get_run(self, run_id: str) -> dict:
+        return self._json(self._http.get(f"/api/v1/runs/{run_id}"))
 
-    def patch_experiment(self, exp_id: str, **fields) -> dict:
-        return self._json(self._http.patch(f"/api/v1/experiments/{exp_id}", json=fields))
+    def patch_run(self, run_id: str, **fields) -> dict:
+        return self._json(self._http.patch(f"/api/v1/runs/{run_id}", json=fields))
 
-    def list_experiments(
+    def list_runs(
         self, project: str | None = None, status: str | None = None, limit: int = 50
     ) -> list[dict]:
         params: dict = {"limit": limit}
@@ -73,47 +73,49 @@ class ApiClient:
             params["project"] = project
         if status:
             params["status"] = status
-        return self._json(self._http.get("/api/v1/experiments", params=params))
+        return self._json(self._http.get("/api/v1/runs", params=params))
 
-    def list_tasks(self, project: str | None = None) -> list[dict]:
+    def list_experiments(self, project: str | None = None) -> list[dict]:
         return self._json(
-            self._http.get("/api/v1/tasks", params={"project": project} if project else {})
+            self._http.get("/api/v1/experiments", params={"project": project} if project else {})
         )
 
-    def create_task(self, project: str, name: str, **fields) -> dict:
+    def create_experiment(self, project: str, name: str, **fields) -> dict:
         return self._json(
-            self._http.post("/api/v1/tasks", json={"project": project, "name": name, **fields})
+            self._http.post(
+                "/api/v1/experiments", json={"project": project, "name": name, **fields}
+            )
         )
 
-    def patch_task(self, task_id: str, **fields) -> dict:
-        return self._json(self._http.patch(f"/api/v1/tasks/{task_id}", json=fields))
+    def patch_experiment(self, experiment_id: str, **fields) -> dict:
+        return self._json(self._http.patch(f"/api/v1/experiments/{experiment_id}", json=fields))
 
-    def post_metrics(self, exp_id: str, points: list[dict]) -> None:
+    def post_metrics(self, run_id: str, points: list[dict]) -> None:
         self._json(
-            self._http.post(f"/api/v1/experiments/{exp_id}/metrics", json={"points": points})
+            self._http.post(f"/api/v1/runs/{run_id}/metrics", json={"points": points})
         )
 
-    def post_logs(self, exp_id: str, stream: str, seq: int, lines: list[dict]) -> None:
+    def post_logs(self, run_id: str, stream: str, seq: int, lines: list[dict]) -> None:
         self._json(
             self._http.post(
-                f"/api/v1/experiments/{exp_id}/logs",
+                f"/api/v1/runs/{run_id}/logs",
                 json={"stream": stream, "seq": seq, "lines": lines},
             )
         )
 
-    def get_logs(self, exp_id: str, after_seq: int = -1) -> list[dict]:
+    def get_logs(self, run_id: str, after_seq: int = -1) -> list[dict]:
         return self._json(
-            self._http.get(f"/api/v1/experiments/{exp_id}/logs", params={"after_seq": after_seq})
+            self._http.get(f"/api/v1/runs/{run_id}/logs", params={"after_seq": after_seq})
         )
 
-    def presign(self, exp_id: str, name: str) -> dict:
+    def presign(self, run_id: str, name: str) -> dict:
         return self._json(
-            self._http.post(f"/api/v1/experiments/{exp_id}/artifacts/presign", json={"name": name})
+            self._http.post(f"/api/v1/runs/{run_id}/artifacts/presign", json={"name": name})
         )
 
     def register_artifact(
         self,
-        exp_id: str,
+        run_id: str,
         name: str,
         key: str,
         size: int = 0,
@@ -122,13 +124,13 @@ class ApiClient:
     ) -> dict:
         return self._json(
             self._http.post(
-                f"/api/v1/experiments/{exp_id}/artifacts",
+                f"/api/v1/runs/{run_id}/artifacts",
                 json={"name": name, "key": key, "size": size, "kind": kind, "meta": meta or {}},
             )
         )
 
-    def list_artifacts(self, exp_id: str) -> list[dict]:
-        return self._json(self._http.get(f"/api/v1/experiments/{exp_id}/artifacts"))
+    def list_artifacts(self, run_id: str) -> list[dict]:
+        return self._json(self._http.get(f"/api/v1/runs/{run_id}/artifacts"))
 
     def create_job(self, spec: dict) -> dict:
         return self._json(self._http.post("/api/v1/jobs", json=spec))

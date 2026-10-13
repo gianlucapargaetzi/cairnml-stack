@@ -30,7 +30,7 @@ class Principal:
     user_id: str | None
     roles: frozenset[str]
     is_admin: bool
-    experiment_id: str | None = None
+    run_id: str | None = None
     job_id: str | None = None
     csrf: str | None = None  # set for web sessions only
 
@@ -76,11 +76,11 @@ def principal_dep(
         or owner is None
         or owner.disabled
         or job.status not in ("assigned", "running")
-        or job.experiment_id != claims.experiment_id
+        or job.run_id != claims.run_id
     ):
         raise _unauthorized()
     return Principal(
-        job.id, "run", job.created_by, frozenset(), False, job.experiment_id, job.id
+        job.id, "run", job.created_by, frozenset(), False, job.run_id, job.id
     )
 
 

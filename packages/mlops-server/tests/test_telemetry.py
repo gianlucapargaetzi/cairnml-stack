@@ -14,7 +14,7 @@ def test_non_finite_metric_values_are_rejected(value):
 def test_nan_body_gets_422_and_is_not_stored(server, enroll_client, make_project):
     dev = enroll_client("dev")
     exp = _exp(dev, make_project)
-    url = f"/api/v1/experiments/{exp}/metrics"
+    url = f"/api/v1/runs/{exp}/metrics"
     body = b'{"points":[{"name":"loss","value":NaN,"ts":1}]}'
     posted = dev.http.post(url, content=body, headers={"content-type": "application/json"})
     assert posted.status_code == 422
@@ -24,7 +24,7 @@ def test_nan_body_gets_422_and_is_not_stored(server, enroll_client, make_project
 def _exp(dev, make_project):
     make_project("vision/seg", members=["dev"])
     created = dev.http.post(
-        "/api/v1/experiments", json={"project": "vision/seg", "name": "n"}
+        "/api/v1/runs", json={"project": "vision/seg", "name": "n"}
     )
     return created.json()["id"]
 
@@ -36,9 +36,9 @@ def test_metrics_roundtrip_and_ordering(server, enroll_client, make_project):
         {"name": "loss", "value": v, "step": s, "ts": time.time()}
         for s, v in [(2, 0.5), (1, 0.9)]
     ]
-    posted = dev.http.post(f"/api/v1/experiments/{exp}/metrics", json={"points": pts})
+    posted = dev.http.post(f"/api/v1/runs/{exp}/metrics", json={"points": pts})
     assert posted.json() == {"accepted": 2}
-    series = dev.http.get(f"/api/v1/experiments/{exp}/metrics", params={"name": "loss"}).json()
+    series = dev.http.get(f"/api/v1/runs/{exp}/metrics", params={"name": "loss"}).json()
     assert [p["step"] for p in series["loss"]] == [1, 2]
 
 
@@ -46,7 +46,7 @@ def test_log_batches_are_idempotent(server, enroll_client, make_project):
     dev = enroll_client("dev")
     exp = _exp(dev, make_project)
     batch = {"stream": "stdout", "seq": 0, "lines": [{"ts": 1.0, "text": "hello"}]}
-    url = f"/api/v1/experiments/{exp}/logs"
+    url = f"/api/v1/runs/{exp}/logs"
     assert dev.http.post(url, json=batch).json() == {"accepted": 1}
     assert dev.http.post(url, json=batch).json() == {"duplicate": True}
     dev.http.post(url, json={**batch, "seq": 1, "lines": [{"ts": 2.0, "text": "world"}]})
@@ -58,7 +58,7 @@ def test_log_batches_are_idempotent(server, enroll_client, make_project):
 def test_oversized_and_overlong_inputs(server, enroll_client, make_project):
     dev = enroll_client("dev")
     exp = _exp(dev, make_project)
-    url = f"/api/v1/experiments/{exp}/logs"
+    url = f"/api/v1/runs/{exp}/logs"
     huge = {"stream": "stdout", "seq": 0, "lines": [{"ts": 1.0, "text": "x" * 16_000}] * 130}
     assert dev.http.post(url, json=huge).status_code == 413
     long_line = {"stream": "stderr", "seq": 0, "lines": [{"ts": 1.0, "text": "y" * 20_000}]}
@@ -75,13 +75,13 @@ def test_other_users_cannot_write_telemetry(server, enroll_client, make_project)
     make_project("vision/seg", members=["eve"])
     eve = enroll_client("eve")
     body = {"points": [{"name": "x", "value": 1.0, "ts": 1.0}]}
-    assert eve.http.post(f"/api/v1/experiments/{exp}/metrics", json=body).status_code == 404
+    assert eve.http.post(f"/api/v1/runs/{exp}/metrics", json=body).status_code == 404
 
 
 def test_metrics_since_id_returns_only_new_points(server, enroll_client, make_project):
     dev = enroll_client("dev")
     exp = _exp(dev, make_project)
-    url = f"/api/v1/experiments/{exp}/metrics"
+    url = f"/api/v1/runs/{exp}/metrics"
     first = [{"name": "loss", "value": 0.9, "step": 1, "ts": 1.0}]
     dev.http.post(url, json={"points": first})
     full = dev.http.get(url).json()
