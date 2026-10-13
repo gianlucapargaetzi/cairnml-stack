@@ -10,6 +10,7 @@ import * as analytics from 'services/analytics';
 
 import RunDispatchForm from '../RunDispatch/RunDispatchForm';
 
+import RunOverviewTabDatasetsCard from './components/DatasetsCard/RunOverviewTabDatasetsCard';
 import GitInfoCard from './components/GitInfoCard';
 import RunOverviewTabMetricsCard from './components/MetricsCard/RunOverviewTabMetricsCard';
 import RunOverviewTabArtifactsCard from './components/ArtifactsCard/RunOverviewTabArtifactsCard';
@@ -58,6 +59,9 @@ function RunOverviewTab({ runData, runHash }: IRunOverviewTabProps) {
       }
       if (!_.isEmpty(systemParams.packages)) {
         data.packages = systemParams.packages;
+      }
+      if (!_.isEmpty(systemParams.datasets)) {
+        data.datasets = systemParams.datasets;
       }
       if (!_.isEmpty(systemParams.git_info)) {
         data.gitInfo = systemParams.git_info;
@@ -148,6 +152,11 @@ function RunOverviewTab({ runData, runHash }: IRunOverviewTabProps) {
               {_.isEmpty(cardsData.gitInfo) ? null : (
                 <ErrorBoundary>
                   <GitInfoCard data={cardsData.gitInfo} />
+                </ErrorBoundary>
+              )}
+              {_.isEmpty(cardsData.datasets) ? null : (
+                <ErrorBoundary>
+                  <RunOverviewTabDatasetsCard datasets={cardsData.datasets} />
                 </ErrorBoundary>
               )}
               <RunDispatchForm runId={runHash} />
