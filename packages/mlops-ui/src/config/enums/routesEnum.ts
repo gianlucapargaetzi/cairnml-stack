@@ -12,6 +12,7 @@ enum PathEnum {
   Datasets = '/datasets',
   Projects = '/projects',
   Experiment_Page = '/experiment',
+  Compare = '/compare',
   Bookmarks = '/bookmarks',
   Run_Detail = '/runs/:runHash',
   Experiment = '/experiments/:experimentId',

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useHistory, useLocation } from 'react-router-dom';
 
 import ErrorBoundary from 'components/ErrorBoundary/ErrorBoundary';
 
@@ -16,11 +16,13 @@ import {
   sortRows,
   varyingKeys,
 } from 'utils/experiments/experiments';
+import { MAX_COMPARE } from 'utils/compare/compare';
 import { fmtNumber } from 'utils/projects/projects';
 
 import './Experiment.scss';
 
 const POLL_MS = 10000;
+const TOP = 3;
 
 function formatTime(value: string | null): string {
   return value ? new Date(value).toLocaleString() : '–';
@@ -159,6 +161,8 @@ function ExperimentDetail({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null);
   const [sort, setSort] = useState('created_at:desc');
   const [reload, setReload] = useState(0);
+  const [selected, setSelected] = useState<string[]>([]);
+  const history = useHistory();
 
   useEffect(() => {
     const request = experimentPagesService.getSummary(id);
@@ -213,6 +217,17 @@ function ExperimentDetail({ id }: { id: string }) {
     .filter((r) => typeof r.primary_value === 'number')
     .map((r) => r.primary_value as number)
     .reverse();
+  const ranked = sortRows(
+    summary.runs.filter((r) => typeof r.primary_value === 'number'),
+    'primary_value',
+    direction,
+  );
+  const compareUrl = (ids: string[]) =>
+    `/compare?ids=${encodeURIComponent(ids.join(','))}`;
+  const toggle = (id: string, on: boolean) =>
+    setSelected((current) =>
+      on ? [...current, id] : current.filter((x) => x !== id),
+    );
 
   return (
     <>
@@ -274,11 +289,30 @@ function ExperimentDetail({ id }: { id: string }) {
             <option value='created_at:asc'>oldest first</option>
             <option value='primary_value:best'>best first</option>
           </select>
-        </label>
+        </label>{' '}
+        <button
+          type='button'
+          disabled={selected.length < 2 || selected.length > MAX_COMPARE}
+          onClick={() => history.push(compareUrl(selected))}
+        >
+          {selected.length
+            ? `Compare selected (${selected.length})`
+            : 'Compare selected'}
+        </button>{' '}
+        <button
+          type='button'
+          disabled={ranked.length < 2}
+          onClick={() =>
+            history.push(compareUrl(ranked.slice(0, TOP).map((r) => r.id)))
+          }
+        >
+          {`Compare top ${Math.min(TOP, ranked.length)}`}
+        </button>
       </div>
       <table className='Experiment__table'>
         <thead>
           <tr>
+            <th />
             <th>Run</th>
             <th>Status</th>
             <th>{experiment.primary_metric || 'Primary value'}</th>
@@ -293,6 +327,14 @@ function ExperimentDetail({ id }: { id: string }) {
         <tbody>
           {rows.map((run) => (
             <tr key={run.id}>
+              <td>
+                <input
+                  type='checkbox'
+                  aria-label={`select ${run.name}`}
+                  checked={selected.includes(run.id)}
+                  onChange={(event) => toggle(run.id, event.target.checked)}
+                />
+              </td>
               <td>
                 <Link to={`/runs/${encodeURIComponent(run.id)}`}>
                   {run.name}
@@ -319,7 +361,7 @@ function ExperimentDetail({ id }: { id: string }) {
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={6 + keys.length} className='Experiment__muted'>
+              <td colSpan={7 + keys.length} className='Experiment__muted'>
                 No runs in this experiment yet.
               </td>
             </tr>

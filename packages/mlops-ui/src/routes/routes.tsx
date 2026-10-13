@@ -19,6 +19,9 @@ const Params = React.lazy(
 const Dashboard = React.lazy(
   () => import(/* webpackChunkName: "dashboard" */ 'pages/Dashboard/Dashboard'),
 );
+const Compare = React.lazy(
+  () => import(/* webpackChunkName: "compare" */ 'pages/Compare/Compare'),
+);
 const ExperimentPage = React.lazy(
   () =>
     import(/* webpackChunkName: "experiment" */ 'pages/Experiment/Experiment'),
@@ -107,6 +110,15 @@ const routes: { [key: string]: any } = {
     icon: 'scatterplot',
     isExact: true,
     title: pageTitlesEnum.SCATTERS_EXPLORER,
+  },
+  COMPARE: {
+    path: PathEnum.Compare,
+    component: Compare,
+    showInSidebar: false,
+    displayName: 'Compare',
+    icon: 'runs',
+    isExact: true,
+    title: pageTitlesEnum.COMPARE,
   },
   EXPERIMENT: {
     path: PathEnum.Experiment_Page,
