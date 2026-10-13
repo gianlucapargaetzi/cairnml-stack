@@ -51,6 +51,10 @@
   - SDK upload, registration, explorer search: the search returns the items with presigned URLs; a direct fetch of one returns a 96x64 PNG (HTTP 200).
   - Browser (headless Chromium, real session): the Images explorer lists the `prediction` sequence from two runs, shows nine images with their captions, sliders read steps 0 to 3 and indices 0 to 1, and there are no console errors and no failed requests.
 
+## Run detail Images tab
+
+- The run detail Images tab shows the run's images, with the menu of name and context, steps, indices and captions. It reads the explorer search filtered to the run and the trace's name, with the page's sliders. Verified in the browser against the e2e harness.
+
 ## Not done
 
 - **UI pages for audio, text and figures, and the run detail tabs for them.** Deferred by the owner because of low priority; tracked in issue #2 (label `feature`). The fork has no models for these explorers, so each needs its own model and page.
