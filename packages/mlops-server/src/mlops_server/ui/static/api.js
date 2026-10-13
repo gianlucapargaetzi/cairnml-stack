@@ -33,7 +33,13 @@ export const api = {
   overview: () => get("/overview"),
   projects: () => get("/projects"),
   jobs: (params) => get("/jobs", params),
-  agentsStatus: () => get("/agents/status"),
+  projectOverview: (slug) => get("/projects/overview", { project: slug }),
+  projectGraph: (slug, repo, limit = 60) => get("/projects/graph", { project: slug, repo, limit }),
+  datasets: (project) => get("/datasets", { project }),
+  datasetDetail: (project, repo, path, ref) => get("/datasets/detail", { project, repo, path, ref }),
+  taskSummary: (id) => get(`/tasks/${encodeURIComponent(id)}/summary`),
+  resources: () => get("/resources"),
+  jobSpec: (id) => get(`/jobs/${encodeURIComponent(id)}/spec`),
   experiments: (params) => request("/experiments", params),
   experiment: (id) => get(`/experiments/${encodeURIComponent(id)}`),
   metrics: (id, sinceId) => get(`/experiments/${encodeURIComponent(id)}/metrics`, { since_id: sinceId }),
@@ -44,6 +50,38 @@ export const api = {
   adminAgents: () => get("/admin/agents"),
   adminClients: () => get("/admin/clients"),
   adminUsers: () => get("/admin/users"),
+};
+
+let csrfToken = "";
+export const setCsrf = (value) => { csrfToken = value; };
+
+// Writes carry the CSRF token from /me. A 401 sends the user to the login page, like reads do.
+async function send(method, path, body) {
+  const response = await fetch("/api/v1" + path, {
+    method,
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json", Accept: "application/json", "X-CSRF-Token": csrfToken },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (response.status === 401) {
+    window.location.href = "/ui/auth/login";
+    throw new Error("login required");
+  }
+  if (!response.ok) {
+    let detail = response.statusText;
+    try { detail = (await response.json()).detail || detail; } catch { /* keep status text */ }
+    const error = new Error(String(detail));
+    error.status = response.status;
+    throw error;
+  }
+  return response.json();
+}
+
+const enc = encodeURIComponent;
+export const writes = {
+  cancelJob: (id) => send("POST", `/jobs/${enc(id)}/cancel`),
+  rescheduleJob: (id, overrides) => send("POST", `/jobs/${enc(id)}/reschedule`, overrides),
+  patchTask: (id, body) => send("PATCH", `/tasks/${enc(id)}`, body),
 };
 
 export async function logout(csrf) {

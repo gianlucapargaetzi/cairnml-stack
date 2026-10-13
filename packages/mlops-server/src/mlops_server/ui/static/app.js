@@ -1,13 +1,16 @@
-import { api, logout } from "./api.js";
+import { api, logout, setCsrf } from "./api.js";
 import { h } from "./dom.js";
 import { createPageScope, parseHash } from "./lib.js";
 
+// [route name, loader, navigation label or null]. The brand link goes to the overview.
 const ROUTES = [
-  ["", () => import("./views/overview.js"), "Overview"],
+  ["", () => import("./views/overview.js"), null],
   ["projects", () => import("./views/projects.js"), "Projects"],
+  ["datasets", () => import("./views/datasets.js"), "Datasets"],
   ["jobs", () => import("./views/jobs.js"), "Jobs"],
-  ["experiments", () => import("./views/experiments.js"), "Experiments"],
-  ["agents", () => import("./views/agents.js"), "Agents"],
+  ["resources", () => import("./views/resources.js"), "Resources"],
+  ["task", () => import("./views/task.js"), null],
+  ["experiments", () => import("./views/experiments.js"), null],
   ["compare", () => import("./views/compare.js"), null],
   ["admin", () => import("./views/admin.js"), "Admin"],
 ];
@@ -77,6 +80,7 @@ async function render() {
 
 async function start() {
   const me = await api.me();
+  setCsrf(me.csrf);
   const nav = document.getElementById("nav");
   for (const [name, , title] of ROUTES) {
     if (!title || (name === "admin" && !me.is_admin)) continue;

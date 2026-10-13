@@ -1,8 +1,6 @@
 import re
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[1]
 UI = ROOT / "packages" / "mlops-server" / "src" / "mlops_server" / "ui" / "static"
 CLIENT = ROOT / "packages" / "mlops-client" / "src" / "mlops"
@@ -37,7 +35,6 @@ def test_the_sdk_names_follow_the_glossary():
     assert not re.search(r"class Task\b|def current_task\b|mlops\.task\b", names)
 
 
-@pytest.mark.xfail(reason="tabs arrive in Task 63", strict=True)
 def test_the_four_dashboard_tabs_exist():
     app_js = (UI / "app.js").read_text()
     for label in ("Projects", "Datasets", "Jobs", "Resources"):

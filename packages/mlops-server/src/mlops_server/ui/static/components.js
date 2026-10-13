@@ -1,5 +1,5 @@
 import { h } from "./dom.js";
-import { fmtDuration, fmtTime, shortSha, statusClass } from "./lib.js";
+import { fmtDuration, fmtNumber, fmtTime, shortSha, statusClass } from "./lib.js";
 
 export const statusBadge = (status) => h("span", { class: statusClass(status) }, status);
 
@@ -13,6 +13,14 @@ export function table(columns, rows, empty = "Nothing here yet.") {
   return h("table", {},
     h("thead", {}, h("tr", {}, columns.map((c) => h("th", {}, c.title)))),
     h("tbody", {}, rows.map((row) => h("tr", {}, columns.map((c) => h("td", { class: c.class }, c.render(row)))))));
+}
+
+// The best experiment of a task (see task_stats on the server) as "value metric" linked to it.
+export function bestCell(task) {
+  const best = task.best;
+  if (!best) return h("span", {}, "–");
+  return h("a", { href: `#/experiments/${encodeURIComponent(best.experiment_id)}` },
+    `${fmtNumber(best.value)} (${task.primary_metric})`);
 }
 
 export function experimentColumns({ selected, onToggle } = {}) {
@@ -29,6 +37,7 @@ export function experimentColumns({ selected, onToggle } = {}) {
     { title: "Name", render: (e) => h("a", { href: `#/experiments/${encodeURIComponent(e.id)}` }, e.name) },
     { title: "Project", render: (e) => e.project },
     { title: "Status", render: (e) => statusBadge(e.status) },
+    { title: "Task", render: (e) => e.task },
     { title: "Owner", render: (e) => e.owner },
     { title: "Source", render: (e) => e.source },
     { title: "Started", render: (e) => fmtTime(e.started_at || e.created_at) },

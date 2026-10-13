@@ -14,7 +14,7 @@ export default async function overview(root, route, ctx) {
         card("Running jobs", jobs.running || 0, "#/jobs?status=running"),
         card("Queued jobs", jobs.queued || 0, "#/jobs?status=queued"),
         card("Running experiments", o.experiments_running, "#/experiments?status=running"),
-        card("Agents online", `${o.agents.online} / ${o.agents.total}`, "#/agents")),
+        card("Agents online", `${o.agents.online} / ${o.agents.total}`, "#/resources")),
       h("h2", {}, "Projects"),
       table([
         { title: "Project", render: (p) => h("a", { href: `#/experiments?project=${encodeURIComponent(p.slug)}` }, p.slug) },

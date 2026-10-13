@@ -23,3 +23,19 @@ export function h(tag, attrs, ...children) {
   }
   return el;
 }
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+// SVG counterpart of h(): elements are created in the SVG namespace and attributes are set with
+// setAttribute. Text children become text nodes, so untrusted text is never parsed as markup.
+export function svg(tag, attrs, ...children) {
+  const el = document.createElementNS(SVG_NS, tag);
+  for (const [key, value] of Object.entries(attrs || {})) {
+    if (value !== null && value !== undefined && value !== false) el.setAttribute(key, String(value));
+  }
+  for (const child of children.flat(Infinity)) {
+    if (child === null || child === undefined || child === false) continue;
+    el.append(child instanceof Node ? child : document.createTextNode(String(child)));
+  }
+  return el;
+}

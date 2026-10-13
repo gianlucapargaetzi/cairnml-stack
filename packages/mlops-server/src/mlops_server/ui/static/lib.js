@@ -139,7 +139,7 @@ export function shouldRedirectToLogin(pathname, alreadyRedirected) {
   return !alreadyRedirected && pathname !== "/ui/auth/login";
 }
 
-const ATTRIBUTES = new Set(["class", "id", "title", "type", "name", "value", "role", "checked", "disabled", "hidden", "placeholder"]);
+const ATTRIBUTES = new Set(["class", "id", "title", "type", "name", "value", "role", "checked", "disabled", "hidden", "open", "placeholder"]);
 const LINK_ATTRIBUTES = new Set(["href", "src"]);
 
 // Whether dom.h() may set this attribute. Event handlers are functions and are checked separately.
@@ -171,4 +171,23 @@ export function mergeLogs(chunks) {
   return chunks
     .flatMap((chunk) => chunk.lines.map((line) => ({ stream: chunk.stream, ts: line.ts, text: line.text })))
     .sort((a, b) => a.ts - b.ts);
+}
+
+// Projects grouped by their slug prefixes ("vision/seg" sits under "vision"). A slug part that is
+// both a project and a group keeps both: the node carries the project and the children.
+export function buildProjectTree(projects) {
+  const root = { children: new Map() };
+  for (const project of projects) {
+    let node = root;
+    const parts = project.slug.split("/");
+    parts.forEach((part, index) => {
+      if (!node.children.has(part)) node.children.set(part, { name: part, project: null, children: new Map() });
+      node = node.children.get(part);
+      if (index === parts.length - 1) node.project = project;
+    });
+  }
+  const convert = (node) => [...node.children.values()]
+    .map((child) => ({ name: child.name, project: child.project, children: convert(child) }))
+    .sort((a, b) => (b.children.length > 0) - (a.children.length > 0) || a.name.localeCompare(b.name));
+  return convert(root);
 }

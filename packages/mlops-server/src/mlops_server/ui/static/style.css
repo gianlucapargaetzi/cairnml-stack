@@ -63,3 +63,18 @@ input, select { font: inherit; padding: 4px 6px; border-radius: 6px; border: 1px
 .differs th { color: var(--accent); }
 .differs td { background: var(--diff-bg); }
 .best { font-weight: 600; color: var(--ok); }
+.tree { list-style: none; padding-left: 0; margin: 8px 0 16px; }
+.tree ul { list-style: none; padding-left: 18px; margin: 4px 0; }
+.tree summary { cursor: pointer; }
+.graph-panel { display: grid; grid-template-columns: 1fr 320px; gap: 12px; }
+.graph-box { overflow: hidden; border: 1px solid var(--line); border-radius: 8px; background: var(--card); height: 420px; }
+.graph-detail { border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: var(--card); overflow: auto; }
+svg.graph { width: 100%; height: 100%; cursor: grab; touch-action: none; }
+.commit { cursor: pointer; outline: none; }
+.commit:focus-visible circle:last-of-type { stroke: var(--accent); stroke-width: 2; }
+.commit-label { font: 12px ui-monospace, monospace; fill: var(--fg); }
+.graph-chip { font: 12px ui-monospace, monospace; fill: var(--accent); }
+.graph-chip-default { font-weight: 700; }
+@media (max-width: 800px) {
+  .graph-panel { grid-template-columns: 1fr; }
+}
