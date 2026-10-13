@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -8,9 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from mlops_server.models import LogChunk, MetricPoint
+from mlops_server.models import LogChunk, MetricPoint, MetricSeries
 from mlops_server.security.deps import READ_ANY, Principal, get_session, require
 from mlops_server.services import access
+from mlops_server.services.metrics import default_context_points, series_id
 
 router = APIRouter()
 any_principal = require("client", "agent", "run")
@@ -28,8 +30,16 @@ def post_metrics(
     session: Annotated[Session, Depends(get_session)],
 ):
     access.load_run(session, principal, run_id, True)
+    series: dict[tuple[str, str], int] = {}
+    for p in body.points:
+        key = (p.name, json.dumps(p.context, sort_keys=True))
+        if key not in series:
+            series[key] = series_id(session, run_id, p.name, p.context)
     session.add_all(
-        MetricPoint(run_id=run_id, name=p.name, step=p.step, value=p.value, ts=p.ts)
+        MetricPoint(
+            series_id=series[(p.name, json.dumps(p.context, sort_keys=True))],
+            step=p.step, epoch=p.epoch, value=p.value, ts=p.ts,
+        )
         for p in body.points
     )
     session.commit()
@@ -87,16 +97,18 @@ def get_metrics(
     """Every point, ordered by step. With since_id, only points stored after that id, in
     insertion order, so a live page can fetch just what is new (ids grow with each insert)."""
     access.load_run(session, principal, run_id, False)
-    query = select(MetricPoint).where(MetricPoint.run_id == run_id)
+    query = default_context_points(MetricPoint, MetricSeries.name).where(
+        MetricSeries.run_id == run_id
+    )
     if name:
-        query = query.where(MetricPoint.name == name)
+        query = query.where(MetricSeries.name == name)
     if since_id is None:
         ordered = query.order_by(MetricPoint.step, MetricPoint.ts, MetricPoint.id)
     else:
         ordered = query.where(MetricPoint.id > since_id).order_by(MetricPoint.id)
     series: dict[str, list[dict]] = {}
-    for p in session.scalars(ordered):
-        series.setdefault(p.name, []).append(
+    for p, metric in session.execute(ordered).all():
+        series.setdefault(metric, []).append(
             {"id": p.id, "step": p.step, "value": p.value, "ts": p.ts}
         )
     return series

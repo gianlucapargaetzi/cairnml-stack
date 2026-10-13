@@ -5,6 +5,7 @@ Revises:
 """
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 revision = "baseline"
 down_revision = None
@@ -167,6 +168,8 @@ def upgrade() -> None:
         sa.Column("owner_id", sa.String(length=32), nullable=False),
         sa.Column("experiment_id", sa.String(length=32), nullable=True),
         sa.Column("name", sa.String(length=200), nullable=False),
+        sa.Column("description", sa.Text(), nullable=True),
+        sa.Column("archived", sa.Boolean(), nullable=False),
         sa.Column("status", sa.String(length=20), nullable=False),
         sa.Column("source", sa.String(length=10), nullable=False),
         sa.Column("parent_id", sa.String(length=32), nullable=True),
@@ -224,18 +227,101 @@ def upgrade() -> None:
     op.create_index(op.f("ix_jobs_queue"), "jobs", ["queue"], unique=False)
     op.create_index(op.f("ix_jobs_status"), "jobs", ["status"], unique=False)
     op.create_table(
-        "metric_points",
+        "metric_series",
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
         sa.Column("run_id", sa.String(length=32), nullable=False),
         sa.Column("name", sa.String(length=200), nullable=False),
+        sa.Column("context", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.ForeignKeyConstraint(["run_id"], ["runs.id"]),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("run_id", "name", "context"),
+    )
+    op.create_index(
+        op.f("ix_metric_series_run_id"), "metric_series", ["run_id"], unique=False
+    )
+    op.create_table(
+        "metric_points",
+        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
+        sa.Column("series_id", sa.BigInteger(), nullable=False),
         sa.Column("step", sa.Integer(), nullable=True),
+        sa.Column("epoch", sa.Integer(), nullable=True),
         sa.Column("value", sa.Float(), nullable=False),
         sa.Column("ts", sa.Float(), nullable=False),
-        sa.ForeignKeyConstraint(["run_id"], ["runs.id"]),
+        sa.ForeignKeyConstraint(["series_id"], ["metric_series.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
-        op.f("ix_metric_points_run_id"), "metric_points", ["run_id"], unique=False
+        op.f("ix_metric_points_series_id"), "metric_points", ["series_id"], unique=False
+    )
+    op.create_table(
+        "tags",
+        sa.Column("id", sa.String(length=32), nullable=False),
+        sa.Column("project_id", sa.String(length=32), nullable=False),
+        sa.Column("name", sa.String(length=64), nullable=False),
+        sa.Column("color", sa.String(length=7), nullable=True),
+        sa.Column("description", sa.Text(), nullable=True),
+        sa.ForeignKeyConstraint(["project_id"], ["projects.id"]),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("project_id", "name"),
+    )
+    op.create_index(op.f("ix_tags_project_id"), "tags", ["project_id"], unique=False)
+    op.create_table(
+        "run_tags",
+        sa.Column("run_id", sa.String(length=32), nullable=False),
+        sa.Column("tag_id", sa.String(length=32), nullable=False),
+        sa.ForeignKeyConstraint(["run_id"], ["runs.id"]),
+        sa.ForeignKeyConstraint(["tag_id"], ["tags.id"]),
+        sa.PrimaryKeyConstraint("run_id", "tag_id"),
+    )
+    op.create_index(op.f("ix_run_tags_tag_id"), "run_tags", ["tag_id"], unique=False)
+    op.create_table(
+        "sequences",
+        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
+        sa.Column("run_id", sa.String(length=32), nullable=False),
+        sa.Column("kind", sa.String(length=20), nullable=False),
+        sa.Column("name", sa.String(length=200), nullable=False),
+        sa.Column("context", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.ForeignKeyConstraint(["run_id"], ["runs.id"]),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("run_id", "kind", "name", "context"),
+    )
+    op.create_index(op.f("ix_sequences_run_id"), "sequences", ["run_id"], unique=False)
+    op.create_table(
+        "sequence_items",
+        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
+        sa.Column("sequence_id", sa.BigInteger(), nullable=False),
+        sa.Column("step", sa.Integer(), nullable=True),
+        sa.Column("idx", sa.Integer(), nullable=False),
+        sa.Column("epoch", sa.Integer(), nullable=True),
+        sa.Column("ts", sa.Float(), nullable=False),
+        sa.Column("caption", sa.Text(), nullable=True),
+        sa.Column("format", sa.String(length=10), nullable=True),
+        sa.Column("width", sa.Integer(), nullable=True),
+        sa.Column("height", sa.Integer(), nullable=True),
+        sa.Column("blob_key", sa.String(length=600), nullable=True),
+        sa.Column("text", sa.Text(), nullable=True),
+        sa.Column("data", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.ForeignKeyConstraint(["sequence_id"], ["sequences.id"]),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("sequence_id", "step", "idx"),
+    )
+    op.create_index(
+        op.f("ix_sequence_items_sequence_id"), "sequence_items", ["sequence_id"], unique=False
+    )
+    op.create_table(
+        "explorer_states",
+        sa.Column("id", sa.String(length=32), nullable=False),
+        sa.Column("user_id", sa.String(length=32), nullable=False),
+        sa.Column("kind", sa.String(length=20), nullable=False),
+        sa.Column("title", sa.String(length=200), nullable=False),
+        sa.Column("description", sa.Text(), nullable=True),
+        sa.Column("state", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        op.f("ix_explorer_states_user_id"), "explorer_states", ["user_id"], unique=False
     )
     op.create_table(
         "log_chunks",
@@ -271,12 +357,24 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.drop_index(op.f("ix_explorer_states_user_id"), table_name="explorer_states")
+    op.drop_table("explorer_states")
+    op.drop_index(op.f("ix_sequence_items_sequence_id"), table_name="sequence_items")
+    op.drop_table("sequence_items")
+    op.drop_index(op.f("ix_sequences_run_id"), table_name="sequences")
+    op.drop_table("sequences")
+    op.drop_index(op.f("ix_run_tags_tag_id"), table_name="run_tags")
+    op.drop_table("run_tags")
+    op.drop_index(op.f("ix_tags_project_id"), table_name="tags")
+    op.drop_table("tags")
     op.drop_index(op.f("ix_artifacts_run_id"), table_name="artifacts")
     op.drop_table("artifacts")
     op.drop_index(op.f("ix_log_chunks_run_id"), table_name="log_chunks")
     op.drop_table("log_chunks")
-    op.drop_index(op.f("ix_metric_points_run_id"), table_name="metric_points")
+    op.drop_index(op.f("ix_metric_points_series_id"), table_name="metric_points")
     op.drop_table("metric_points")
+    op.drop_index(op.f("ix_metric_series_run_id"), table_name="metric_series")
+    op.drop_table("metric_series")
     op.drop_index(op.f("ix_jobs_status"), table_name="jobs")
     op.drop_index(op.f("ix_jobs_queue"), table_name="jobs")
     op.drop_index(op.f("ix_jobs_run_id"), table_name="jobs")

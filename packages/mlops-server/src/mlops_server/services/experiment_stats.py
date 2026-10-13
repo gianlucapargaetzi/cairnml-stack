@@ -4,7 +4,8 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.orm import Session
 
-from mlops_server.models import Experiment, MetricPoint, Run
+from mlops_server.models import Experiment, MetricPoint, MetricSeries, Run
+from mlops_server.services.metrics import default_context_points
 
 
 def last_values(session: Session, run_ids: list[str], metric: str) -> dict[str, float]:
@@ -12,11 +13,11 @@ def last_values(session: Session, run_ids: list[str], metric: str) -> dict[str, 
     if not run_ids:
         return {}
     rows = session.execute(
-        select(MetricPoint.run_id, MetricPoint.value)
-        .where(MetricPoint.run_id.in_(run_ids), MetricPoint.name == metric)
-        .ext(distinct_on(MetricPoint.run_id))
+        default_context_points(MetricSeries.run_id, MetricPoint.value)
+        .where(MetricSeries.run_id.in_(run_ids), MetricSeries.name == metric)
+        .ext(distinct_on(MetricSeries.run_id))
         .order_by(
-            MetricPoint.run_id,
+            MetricSeries.run_id,
             MetricPoint.step.desc().nulls_last(),
             MetricPoint.ts.desc(),
         )

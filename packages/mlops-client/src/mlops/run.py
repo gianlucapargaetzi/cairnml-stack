@@ -14,7 +14,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
-from mlops_common.schemas import DatasetRef
+from mlops_common.schemas import DatasetRef, MetricContext
+from pydantic import TypeAdapter, ValidationError
 
 from mlops import runtime
 from mlops.capture import args as capargs
@@ -43,6 +44,19 @@ class RunError(Exception):
 
 def current_run() -> Run | None:
     return _current
+
+
+_CONTEXT = TypeAdapter(MetricContext)
+
+
+def _checked_context(context: dict | None) -> dict | None:
+    """Reject a context the server would refuse, so the mistake shows up in user code."""
+    if not context:
+        return None
+    try:
+        return _CONTEXT.validate_python(context)
+    except ValidationError as exc:
+        raise ValueError(f"invalid metric context: {exc.errors()[0]['msg']}") from None
 
 
 def _transient(exc: Exception) -> bool:
@@ -97,15 +111,34 @@ class Run:
                 log.warning("server rejected run update: %s", exc)
 
     # ----- public API -----
+    def track(
+        self,
+        value: float,
+        name: str = "metric",
+        *,
+        step: int | None = None,
+        epoch: int | None = None,
+        context: dict | None = None,
+    ) -> None:
+        """Record one value of a metric. A context such as {"subset": "val"} keeps it apart
+        from the same metric name in other contexts."""
+        self._uplink.metric(
+            name, value, step, epoch=epoch, context=_checked_context(context)
+        )
+
     def log_metric(self, name: str, value: float, step: int | None = None) -> None:
-        self._uplink.metric(name, value, step)
+        self.track(value, name, step=step)
 
     def log_metrics(self, values: dict, step: int | None = None) -> None:
         for name, value in values.items():
-            self._uplink.metric(name, value, step)
+            self.track(value, name, step=step)
 
     def log_params(self, params: dict) -> None:
         self._patch(params=redact_mapping(json.loads(json.dumps(params, default=str))))
+
+    def __setitem__(self, key: str, value) -> None:
+        """Set one parameter: run["hparams"] = {"lr": 0.1}. The server merges it with the others."""
+        self.log_params({key: value})
 
     def connect(self, params):
         if self.mode == "job" and self._overrides:

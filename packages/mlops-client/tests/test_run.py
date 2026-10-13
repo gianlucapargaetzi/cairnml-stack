@@ -463,3 +463,46 @@ def test_the_default_experiment_is_general(sdk, tmp_path, monkeypatch):
     run = mlops.init("vision/seg", "t2")
     assert sdk.api.get_run(run.id)["experiment"] == "general"
     run.close()
+
+
+def test_track_keeps_context_apart_from_the_default_series(sdk, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    run = mlops.init("vision/seg", "tracked")
+    run.track(0.5, "loss", step=3, epoch=1, context={"subset": "val"})
+    run.track(0.9, "loss", step=3)
+    run.track(0.1, step=3)  # the name defaults to "metric"
+    run.close()
+    series = sdk.dev.http.get(f"/api/v1/runs/{run.id}/metrics").json()
+    assert [p["value"] for p in series["loss"]] == [0.9]
+    assert [p["value"] for p in series["metric"]] == [0.1]
+
+
+def test_track_refuses_a_context_the_server_would_reject(sdk, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    run = mlops.init("vision/seg", "bad-context")
+    with pytest.raises(ValueError, match="context"):
+        run.track(0.5, "loss", context={"subset": ["val"]})
+    with pytest.raises(ValueError, match="context"):
+        run.track(0.5, "loss", context={f"k{i}": 1 for i in range(9)})
+    run.close()
+
+
+def test_item_assignment_sets_one_param_and_keeps_the_others(sdk, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    run = mlops.init("vision/seg", "params")
+    run.log_params({"batch": 32})
+    run["hparams"] = {"lr": 0.1, "warmup": 5}
+    run.close()
+    params = _exp(sdk, run)["params"]
+    assert params["batch"] == 32
+    assert params["hparams"] == {"lr": 0.1, "warmup": 5}
+
+
+def test_track_refuses_oversized_context_keys_and_values(sdk, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    run = mlops.init("vision/seg", "oversized-context")
+    with pytest.raises(ValueError, match="context"):
+        run.track(0.5, "loss", context={"k" * 65: 1})
+    with pytest.raises(ValueError, match="context"):
+        run.track(0.5, "loss", context={"subset": "v" * 129})
+    run.close()

@@ -15,16 +15,17 @@ from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.orm import Session, object_session
 
 from mlops_server.ids import new_id
-from mlops_server.models import Experiment, MetricPoint, Project, Run, User
+from mlops_server.models import Experiment, MetricPoint, MetricSeries, Project, Run, User
 from mlops_server.security.deps import READERS, Principal, get_session, require
 from mlops_server.services import access
 from mlops_server.services.experiments import DEFAULT_EXPERIMENT, get_or_create_experiment
+from mlops_server.services.metrics import default_context_points
 
 router = APIRouter()
 any_principal = require("client", "agent", "run")
 read_principal = require("client", "agent", "run", "web")
 # Fields that may be explicitly cleared with null; every other null in a PATCH body is ignored.
-NULLABLE_FIELDS = {"git", "python_version", "platform", "script", "notes"}
+NULLABLE_FIELDS = {"git", "python_version", "platform", "script", "notes", "description"}
 
 
 def run_out(session: Session, exp: Run) -> RunOut:
@@ -32,7 +33,8 @@ def run_out(session: Session, exp: Run) -> RunOut:
     owner = session.get(User, exp.owner_id)
     experiment = session.get(Experiment, exp.experiment_id) if exp.experiment_id else None
     return RunOut(
-        id=exp.id, project=project.slug, name=exp.name, status=exp.status, source=exp.source,
+        id=exp.id, project=project.slug, name=exp.name, description=exp.description,
+        archived=exp.archived, status=exp.status, source=exp.source,
         owner=owner.username, experiment=experiment.name if experiment else DEFAULT_EXPERIMENT,
         parent_id=exp.parent_id, job_id=exp.job_id, config=exp.config,
         params=exp.params, git=exp.git, datasets=exp.datasets, requirements=exp.requirements,
@@ -136,8 +138,8 @@ def _series(session: Session, run_id: str, name: str, count: int) -> list[list]:
         order_by=(MetricPoint.step, MetricPoint.ts, MetricPoint.id)
     ).label("rn")
     inner = (
-        select(MetricPoint.step, MetricPoint.value, rank)
-        .where(MetricPoint.run_id == run_id, MetricPoint.name == name)
+        default_context_points(MetricPoint.step, MetricPoint.value, rank)
+        .where(MetricSeries.run_id == run_id, MetricSeries.name == name)
         .subquery()
     )
     query = select(inner.c.step, inner.c.value, inner.c.rn).where(
@@ -162,21 +164,21 @@ def compare(
     out = []
     for exp in runs:
         stats = session.execute(
-            select(
-                MetricPoint.name, func.count(), func.min(MetricPoint.value),
+            default_context_points(
+                MetricSeries.name, func.count(), func.min(MetricPoint.value),
                 func.max(MetricPoint.value),
             )
-            .where(MetricPoint.run_id == exp.id)
-            .group_by(MetricPoint.name)
+            .where(MetricSeries.run_id == exp.id)
+            .group_by(MetricSeries.name)
         ).all()
         last = {
             row.name: row.value
             for row in session.execute(
-                select(MetricPoint.name, MetricPoint.value)
-                .where(MetricPoint.run_id == exp.id)
-                .ext(distinct_on(MetricPoint.name))
+                default_context_points(MetricSeries.name, MetricPoint.value)
+                .where(MetricSeries.run_id == exp.id)
+                .ext(distinct_on(MetricSeries.name))
                 .order_by(
-                    MetricPoint.name, MetricPoint.step.desc().nulls_last(), MetricPoint.ts.desc()
+                    MetricSeries.name, MetricPoint.step.desc().nulls_last(), MetricPoint.ts.desc()
                 )
             )
         }

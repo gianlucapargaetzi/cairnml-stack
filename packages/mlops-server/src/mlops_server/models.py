@@ -15,6 +15,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from mlops_server.db import Base, utcnow
@@ -134,6 +135,8 @@ class Run(Base):
         ForeignKey("experiments.id"), nullable=True, index=True
     )
     name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    archived: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[str] = mapped_column(String(20), default="created")
     source: Mapped[str] = mapped_column(String(10), default="local")
     parent_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
@@ -176,14 +179,84 @@ class Job(Base):
     finished_at: Mapped[datetime | None] = mapped_column(_TS, nullable=True)
 
 
-class MetricPoint(Base):
-    __tablename__ = "metric_points"
+class MetricSeries(Base):
+    """One named metric of a run in one context, such as subset=val. {} is the default."""
+
+    __tablename__ = "metric_series"
+    __table_args__ = (UniqueConstraint("run_id", "name", "context"),)
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     run_id: Mapped[str] = mapped_column(ForeignKey("runs.id"), index=True)
     name: Mapped[str] = mapped_column(String(200))
+    context: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+
+
+class MetricPoint(Base):
+    __tablename__ = "metric_points"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    series_id: Mapped[int] = mapped_column(ForeignKey("metric_series.id"), index=True)
     step: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    epoch: Mapped[int | None] = mapped_column(Integer, nullable=True)
     value: Mapped[float] = mapped_column(Float)
     ts: Mapped[float] = mapped_column(Float)
+
+
+class Tag(Base):
+    __tablename__ = "tags"
+    __table_args__ = (UniqueConstraint("project_id", "name"),)
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    name: Mapped[str] = mapped_column(String(64))
+    color: Mapped[str | None] = mapped_column(String(7), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class RunTag(Base):
+    __tablename__ = "run_tags"
+    run_id: Mapped[str] = mapped_column(ForeignKey("runs.id"), primary_key=True)
+    tag_id: Mapped[str] = mapped_column(ForeignKey("tags.id"), primary_key=True, index=True)
+
+
+class Sequence(Base):
+    """A stream of one kind of value: image, audio, text, figure or distribution."""
+
+    __tablename__ = "sequences"
+    __table_args__ = (UniqueConstraint("run_id", "kind", "name", "context"),)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("runs.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    name: Mapped[str] = mapped_column(String(200))
+    context: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+
+
+class SequenceItem(Base):
+    __tablename__ = "sequence_items"
+    __table_args__ = (UniqueConstraint("sequence_id", "step", "idx"),)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    sequence_id: Mapped[int] = mapped_column(ForeignKey("sequences.id"), index=True)
+    step: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    idx: Mapped[int] = mapped_column(Integer, default=0)
+    epoch: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    ts: Mapped[float] = mapped_column(Float)
+    caption: Mapped[str | None] = mapped_column(Text, nullable=True)
+    format: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    blob_key: Mapped[str | None] = mapped_column(String(600), nullable=True)
+    text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    data: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
+
+
+class ExplorerState(Base):
+    """A saved explorer view (bookmark) owned by one user."""
+
+    __tablename__ = "explorer_states"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    state: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(_TS, default=utcnow)
 
 
 class LogChunk(Base):

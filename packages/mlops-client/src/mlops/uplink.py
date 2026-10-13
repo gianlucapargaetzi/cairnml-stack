@@ -87,12 +87,20 @@ class Uplink:
         self.degraded = False
 
     def metric(
-        self, name: str, value: float, step: int | None = None, ts: float | None = None
+        self,
+        name: str,
+        value: float,
+        step: int | None = None,
+        ts: float | None = None,
+        *,
+        epoch: int | None = None,
+        context: dict | None = None,
     ) -> None:
         with self._lock:
-            self._metrics.append(
-                {"name": name, "value": float(value), "step": step, "ts": ts or time.time()}
-            )
+            self._metrics.append({
+                "name": name, "value": float(value), "step": step, "epoch": epoch,
+                "context": context or {}, "ts": ts or time.time(),
+            })
 
     def log(self, stream: str, text: str) -> None:
         with self._lock:

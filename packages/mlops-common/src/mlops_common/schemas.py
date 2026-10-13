@@ -6,7 +6,7 @@ import re
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
 
 RuntimeName = Literal["python", "image", "compose"]
 
@@ -170,6 +170,9 @@ class RunCreate(BaseModel):
 
 
 class RunPatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=5000)
+    archived: bool | None = None
     status: RunStatus | None = None
     params: dict[str, Any] | None = None
     config: dict[str, Any] | None = None
@@ -188,6 +191,8 @@ class RunOut(BaseModel):
     id: str
     project: str
     name: str
+    description: str | None = None
+    archived: bool = False
     status: RunStatus
     source: str
     owner: str
@@ -210,11 +215,26 @@ class RunOut(BaseModel):
     finished_at: datetime | None
 
 
+# A context splits one metric into series. The limits keep a unique index entry well under
+# the database's row size limit, so an oversized context is refused here, not by a 500 later.
+MAX_CONTEXT_KEYS = 8
+MAX_CONTEXT_KEY = 64
+MAX_CONTEXT_VALUE = 128
+ContextKey = Annotated[str, StringConstraints(min_length=1, max_length=MAX_CONTEXT_KEY)]
+ContextValue = (
+    Annotated[str, StringConstraints(max_length=MAX_CONTEXT_VALUE)] | int | float | bool
+)
+MetricContext = Annotated[dict[ContextKey, ContextValue], Field(max_length=MAX_CONTEXT_KEYS)]
+
+
 class MetricPointIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     value: float = Field(allow_inf_nan=False)
     step: int | None = None
+    epoch: int | None = None
     ts: float = Field(allow_inf_nan=False)
+    # Splits one metric into series, for example {"subset": "val"}. Empty is the default series.
+    context: MetricContext = Field(default_factory=dict)
 
 
 class MetricBatch(BaseModel):
