@@ -17,6 +17,8 @@ import {
   IProjectTreeNode,
 } from 'utils/projects/projects';
 
+import RepoGraph from './RepoGraph';
+
 import './Projects.scss';
 
 function formatTime(value: string | null): string {
@@ -251,13 +253,7 @@ function ProjectDetail({ slug }: { slug: string }) {
 
       <h2>Repository</h2>
       {overview.repos.length ? (
-        <ul>
-          {overview.repos.map((repo) => (
-            <li key={repo.repo}>
-              {repo.repo} <span className='Projects__muted'>({repo.role})</span>
-            </li>
-          ))}
-        </ul>
+        <RepoGraph repos={overview.repos} project={slug} />
       ) : (
         <p className='Projects__muted'>
           No repository linked: run{' '}

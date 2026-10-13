@@ -1,3 +1,4 @@
+import { IGraphBranch, IGraphCommit } from 'utils/graph/layout';
 import { IProjectRef } from 'utils/projects/projects';
 
 import API from '../api';
@@ -62,6 +63,33 @@ function getProjectOverview(slug: string) {
   return API.get<IProjectOverview>('v1/projects/overview', { project: slug });
 }
 
-const projectPagesService = { getProjects, getOverview, getProjectOverview };
+// The commit history of a linked repository, with the runs that ran on each commit.
+export interface IRepoGraph {
+  repo: string;
+  default_branch: string;
+  head: string;
+  branches: IGraphBranch[];
+  commits: IGraphCommit[];
+  truncated: boolean;
+  runs: {
+    [sha: string]: {
+      id: string;
+      name: string;
+      experiment: string;
+      status: string;
+    }[];
+  };
+}
+
+function getRepoGraph(project: string, repo: string) {
+  return API.get<IRepoGraph>('v1/projects/graph', { project, repo });
+}
+
+const projectPagesService = {
+  getProjects,
+  getOverview,
+  getProjectOverview,
+  getRepoGraph,
+};
 
 export default projectPagesService;
