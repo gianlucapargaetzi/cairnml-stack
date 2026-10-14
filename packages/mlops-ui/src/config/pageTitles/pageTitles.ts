@@ -13,6 +13,7 @@ const pageTitles = {
   JOBS: 'Jobs',
   RESOURCES: 'Resources',
   ADMIN: 'Administration',
+  ACCOUNT: 'Account',
   DATASETS: 'Datasets',
   PROJECTS: 'Projects',
   EXPERIMENT: 'Experiment',

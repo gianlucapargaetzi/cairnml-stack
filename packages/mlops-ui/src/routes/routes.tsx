@@ -38,6 +38,9 @@ const Datasets = React.lazy(
 const Admin = React.lazy(
   () => import(/* webpackChunkName: "admin" */ 'pages/Admin/Admin'),
 );
+const Account = React.lazy(
+  () => import(/* webpackChunkName: "account" */ 'pages/Account/Account'),
+);
 const Resources = React.lazy(
   () => import(/* webpackChunkName: "resources" */ 'pages/Resources/Resources'),
 );
@@ -167,6 +170,15 @@ const routes: { [key: string]: any } = {
     icon: 'params',
     isExact: true,
     title: pageTitlesEnum.ADMIN,
+  },
+  ACCOUNT: {
+    path: PathEnum.Account,
+    component: Account,
+    showInSidebar: false,
+    displayName: 'Account',
+    icon: 'params',
+    isExact: true,
+    title: pageTitlesEnum.ACCOUNT,
   },
   RESOURCES: {
     path: PathEnum.Resources,

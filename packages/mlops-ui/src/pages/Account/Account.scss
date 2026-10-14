@@ -1,0 +1,87 @@
+.Account {
+  padding: 16px;
+  max-width: 720px;
+
+  h1 {
+    font-size: 20px;
+    margin: 0 0 8px;
+  }
+
+  h2 {
+    font-size: 15px;
+    margin: 20px 0 6px;
+  }
+
+  &__profile {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 6px 16px;
+    font-size: 13px;
+    margin: 0;
+
+    dt {
+      color: #5b6676;
+    }
+
+    dd {
+      margin: 0;
+    }
+  }
+
+  &__list {
+    font-size: 13px;
+    padding-left: 18px;
+    margin: 0;
+  }
+
+  &__table {
+    width: 100%;
+    border-collapse: collapse;
+
+    th,
+    td {
+      text-align: left;
+      padding: 6px 8px;
+      border-bottom: 1px solid #e3e8ef;
+      font-size: 13px;
+    }
+  }
+
+  &__button {
+    display: inline-block;
+    padding: 6px 12px;
+    font-size: 13px;
+    border-radius: 4px;
+    background: #2c6bed;
+    color: #fff;
+    border: 0;
+    cursor: pointer;
+    text-decoration: none;
+
+    &--secondary {
+      background: #e3e8ef;
+      color: #1f2937;
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+  }
+
+  &__mono {
+    font-family: monospace;
+    font-size: 12px;
+    color: #5b6676;
+  }
+
+  &__muted {
+    color: #5b6676;
+    font-size: 13px;
+  }
+
+  &__error {
+    color: #b42318;
+    font-size: 13px;
+  }
+}
