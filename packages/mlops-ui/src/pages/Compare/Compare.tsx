@@ -2,6 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 import ErrorBoundary from 'components/ErrorBoundary/ErrorBoundary';
+import { Badge, Card, Table, Text } from 'components/kit';
+
+import { STATUS_COLORS } from 'config/colors/colors';
 
 import compareService, {
   ICompareRun,
@@ -103,187 +106,203 @@ function CompareView({ ids }: { ids: string[] }) {
 
   return (
     <>
-      <p>
-        <Link to='/runs'>← runs</Link>
-      </p>
-      <h1>Compare runs</h1>
-      {ids.length > MAX_COMPARE && (
-        <p className='Compare__muted'>
-          Only the first {MAX_COMPARE} runs are compared.
-        </p>
-      )}
-      <div className='Compare__chips'>
-        {colored.map((run) => (
-          <span key={run.id} className='Compare__chip'>
-            <span
-              className='Compare__swatch'
-              style={{ background: run.color }}
-            />
-            <Link to={`/runs/${encodeURIComponent(run.id)}`}>{run.name}</Link>{' '}
-            {run.status}
-            {runs.length > 2 && (
-              <>
-                {' '}
+      <header className='Compare__header'>
+        <Link className='Compare__link' to='/runs'>
+          ← Runs
+        </Link>
+        <Text component='h1' size={18} weight={600} tint={100}>
+          Compare runs
+        </Text>
+        {ids.length > MAX_COMPARE && (
+          <Text size={12} tint={50}>
+            {`Only the first ${MAX_COMPARE} runs are compared.`}
+          </Text>
+        )}
+      </header>
+
+      <Card
+        title='Runs'
+        subtitle='Each run keeps its colour in the charts below.'
+      >
+        <div className='Compare__chips'>
+          {colored.map((run) => (
+            <div key={run.id} className='Compare__chip'>
+              <span
+                className='Compare__swatch'
+                style={{ background: run.color }}
+              />
+              <Link
+                className='Compare__link'
+                to={`/runs/${encodeURIComponent(run.id)}`}
+              >
+                {run.name}
+              </Link>
+              <Badge
+                label={run.status}
+                size='small'
+                color={STATUS_COLORS.neutral}
+              />
+              {runs.length > 2 && (
                 <Link
-                  className='Compare__muted'
+                  className='Compare__muted-link'
                   to={`/compare?ids=${encodeURIComponent(
                     ids.filter((x) => x !== run.id).join(','),
                   )}`}
                 >
-                  remove
+                  Remove
                 </Link>
-              </>
-            )}
-          </span>
-        ))}
-      </div>
-
-      <h2>Metrics</h2>
-      {names.length === 0 && (
-        <p className='Compare__muted'>None of these runs logged metrics.</p>
-      )}
-      <div className='Compare__charts'>
-        {names.map((name) => (
-          <section key={name} className='Compare__chart-box'>
-            <h3>{name}</h3>
-            <MultiLineChart
-              label={`compare ${name}`}
-              series={colored
-                .filter((run) => run.metrics[name])
-                .map((run) => ({
-                  name: run.name,
-                  color: run.color,
-                  points: run.metrics[name].series,
-                }))}
-            />
-          </section>
-        ))}
-      </div>
-      {names.length > 0 && (
-        <table className='Compare__table'>
-          <thead>
-            <tr>
-              <th>Metric</th>
-              {runs.map((run) => (
-                <th key={run.id}>{run.name}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {names.map((name) => {
-              const winner = metricWinner(runs, name);
-              return (
-                <tr key={name}>
-                  <th>{name}</th>
-                  {runs.map((run) => {
-                    const m = run.metrics[name];
-                    return (
-                      <td
-                        key={run.id}
-                        className={
-                          m && winner === run.id ? 'Compare__best' : undefined
-                        }
-                      >
-                        {m
-                          ? `${fmtNumber(m.last)} (${fmtNumber(
-                              m.min,
-                            )} – ${fmtNumber(m.max)})`
-                          : '–'}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
-
-      <h2>Parameters</h2>
-      <label className='Compare__muted'>
-        <input
-          type='checkbox'
-          checked={onlyDiffs}
-          onChange={(e) => setOnlyDiffs(e.target.checked)}
-        />{' '}
-        only differences
-      </label>
-      {shownParams.length ? (
-        <table className='Compare__table'>
-          <thead>
-            <tr>
-              <th>Parameter</th>
-              {runs.map((run) => (
-                <th key={run.id}>{run.name}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {shownParams.map((row) => (
-              <tr
-                key={row.key}
-                className={row.differs ? 'Compare__differs' : undefined}
-              >
-                <th>{row.key}</th>
-                {row.values.map((value, index) => (
-                  <td key={index} className='Compare__mono'>
-                    {cell(value)}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : (
-        <p className='Compare__muted'>
-          {onlyDiffs
-            ? 'All parameters are identical.'
-            : 'No parameters recorded.'}
-        </p>
-      )}
-
-      <h2>Code and data</h2>
-      <table className='Compare__table'>
-        <thead>
-          <tr>
-            <th />
-            {runs.map((run) => (
-              <th key={run.id}>{run.name}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {code.map((row) => (
-            <tr
-              key={row.key}
-              className={row.differs ? 'Compare__differs' : undefined}
-            >
-              <th>{row.key}</th>
-              {row.values.map((value, index) => (
-                <td key={index} className='Compare__mono'>
-                  {cell(value)}
-                </td>
-              ))}
-            </tr>
+              )}
+            </div>
           ))}
-        </tbody>
-      </table>
-      {runs.slice(1).map((run) => {
-        const diff = setDiff(base.requirements, run.requirements);
-        const lines = [
-          ...diff.added.map((x) => `+ ${x}`),
-          ...diff.removed.map((x) => `- ${x}`),
-        ];
-        return (
-          <details key={run.id} className='Compare__packages'>
-            <summary>
-              {run.name} vs {base.name}: +{diff.added.length} added, −
-              {diff.removed.length} removed
-            </summary>
-            <pre>{lines.join('\n') || 'identical'}</pre>
-          </details>
-        );
-      })}
+        </div>
+      </Card>
+
+      <Card title='Metrics'>
+        {names.length === 0 && (
+          <Text size={12} tint={50}>
+            None of these runs logged metrics.
+          </Text>
+        )}
+        <div className='Compare__charts'>
+          {names.map((name) => (
+            <section key={name} className='Compare__chart-box'>
+              <Text component='h3' size={14} weight={600} tint={100}>
+                {name}
+              </Text>
+              <MultiLineChart
+                label={`compare ${name}`}
+                series={colored
+                  .filter((run) => run.metrics[name])
+                  .map((run) => ({
+                    name: run.name,
+                    color: run.color,
+                    points: run.metrics[name].series,
+                  }))}
+              />
+            </section>
+          ))}
+        </div>
+        {names.length > 0 && (
+          <Table
+            columns={[
+              { key: 'metric', label: 'Metric' },
+              ...runs.map((run) => ({ key: run.id, label: run.name })),
+            ]}
+            rows={names.map((name) => {
+              const winner = metricWinner(runs, name);
+              const row: { [key: string]: React.ReactNode } = {
+                id: name,
+                metric: name,
+              };
+              runs.forEach((run) => {
+                const m = run.metrics[name];
+                const text = m
+                  ? `${fmtNumber(m.last)} (${fmtNumber(m.min)} – ${fmtNumber(
+                      m.max,
+                    )})`
+                  : '–';
+                row[run.id] =
+                  m && winner === run.id ? (
+                    <span className='Compare__best'>{text}</span>
+                  ) : (
+                    text
+                  );
+              });
+              return row;
+            })}
+            rowKey='id'
+          />
+        )}
+      </Card>
+
+      <Card title='Parameters'>
+        <label className='Compare__toggle'>
+          <input
+            type='checkbox'
+            checked={onlyDiffs}
+            onChange={(e) => setOnlyDiffs(e.target.checked)}
+          />
+          <Text size={12} tint={50}>
+            Only differences
+          </Text>
+        </label>
+        {shownParams.length ? (
+          <Table
+            columns={[
+              { key: 'parameter', label: 'Parameter' },
+              ...runs.map((run) => ({ key: run.id, label: run.name })),
+            ]}
+            rows={shownParams.map((row) => {
+              const out: { [key: string]: React.ReactNode } = {
+                id: row.key,
+                parameter: row.differs ? (
+                  <span className='Compare__differs'>{row.key}</span>
+                ) : (
+                  row.key
+                ),
+              };
+              row.values.forEach((value, index) => {
+                out[runs[index].id] = (
+                  <span className='Compare__mono'>{cell(value)}</span>
+                );
+              });
+              return out;
+            })}
+            rowKey='id'
+          />
+        ) : (
+          <Text size={12} tint={50}>
+            {onlyDiffs
+              ? 'All parameters are identical.'
+              : 'No parameters recorded.'}
+          </Text>
+        )}
+      </Card>
+
+      <Card title='Code and data'>
+        <Table
+          columns={[
+            { key: 'field', label: '' },
+            ...runs.map((run) => ({ key: run.id, label: run.name })),
+          ]}
+          rows={code.map((row) => {
+            const out: { [key: string]: React.ReactNode } = {
+              id: row.key,
+              field: row.differs ? (
+                <span className='Compare__differs'>{row.key}</span>
+              ) : (
+                row.key
+              ),
+            };
+            row.values.forEach((value, index) => {
+              out[runs[index].id] = (
+                <span className='Compare__mono'>{cell(value)}</span>
+              );
+            });
+            return out;
+          })}
+          rowKey='id'
+        />
+        {runs.slice(1).map((run) => {
+          const diff = setDiff(base.requirements, run.requirements);
+          const lines = [
+            ...diff.added.map((x) => `+ ${x}`),
+            ...diff.removed.map((x) => `- ${x}`),
+          ];
+          return (
+            <details key={run.id} className='Compare__packages'>
+              <summary>
+                <Text size={12} component='span'>
+                  {`${run.name} vs ${base.name}: +${diff.added.length} added, −${diff.removed.length} removed`}
+                </Text>
+              </summary>
+              <pre className='Compare__mono'>
+                {lines.join('\n') || 'identical'}
+              </pre>
+            </details>
+          );
+        })}
+      </Card>
     </>
   );
 }
@@ -300,13 +319,14 @@ function Compare(): React.FunctionComponentElement<React.ReactNode> {
         {ids.length >= 2 ? (
           <CompareView key={ids.join(',')} ids={ids} />
         ) : (
-          <>
-            <h1>Compare runs</h1>
-            <p className='Compare__muted'>
-              Select two or more runs in the list and press “Compare selected”.
-            </p>
-            <Link to='/runs'>Go to runs</Link>
-          </>
+          <Card
+            title='Compare runs'
+            subtitle='Select two or more runs in the list and press “Compare selected”.'
+          >
+            <Link className='Compare__link' to='/runs'>
+              Go to runs
+            </Link>
+          </Card>
         )}
       </section>
     </ErrorBoundary>
