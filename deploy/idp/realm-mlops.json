@@ -33,7 +33,7 @@
       "webOrigins": ["http://mlops-server:8000"],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://mlops-server:8000/ui/*"
+        "post.logout.redirect.uris": "http://mlops-server:8000/ui/*##http://mlops-server:8000/ui-next/*"
       }
     },
     {

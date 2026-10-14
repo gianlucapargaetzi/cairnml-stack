@@ -112,6 +112,7 @@ def test_realm_has_the_web_client_and_a_read_only_service_account():
     assert web["publicClient"] is True and web["standardFlowEnabled"] is True
     assert web["directAccessGrantsEnabled"] is False
     assert web["attributes"]["pkce.code.challenge.method"] == "S256"
+    assert "http://mlops-server:8000/ui-next/*" in web["attributes"]["post.logout.redirect.uris"].split("##")
     assert web["redirectUris"] == ["http://mlops-server:8000/ui/auth/callback"]
     sync = clients["mlops-server"]
     assert sync["publicClient"] is False and sync["serviceAccountsEnabled"] is True
