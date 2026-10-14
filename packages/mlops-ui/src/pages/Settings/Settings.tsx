@@ -1,6 +1,13 @@
 import React, { useEffect, useState } from 'react';
 
-import { Badge, Button, Card, Table, Text } from 'components/kit';
+import {
+  Badge,
+  Button,
+  Card,
+  DefinitionList,
+  Table,
+  Text,
+} from 'components/kit';
 import ErrorBoundary from 'components/ErrorBoundary/ErrorBoundary';
 
 import { STATUS_COLORS } from 'config/colors/colors';
@@ -75,62 +82,50 @@ function Settings(): React.FunctionComponentElement<React.ReactNode> {
         )}
 
         <Card title='Profile' subtitle='Read-only.'>
-          <dl className='Settings__details'>
-            <dt>
-              <Text size={12} weight={600} tint={60}>
-                Username
-              </Text>
-            </dt>
-            <dd>
-              <Text size={12}>{session?.username ?? 'Not available'}</Text>
-            </dd>
-            <dt>
-              <Text size={12} weight={600} tint={60}>
-                Roles
-              </Text>
-            </dt>
-            <dd>
-              <Text size={12}>
-                {session?.roles.length ? session.roles.join(', ') : 'None'}
-              </Text>
-            </dd>
-            <dt>
-              <Text size={12} weight={600} tint={60}>
-                Administrator
-              </Text>
-            </dt>
-            <dd>
-              <Badge
-                label={session?.is_admin ? 'Yes' : 'No'}
-                color={
-                  session?.is_admin
-                    ? STATUS_COLORS.primary
-                    : STATUS_COLORS.neutral
-                }
-                size='small'
-              />
-            </dd>
-            <dt>
-              <Text size={12} weight={600} tint={60}>
-                Name and email
-              </Text>
-            </dt>
-            <dd>
-              {data ? (
-                <Button
-                  variant='text'
-                  size='small'
-                  onClick={() => openAccountConsole(data.issuer)}
-                >
-                  View in your identity provider
-                </Button>
-              ) : (
-                <Text size={12} tint={50}>
-                  Loading
-                </Text>
-              )}
-            </dd>
-          </dl>
+          <DefinitionList
+            items={[
+              {
+                label: 'Username',
+                value: session?.username ?? 'Not available',
+              },
+              {
+                label: 'Roles',
+                value: session?.roles.length
+                  ? session.roles.join(', ')
+                  : 'None',
+              },
+              {
+                label: 'Administrator',
+                value: (
+                  <Badge
+                    label={session?.is_admin ? 'Yes' : 'No'}
+                    color={
+                      session?.is_admin
+                        ? STATUS_COLORS.primary
+                        : STATUS_COLORS.neutral
+                    }
+                    size='small'
+                  />
+                ),
+              },
+              {
+                label: 'Name and email',
+                value: data ? (
+                  <Button
+                    variant='text'
+                    size='small'
+                    onClick={() => openAccountConsole(data.issuer)}
+                  >
+                    View in your identity provider
+                  </Button>
+                ) : (
+                  <Text size={12} tint={50}>
+                    Loading
+                  </Text>
+                ),
+              },
+            ]}
+          />
         </Card>
 
         <Card
