@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
+import { Card, Dropdown, Table, Text, InputWrapper } from 'components/kit';
 import ErrorBoundary from 'components/ErrorBoundary/ErrorBoundary';
 
 import datasetsService from 'services/api/datasets/datasetsService';
@@ -26,6 +27,7 @@ function DatasetList({
   const [project, setProject] = useState(initialProject);
   const [type, setType] = useState('');
   const [query, setQuery] = useState('');
+  const [openMenu, setOpenMenu] = useState<'project' | 'type' | null>(null);
   const projects = useMemo(
     () => [...new Set(rows.map((row) => row.project))].sort(),
     [rows],
@@ -41,89 +43,87 @@ function DatasetList({
 
   return (
     <>
-      <h1>Datasets</h1>
-      <p className='Datasets__muted'>
-        Datasets are tracked with DVC in Git. A card is a Markdown file next to
-        the .dvc file.
-      </p>
-      <div className='Datasets__toolbar'>
-        <label>
-          Project
-          <select
-            value={project}
-            onChange={(event) => setProject(event.target.value)}
-          >
-            <option value=''>all</option>
-            {projects.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Type
-          <select
-            value={type}
-            onChange={(event) => setType(event.target.value)}
-          >
-            <option value=''>any</option>
-            {types.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Search
-          <input
-            type='search'
+      <header className='Datasets__header'>
+        <Text component='h1' size={18} weight={600} tint={100}>
+          Datasets
+        </Text>
+        <Text size={12} tint={50}>
+          Datasets are tracked with DVC in Git. A card is a Markdown file next
+          to the .dvc file.
+        </Text>
+      </header>
+      <Card
+        title='All datasets'
+        subtitle={`${shown.length} of ${rows.length} shown.`}
+      >
+        <div className='Datasets__toolbar'>
+          <Dropdown
+            label='Project'
+            size='medium'
+            placeholder='All projects'
+            value={project || null}
+            options={[
+              { value: '', label: 'All projects' },
+              ...projects.map((name) => ({ value: name, label: name })),
+            ]}
+            onChange={(option) => setProject(option?.value ?? '')}
+            onMenuOpen={() => setOpenMenu('project')}
+            onMenuClose={() => setOpenMenu(null)}
+            open={openMenu === 'project'}
+            withPortal
+          />
+          <Dropdown
+            label='Type'
+            size='medium'
+            placeholder='Any type'
+            value={type || null}
+            options={[
+              { value: '', label: 'Any type' },
+              ...types.map((name) => ({ value: name, label: name })),
+            ]}
+            onChange={(option) => setType(option?.value ?? '')}
+            onMenuOpen={() => setOpenMenu('type')}
+            onMenuClose={() => setOpenMenu(null)}
+            open={openMenu === 'type'}
+            withPortal
+          />
+          <InputWrapper
+            labelAppearance='top-labeled'
+            label='Search'
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
-        </label>
-      </div>
-      <table className='Datasets__table'>
-        <thead>
-          <tr>
-            <th>Dataset</th>
-            <th>Project</th>
-            <th>Repository</th>
-            <th>Type</th>
-            <th>License</th>
-            <th>Size</th>
-            <th>Files</th>
-            <th>Card</th>
-          </tr>
-        </thead>
-        <tbody>
-          {shown.map((row) => (
-            <tr key={`${row.project}/${row.repo}/${row.path}`}>
-              <td>
-                <Link to={datasetLink(row)}>
-                  {row.title ? `${row.path} (${row.title})` : row.path}
-                </Link>
-              </td>
-              <td>{row.project}</td>
-              <td>{row.repo}</td>
-              <td>{row.type ?? '–'}</td>
-              <td>{row.license ?? '–'}</td>
-              <td>{formatBytes(row.size_bytes)}</td>
-              <td>{row.nfiles ?? '–'}</td>
-              <td>{row.has_card ? 'yes' : 'missing'}</td>
-            </tr>
-          ))}
-          {shown.length === 0 && (
-            <tr>
-              <td colSpan={8} className='Datasets__muted'>
-                No datasets found. Link a data repository with{' '}
-                <code>mlops repo link --role data</code> and add .dvc files.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+        </div>
+        <Table
+          columns={[
+            { key: 'dataset', label: 'Dataset' },
+            { key: 'project', label: 'Project' },
+            { key: 'repo', label: 'Repository' },
+            { key: 'type', label: 'Type' },
+            { key: 'license', label: 'License' },
+            { key: 'size', label: 'Size' },
+            { key: 'files', label: 'Files' },
+            { key: 'card', label: 'Card' },
+          ]}
+          rows={shown.map((row) => ({
+            id: `${row.project}/${row.repo}/${row.path}`,
+            dataset: (
+              <Link className='Datasets__link' to={datasetLink(row)}>
+                {row.title ? `${row.path} (${row.title})` : row.path}
+              </Link>
+            ),
+            project: row.project,
+            repo: row.repo,
+            type: row.type ?? '–',
+            license: row.license ?? '–',
+            size: formatBytes(row.size_bytes),
+            files: row.nfiles ?? '–',
+            card: row.has_card ? 'Yes' : 'Missing',
+          }))}
+          rowKey='id'
+          emptyText='No datasets found. Link a data repository with mlops repo link --role data, and add .dvc files.'
+        />
+      </Card>
     </>
   );
 }
@@ -164,9 +164,9 @@ function Datasets(): React.FunctionComponentElement<React.ReactNode> {
     <ErrorBoundary>
       <section className='Datasets'>
         {error && (
-          <p className='Datasets__error' role='alert'>
+          <Text size={12} color='error' role='alert'>
             {error}
-          </p>
+          </Text>
         )}
         {selection ? (
           <DatasetDetail {...selection} />
@@ -176,7 +176,11 @@ function Datasets(): React.FunctionComponentElement<React.ReactNode> {
             initialProject={params.get('project') ?? ''}
           />
         ) : (
-          !error && <p className='Datasets__muted'>Loading…</p>
+          !error && (
+            <Text size={12} tint={50}>
+              Loading
+            </Text>
+          )
         )}
       </section>
     </ErrorBoundary>
