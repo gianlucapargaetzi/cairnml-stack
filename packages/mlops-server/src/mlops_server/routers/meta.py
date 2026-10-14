@@ -4,10 +4,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 from mlops_common.schemas import PublicConfig
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from mlops_server.models import User
-from mlops_server.security.deps import Principal, get_session, principal_dep
+from mlops_server.models import Client, User
+from mlops_server.security.deps import Principal, get_session, principal_dep, require
 
 router = APIRouter()
 
@@ -25,6 +26,26 @@ def public_config(request: Request) -> PublicConfig:
         oidc_issuer=settings.oidc_issuer,
         oidc_client_id=settings.oidc_client_id,
     )
+
+
+@router.get("/me/clients")
+def my_clients(
+    principal: Annotated[Principal, Depends(require("web"))],
+    session: Annotated[Session, Depends(get_session)],
+) -> list[dict]:
+    """The machines enrolled for the signed-in user. Read-only: revocation stays with the CLI."""
+    rows = session.scalars(
+        select(Client).where(Client.user_id == principal.user_id).order_by(Client.created_at)
+    ).all()
+    return [
+        {
+            "id": c.id,
+            "name": c.name,
+            "created_at": c.created_at.isoformat(),
+            "revoked_at": c.revoked_at.isoformat() if c.revoked_at else None,
+        }
+        for c in rows
+    ]
 
 
 @router.get("/me")
