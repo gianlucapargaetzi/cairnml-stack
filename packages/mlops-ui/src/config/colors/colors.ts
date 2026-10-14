@@ -78,3 +78,14 @@ export const COLOR_BY_VALUE_TYPE: Record<string, string> = {
 };
 
 export default COLORS;
+
+// Status colours for components that take a colour in TypeScript (Badge, Avatar). They repeat the
+// values of $primary-color, $success-color, $error-color, $warning-color and $grey in
+// styles/abstracts/_variables.scss; change both places together.
+export const STATUS_COLORS = {
+  primary: '#1473E6',
+  success: '#2BC784',
+  error: '#E64E48',
+  warning: '#FFCC00',
+  neutral: '#586069',
+} as const;
