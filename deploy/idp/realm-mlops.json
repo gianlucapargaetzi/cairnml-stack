@@ -14,7 +14,10 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "fullScopeAllowed": true,
-      "attributes": { "oauth2.device.authorization.grant.enabled": "true" }
+      "attributes": {
+        "oauth2.device.authorization.grant.enabled": "true",
+        "post.logout.redirect.uris": "http://127.0.0.1:8765/logged-out"
+      }
     },
     {
       "clientId": "mlops-web",

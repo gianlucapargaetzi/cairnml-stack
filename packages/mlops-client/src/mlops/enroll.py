@@ -27,7 +27,7 @@ def enroll(
     if idp_token is None and already_enrolled:
         # The browser may still hold the previous user's IdP session, which would approve the
         # login silently as that user. Log it out first so the next login asks for credentials.
-        logout(meta.oidc_issuer)
+        logout(meta.oidc_issuer, meta.oidc_client_id)
     token = idp_token or login(meta.oidc_issuer, meta.oidc_client_id)
     key = generate_private_key()
     response = http.post(
