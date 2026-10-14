@@ -122,6 +122,18 @@ def test_realm_has_the_web_client_and_a_read_only_service_account():
     assert any(u["username"] == "carol" for u in realm["users"])
 
 
+def test_users_cannot_edit_their_name_email_or_username():
+    import json
+
+    realm = json.loads(Path("deploy/idp/realm-mlops.json").read_text())
+    assert realm["editUsernameAllowed"] is False
+    provider = realm["components"]["org.keycloak.userprofile.UserProfileProvider"][0]
+    profile = json.loads(provider["config"]["kc.user.profile.config"][0])
+    attributes = {a["name"]: a for a in profile["attributes"]}
+    for name in ("username", "email", "firstName", "lastName"):
+        assert attributes[name]["permissions"]["edit"] == ["admin"], name
+
+
 def test_idp_sync_settings_reach_the_server_and_the_realm_import():
     server_env = _compose("server")["services"]["mlops-server"]["environment"]
     assert server_env["MLOPS_IDP_SYNC_CLIENT_SECRET"]

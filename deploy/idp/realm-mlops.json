@@ -3,7 +3,14 @@
   "enabled": true,
   "sslRequired": "none",
   "registrationAllowed": false,
-  "roles": { "realm": [ { "name": "mlops-admin", "description": "May create agent enrollment tokens, projects and revoke machines" } ] },
+  "roles": {
+    "realm": [
+      {
+        "name": "mlops-admin",
+        "description": "May create agent enrollment tokens, projects and revoke machines"
+      }
+    ]
+  },
   "clients": [
     {
       "clientId": "mlops-cli",
@@ -29,8 +36,12 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "fullScopeAllowed": true,
-      "redirectUris": ["http://mlops-server:8000/ui/auth/callback"],
-      "webOrigins": ["http://mlops-server:8000"],
+      "redirectUris": [
+        "http://mlops-server:8000/ui/auth/callback"
+      ],
+      "webOrigins": [
+        "http://mlops-server:8000"
+      ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "http://mlops-server:8000/ui/*##http://mlops-server:8000/ui-next/*"
@@ -50,13 +61,37 @@
   ],
   "users": [
     {
-      "username": "carol", "enabled": true, "emailVerified": true,
-      "email": "carol@example.test", "firstName": "Carol", "lastName": "Lifecycle"
+      "username": "carol",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "carol@example.test",
+      "firstName": "Carol",
+      "lastName": "Lifecycle"
     },
     {
-      "username": "service-account-mlops-server", "enabled": true,
+      "username": "service-account-mlops-server",
+      "enabled": true,
       "serviceAccountClientId": "mlops-server",
-      "clientRoles": { "realm-management": ["view-users", "query-users"] }
+      "clientRoles": {
+        "realm-management": [
+          "view-users",
+          "query-users"
+        ]
+      }
     }
-  ]
+  ],
+  "components": {
+    "org.keycloak.userprofile.UserProfileProvider": [
+      {
+        "name": "declarative-user-profile",
+        "providerId": "declarative-user-profile",
+        "config": {
+          "kc.user.profile.config": [
+            "{\n  \"attributes\": [\n    {\n      \"name\": \"username\",\n      \"displayName\": \"${username}\",\n      \"validations\": {\n        \"length\": {\n          \"min\": 3,\n          \"max\": 255\n        },\n        \"username-prohibited-characters\": {},\n        \"up-username-not-idn-homograph\": {}\n      },\n      \"permissions\": {\n        \"view\": [\n          \"admin\",\n          \"user\"\n        ],\n        \"edit\": [\n          \"admin\"\n        ]\n      },\n      \"multivalued\": false\n    },\n    {\n      \"name\": \"email\",\n      \"displayName\": \"${email}\",\n      \"validations\": {\n        \"email\": {},\n        \"length\": {\n          \"max\": 255\n        }\n      },\n      \"required\": {\n        \"roles\": [\n          \"user\"\n        ]\n      },\n      \"permissions\": {\n        \"view\": [\n          \"admin\",\n          \"user\"\n        ],\n        \"edit\": [\n          \"admin\"\n        ]\n      },\n      \"multivalued\": false\n    },\n    {\n      \"name\": \"firstName\",\n      \"displayName\": \"${firstName}\",\n      \"validations\": {\n        \"length\": {\n          \"max\": 255\n        },\n        \"person-name-prohibited-characters\": {}\n      },\n      \"required\": {\n        \"roles\": [\n          \"user\"\n        ]\n      },\n      \"permissions\": {\n        \"view\": [\n          \"admin\",\n          \"user\"\n        ],\n        \"edit\": [\n          \"admin\"\n        ]\n      },\n      \"multivalued\": false\n    },\n    {\n      \"name\": \"lastName\",\n      \"displayName\": \"${lastName}\",\n      \"validations\": {\n        \"length\": {\n          \"max\": 255\n        },\n        \"person-name-prohibited-characters\": {}\n      },\n      \"required\": {\n        \"roles\": [\n          \"user\"\n        ]\n      },\n      \"permissions\": {\n        \"view\": [\n          \"admin\",\n          \"user\"\n        ],\n        \"edit\": [\n          \"admin\"\n        ]\n      },\n      \"multivalued\": false\n    }\n  ],\n  \"groups\": [\n    {\n      \"name\": \"user-metadata\",\n      \"displayHeader\": \"User metadata\",\n      \"displayDescription\": \"Attributes, which refer to user metadata\"\n    }\n  ]\n}"
+          ]
+        }
+      }
+    ]
+  },
+  "editUsernameAllowed": false
 }
