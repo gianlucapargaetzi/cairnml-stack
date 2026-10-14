@@ -1,26 +1,35 @@
 import React, { useEffect, useState } from 'react';
 
+import { Badge, Button, Card, Table, Text } from 'components/kit';
 import ErrorBoundary from 'components/ErrorBoundary/ErrorBoundary';
+
+import { STATUS_COLORS } from 'config/colors/colors';
 
 import accountService, {
   IAccountClient,
   IAccountProject,
 } from 'services/api/account/accountService';
-import { getSession, signOut } from 'services/session/session';
+import { getSession } from 'services/session/session';
 
-import './Account.scss';
+import './Settings.scss';
 
-interface IAccountData {
+interface ISettingsData {
   clients: IAccountClient[];
   projects: IAccountProject[];
   issuer: string;
 }
 
-function Account(): React.FunctionComponentElement<React.ReactNode> {
+// The identity provider's account console. Name, email and username are read-only there;
+// the password is changed on its "Signing in" page.
+function openAccountConsole(issuer: string, path: string = ''): void {
+  const url = `${issuer.replace(/\/$/, '')}/account/${path}`;
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+function Settings(): React.FunctionComponentElement<React.ReactNode> {
   const session = getSession();
-  const [data, setData] = useState<IAccountData | null>(null);
+  const [data, setData] = useState<ISettingsData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     const clients = accountService.getMyClients();
@@ -36,7 +45,7 @@ function Account(): React.FunctionComponentElement<React.ReactNode> {
       )
       .catch((requestError) => {
         if (requestError?.name !== 'AbortError') {
-          setError(`Account data could not be loaded: ${requestError.message}`);
+          setError(`Settings could not be loaded: ${requestError.message}`);
         }
       });
     return () => {
@@ -46,116 +55,163 @@ function Account(): React.FunctionComponentElement<React.ReactNode> {
     };
   }, []);
 
-  function handleSignOut() {
-    setSigningOut(true);
-    setError(null);
-    signOut().catch((signOutError) => {
-      setSigningOut(false);
-      setError(`Sign out failed: ${signOutError.message}`);
-    });
-  }
-
-  // Keycloak's account console, on the password page. Passwords are changed there, not here.
-  const passwordUrl = data
-    ? `${data.issuer}/account/#/security/signingin`
-    : null;
-
   return (
     <ErrorBoundary>
-      <section className='Account'>
-        <h1>Account</h1>
-        <p className='Account__muted'>
-          Your account. Everything on this page is read-only, except the
-          password and sign-out actions.
-        </p>
+      <section className='Settings'>
+        <header className='Settings__header'>
+          <Text component='h1' size={18} weight={600} tint={100}>
+            Settings
+          </Text>
+          <Text size={12} tint={50}>
+            Your account. Name, email and username are managed by an
+            administrator.
+          </Text>
+        </header>
+
         {error && (
-          <p className='Account__error' role='alert'>
+          <Text size={12} color='error' role='alert'>
             {error}
-          </p>
+          </Text>
         )}
 
-        <h2>Profile</h2>
-        <dl className='Account__profile'>
-          <dt>Username</dt>
-          <dd>{session?.username ?? 'Not available'}</dd>
-          <dt>Roles</dt>
-          <dd>{session?.roles.length ? session.roles.join(', ') : 'None'}</dd>
-          <dt>Administrator</dt>
-          <dd>{session?.is_admin ? 'Yes' : 'No'}</dd>
-        </dl>
+        <Card title='Profile' subtitle='Read-only.'>
+          <dl className='Settings__details'>
+            <dt>
+              <Text size={12} weight={600} tint={60}>
+                Username
+              </Text>
+            </dt>
+            <dd>
+              <Text size={12}>{session?.username ?? 'Not available'}</Text>
+            </dd>
+            <dt>
+              <Text size={12} weight={600} tint={60}>
+                Roles
+              </Text>
+            </dt>
+            <dd>
+              <Text size={12}>
+                {session?.roles.length ? session.roles.join(', ') : 'None'}
+              </Text>
+            </dd>
+            <dt>
+              <Text size={12} weight={600} tint={60}>
+                Administrator
+              </Text>
+            </dt>
+            <dd>
+              <Badge
+                label={session?.is_admin ? 'Yes' : 'No'}
+                color={
+                  session?.is_admin
+                    ? STATUS_COLORS.primary
+                    : STATUS_COLORS.neutral
+                }
+                size='small'
+              />
+            </dd>
+            <dt>
+              <Text size={12} weight={600} tint={60}>
+                Name and email
+              </Text>
+            </dt>
+            <dd>
+              {data ? (
+                <Button
+                  variant='text'
+                  size='small'
+                  onClick={() => openAccountConsole(data.issuer)}
+                >
+                  View in your identity provider
+                </Button>
+              ) : (
+                <Text size={12} tint={50}>
+                  Loading
+                </Text>
+              )}
+            </dd>
+          </dl>
+        </Card>
 
-        <h2>Password</h2>
-        <p className='Account__muted'>
-          Passwords are managed by the identity provider. Change yours there.
-        </p>
-        {passwordUrl ? (
-          <a
-            className='Account__button'
-            href={passwordUrl}
-            target='_blank'
-            rel='noopener noreferrer'
-          >
-            Change password
-          </a>
-        ) : (
-          <span className='Account__muted'>Loading</span>
-        )}
-
-        <h2>Projects</h2>
-        {data && data.projects.length === 0 && (
-          <p className='Account__muted'>You are not a member of any project.</p>
-        )}
-        {data && data.projects.length > 0 && (
-          <ul className='Account__list'>
-            {data.projects.map((project) => (
-              <li key={project.id}>
-                <span>{project.name}</span>{' '}
-                <span className='Account__mono'>{project.slug}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <h2>Enrolled machines</h2>
-        {data && data.clients.length === 0 && (
-          <p className='Account__muted'>
-            No machine is enrolled for your account. Run{' '}
-            <code>mlops enroll</code> on the machine.
-          </p>
-        )}
-        {data && data.clients.length > 0 && (
-          <table className='Account__table'>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Enrolled</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.clients.map((client) => (
-                <tr key={client.id}>
-                  <td>{client.name}</td>
-                  <td>{new Date(client.created_at).toLocaleString()}</td>
-                  <td>{client.revoked_at ? 'Revoked' : 'Active'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-
-        <h2>Session</h2>
-        <button
-          type='button'
-          className='Account__button Account__button--secondary'
-          onClick={handleSignOut}
-          disabled={signingOut}
+        <Card
+          title='Password'
+          subtitle='The identity provider checks your password, so it is changed there.'
         >
-          {signingOut ? 'Signing out' : 'Sign out'}
-        </button>
+          <div>
+            {data ? (
+              <Button
+                variant='contained'
+                onClick={() =>
+                  openAccountConsole(data.issuer, 'account-security/signing-in')
+                }
+              >
+                Change password
+              </Button>
+            ) : (
+              <Text size={12} tint={50}>
+                Loading
+              </Text>
+            )}
+          </div>
+        </Card>
+
+        <Card title='Projects' subtitle='Projects you are a member of.'>
+          <Table
+            columns={[
+              { key: 'name', label: 'Name' },
+              { key: 'slug', label: 'Identifier' },
+            ]}
+            rows={(data?.projects ?? []).map((project) => ({
+              id: project.id,
+              name: project.name,
+              slug: project.slug,
+            }))}
+            rowKey='id'
+            emptyText={
+              data
+                ? 'You are not a member of any project yet. Ask an administrator.'
+                : 'Loading'
+            }
+          />
+        </Card>
+
+        <Card
+          title='Enrolled machines'
+          subtitle='Machines that can submit runs as you.'
+        >
+          <Table
+            columns={[
+              { key: 'name', label: 'Name' },
+              { key: 'enrolled', label: 'Enrolled' },
+              { key: 'status', label: 'Status' },
+            ]}
+            rows={(data?.clients ?? []).map((client) => ({
+              id: client.id,
+              name: client.name,
+              enrolled: new Date(client.created_at).toLocaleString(),
+              status: (
+                <Badge
+                  label={client.revoked_at ? 'Revoked' : 'Active'}
+                  color={
+                    client.revoked_at
+                      ? STATUS_COLORS.error
+                      : STATUS_COLORS.success
+                  }
+                  size='small'
+                />
+              ),
+            }))}
+            rowKey='id'
+            emptyText={
+              data
+                ? 'No machine is enrolled for your account. Run mlops enroll on the machine.'
+                : 'Loading'
+            }
+          />
+        </Card>
       </section>
     </ErrorBoundary>
   );
 }
 
-export default Account;
+export default Settings;
