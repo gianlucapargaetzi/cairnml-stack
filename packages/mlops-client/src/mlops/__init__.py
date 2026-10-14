@@ -1,6 +1,6 @@
 import logging as _logging
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 # SDK warnings must never reach the user's stderr, the stdout/stderr tees (which would
 # send them to the server as run logs) or a root handler, so the logger is isolated.
