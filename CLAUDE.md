@@ -22,6 +22,10 @@ The UI is built from the kit in `src/components/kit` and the tokens in `src/styl
 - Titles, body text and labels use `Text`. Buttons use `Button`. Cards use `Card`. Context menus use `ControlPopover`. Plain `<h1>`/`<table>` with page-local CSS is not allowed in new code.
 - Read-only data is shown as text, never as a disabled input.
 - Icons come from `Icon`. People are shown as a round `Avatar` (`react-avatar`, `round`), coloured with `stringToColor(name)`.
+- Use `components/kit` only. `components/kit_v2` belongs to the Aim fork and is not used in new or restyled code.
+- Read-only label and value pairs use `DefinitionList`. Form fields use the kit `Input` (`components/kit/Input`), and dropdowns are `Input` with `select` and `MenuItem`. Status uses `Badge` with the colours in `config/colors/colors.ts` (`STATUS_COLORS`).
+- Links inside a page use a page-local class in `$primary-color` with no underline until hover.
+- Filter groups are `Button`s: the active one `variant='contained' color='secondary'`, the others `variant='outlined'`.
 - One primary action per view. Destructive actions use the error colour and sit apart from other actions.
 
 **Typography** (font: Inter)
@@ -45,7 +49,7 @@ The UI is built from the kit in `src/components/kit` and the tokens in `src/styl
 **Layout and spacing**
 - Page padding: `$space-lg` (24px). Space between sections: `$space-lg`. Space between a title and its description: `$space-xxxs`. Space between related items: `$space-xs`.
 - Cards: `Card`, padding `$space-lg`, radius `$border-radius-lg`, border `$border-grey`.
-- Tables: use the kit `Table` (`components/kit/Table`) for read-only lists. Header labels use the table-label style above, rows are separated by `$border-grey-light`, no zebra striping. Use `DataList` only for large or sortable data.
+- Tables: use the kit `Table` (`components/kit/Table`) for read-only lists. Rows can be clickable and selectable (`onRowClick`, `selectedRowKey`). Global styles set `td` and `th` to `display: flex`, so the kit `Table` pins its own table display values; do not build tables by hand. Header labels use the table-label style above, rows are separated by `$border-grey-light`, no zebra striping. Use `DataList` only for large or sortable data.
 - Empty states: one muted sentence that says what to do next.
 
 **Buttons** (`Button`, size `medium`, 32px high)

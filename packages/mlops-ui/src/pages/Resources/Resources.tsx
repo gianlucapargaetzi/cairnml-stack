@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 
+import { Badge, Card, DefinitionList, Table, Text } from 'components/kit';
 import ErrorBoundary from 'components/ErrorBoundary/ErrorBoundary';
+
+import { STATUS_COLORS } from 'config/colors/colors';
 
 import resourcesService, {
   IResourceAgent,
@@ -19,6 +22,12 @@ import {
 import './Resources.scss';
 
 const REFRESH_MS = 5000;
+
+const STATE_COLOR: Record<QueueState, string> = {
+  stuck: STATUS_COLORS.error,
+  busy: STATUS_COLORS.warning,
+  idle: STATUS_COLORS.success,
+};
 
 const STATE_LABEL: Record<QueueState, string> = {
   stuck: 'stuck: no online agent serves this queue',
@@ -40,7 +49,9 @@ function Meter({
   return (
     <div className='Resources__meter'>
       <div className='Resources__meter-label'>
-        {label}: {usageLabel(used, total, unit)}
+        <Text size={12} weight={600} tint={60}>
+          {label}: {usageLabel(used, total, unit)}
+        </Text>
       </div>
       <div className='Resources__track'>
         <div
@@ -56,35 +67,33 @@ function AgentCard({ agent }: { agent: IResourceAgent }) {
   const caps = agent.capabilities;
   const free = agent.free;
   const usage = agent.usage;
+  const status = agent.online
+    ? 'Online'
+    : `Offline, last seen ${
+        agent.last_seen ? new Date(agent.last_seen).toLocaleString() : '–'
+      }`;
   return (
-    <section className='Resources__agent'>
-      <h2>
-        <span
-          className={`Resources__dot ${
-            agent.online ? 'Resources__dot--on' : ''
-          }`}
-          role='img'
-          aria-label={agent.online ? 'online' : 'offline'}
-        />{' '}
-        {agent.name}{' '}
-        <span className='Resources__muted'>
-          {agent.online
-            ? 'online'
-            : `offline, last seen ${
-                agent.last_seen
-                  ? new Date(agent.last_seen).toLocaleString()
-                  : '–'
-              }`}
-        </span>
-      </h2>
-      <p className='Resources__muted'>
-        queues: {agent.queues.join(', ') || 'none'} · runtimes:{' '}
-        {caps.runtimes.join(', ') || 'none'}
-        {caps.labels.length ? ` · labels: ${caps.labels.join(', ')}` : ''}
-        {caps.docker ? '' : ' · no docker'}
-      </p>
-      <p>{capabilityText(caps)}</p>
-      <h3>Allocated to jobs</h3>
+    <Card title={agent.name} subtitle={status}>
+      <div className='Resources__status'>
+        <Badge
+          label={agent.online ? 'Online' : 'Offline'}
+          color={agent.online ? STATUS_COLORS.success : STATUS_COLORS.error}
+          size='small'
+        />
+      </div>
+      <DefinitionList
+        items={[
+          { label: 'Queues', value: agent.queues.join(', ') || 'none' },
+          { label: 'Runtimes', value: caps.runtimes.join(', ') || 'none' },
+          { label: 'Labels', value: caps.labels.join(', ') || 'none' },
+          { label: 'Docker', value: caps.docker ? 'Yes' : 'No' },
+        ]}
+      />
+      <Text size={12}>{capabilityText(caps)}</Text>
+
+      <Text component='h3' size={14} weight={600} tint={100}>
+        Allocated to jobs
+      </Text>
       <Meter
         label='CPU'
         used={caps.cpu - free.cpu}
@@ -105,14 +114,15 @@ function AgentCard({ agent }: { agent: IResourceAgent }) {
           unit='gpu'
         />
       )}
-      <h3>
-        Actually in use{' '}
-        {agent.usage_at && (
-          <span className='Resources__muted'>
-            (sampled {fmtDuration(agent.usage_at, null)} ago)
-          </span>
-        )}
-      </h3>
+
+      <Text component='h3' size={14} weight={600} tint={100}>
+        Actually in use
+      </Text>
+      {agent.usage_at && (
+        <Text size={12} tint={50}>
+          {`Sampled ${fmtDuration(agent.usage_at, null)} ago`}
+        </Text>
+      )}
       {usage ? (
         <>
           <Meter label='CPU' used={usage.cpu_percent} total={100} unit='%' />
@@ -140,26 +150,31 @@ function AgentCard({ agent }: { agent: IResourceAgent }) {
           ))}
         </>
       ) : (
-        <p className='Resources__muted'>No usage reported yet.</p>
+        <Text size={12} tint={50}>
+          No usage reported yet.
+        </Text>
       )}
-      <h3>Running jobs</h3>
+
+      <Text component='h3' size={14} weight={600} tint={100}>
+        Running jobs
+      </Text>
       {agent.running_jobs.length ? (
-        <ul>
-          {agent.running_jobs.map((job, index) => (
-            <li key={index}>
-              {job.run_name} ({job.project})
-            </li>
-          ))}
-        </ul>
+        agent.running_jobs.map((job, index) => (
+          <Text key={index} size={12}>
+            {`${job.run_name} (${job.project})`}
+          </Text>
+        ))
       ) : (
-        <p className='Resources__muted'>Idle.</p>
+        <Text size={12} tint={50}>
+          Idle.
+        </Text>
       )}
       {agent.other_running_jobs > 0 && (
-        <p className='Resources__muted'>
-          {agent.other_running_jobs} more in projects you are not in.
-        </p>
+        <Text size={12} tint={50}>
+          {`${agent.other_running_jobs} more in projects you are not in.`}
+        </Text>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -204,11 +219,19 @@ function Resources(): React.FunctionComponentElement<React.ReactNode> {
   return (
     <ErrorBoundary>
       <section className='Resources'>
-        <h1>Resources</h1>
+        <header className='Resources__header'>
+          <Text component='h1' size={18} weight={600} tint={100}>
+            Resources
+          </Text>
+          <Text size={12} tint={50}>
+            Agents, what they run, and the queues waiting for them. Refreshes
+            every few seconds.
+          </Text>
+        </header>
         {error && (
-          <p className='Resources__error' role='alert'>
+          <Text size={12} color='error' role='alert'>
             {error}
-          </p>
+          </Text>
         )}
         {data && data.agents.length > 0 && (
           <div className='Resources__grid'>
@@ -218,48 +241,43 @@ function Resources(): React.FunctionComponentElement<React.ReactNode> {
           </div>
         )}
         {data && data.agents.length === 0 && (
-          <p className='Resources__muted'>
-            No agents are registered. An administrator creates a token with{' '}
-            <code>mlops admin agent-token</code> and starts an agent.
-          </p>
+          <Text size={12} tint={50}>
+            No agents are registered. An administrator creates a token with
+            mlops admin agent-token and starts an agent.
+          </Text>
         )}
-        <h2>Queues</h2>
-        <table className='Resources__table'>
-          <thead>
-            <tr>
-              <th>Queue</th>
-              <th>Queued</th>
-              <th>Running</th>
-              <th>Serving agents</th>
-              <th>Oldest wait</th>
-              <th>State</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(data?.queues ?? []).map((queue) => {
+        <Card title='Queues' subtitle='Jobs waiting or running, per queue.'>
+          <Table
+            columns={[
+              { key: 'queue', label: 'Queue' },
+              { key: 'queued', label: 'Queued' },
+              { key: 'running', label: 'Running' },
+              { key: 'agents', label: 'Serving agents' },
+              { key: 'wait', label: 'Oldest wait' },
+              { key: 'state', label: 'State' },
+            ]}
+            rows={(data?.queues ?? []).map((queue) => {
               const state = queueState(queue);
-              return (
-                <tr key={queue.name}>
-                  <td>{queue.name}</td>
-                  <td>{queue.queued}</td>
-                  <td>{queue.running}</td>
-                  <td>{queue.agents}</td>
-                  <td>{queueWait(queue.oldest_wait_s)}</td>
-                  <td className={`Resources__state Resources__state--${state}`}>
-                    {STATE_LABEL[state]}
-                  </td>
-                </tr>
-              );
+              return {
+                id: queue.name,
+                queue: queue.name,
+                queued: queue.queued,
+                running: queue.running,
+                agents: queue.agents,
+                wait: queueWait(queue.oldest_wait_s),
+                state: (
+                  <Badge
+                    label={STATE_LABEL[state]}
+                    color={STATE_COLOR[state]}
+                    size='small'
+                  />
+                ),
+              };
             })}
-            {data && data.queues.length === 0 && (
-              <tr>
-                <td colSpan={6} className='Resources__muted'>
-                  No queues yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+            rowKey='id'
+            emptyText='No queues yet.'
+          />
+        </Card>
       </section>
     </ErrorBoundary>
   );

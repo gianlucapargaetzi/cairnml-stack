@@ -1,105 +1,45 @@
-.Resources {
-  padding: 16px;
+@use 'src/styles/abstracts' as *;
 
-  h1 {
-    font-size: 20px;
-    margin: 0 0 12px;
+.Resources {
+  display: flex;
+  flex-direction: column;
+  gap: $space-lg;
+  padding: $space-lg;
+
+  &__header {
+    display: flex;
+    flex-direction: column;
+    gap: $space-xxxs;
   }
 
   &__grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 16px;
-    margin-bottom: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(toRem(320px), 1fr));
+    gap: $space-lg;
+    align-items: start;
   }
 
-  &__agent {
-    border: 1px solid #e3e8ef;
-    border-radius: 4px;
-    padding: 12px;
-    background: #fff;
-
-    h2 {
-      font-size: 15px;
-      margin: 0 0 4px;
-    }
-
-    h3 {
-      font-size: 13px;
-      margin: 12px 0 4px;
-    }
-
-    p,
-    ul {
-      font-size: 13px;
-      margin: 4px 0;
-    }
-  }
-
-  &__dot {
-    display: inline-block;
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    background: #b42318;
-
-    &--on {
-      background: #12b76a;
-    }
+  &__status {
+    margin-bottom: $space-xs;
   }
 
   &__meter {
-    margin: 4px 0;
-  }
-
-  &__meter-label {
-    font-size: 12px;
-    color: #344054;
+    display: flex;
+    flex-direction: column;
+    gap: $space-xxxs;
+    margin: $space-xxs 0;
   }
 
   &__track {
-    height: 6px;
-    background: #eef1f5;
-    border-radius: 3px;
+    height: toRem(8px);
+    border-radius: $border-radius-sm;
+    background: $primary-color-10;
     overflow: hidden;
   }
 
   &__fill {
     height: 100%;
-    background: #1f6feb;
-  }
-
-  &__table {
-    width: 100%;
-    border-collapse: collapse;
-
-    th,
-    td {
-      text-align: left;
-      padding: 6px 8px;
-      border-bottom: 1px solid #e3e8ef;
-      font-size: 13px;
-    }
-  }
-
-  &__state--stuck {
-    color: #b42318;
-  }
-
-  &__state--busy {
-    color: #b54708;
-  }
-
-  &__state--idle {
-    color: #067647;
-  }
-
-  &__muted {
-    color: #5b6676;
-    font-size: 13px;
-  }
-
-  &__error {
-    color: #b42318;
+    background: $primary-color;
+    border-radius: $border-radius-sm;
   }
 }

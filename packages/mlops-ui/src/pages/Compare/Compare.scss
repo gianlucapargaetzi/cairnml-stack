@@ -1,55 +1,73 @@
+@use 'src/styles/abstracts' as *;
+
 .Compare {
-  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: $space-lg;
+  padding: $space-lg;
 
-  h1 {
-    font-size: 20px;
-    margin: 0 0 8px;
+  &__header {
+    display: flex;
+    flex-direction: column;
+    gap: $space-xxxs;
   }
 
-  h2 {
-    font-size: 15px;
-    margin: 20px 0 6px;
+  &__link {
+    color: $primary-color;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
   }
 
-  h3 {
-    font-size: 13px;
-    margin: 0 0 4px;
+  &__muted-link {
+    color: $pico-50;
+    font-size: $text-sm;
+
+    &:hover {
+      color: $pico-80;
+    }
   }
 
   &__chips {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    font-size: 13px;
+    gap: $space-xs;
   }
 
   &__chip {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    border: 1px solid #e3e8ef;
-    border-radius: 4px;
-    padding: 2px 8px;
+    gap: $space-xs;
+    border: $border-grey;
+    border-radius: $border-radius-md;
+    padding: $space-xxs $space-xs;
+    font-size: $text-md;
   }
 
   &__swatch {
     display: inline-block;
-    width: 10px;
-    height: 10px;
-    border-radius: 2px;
+    width: toRem(10px);
+    height: toRem(10px);
+    border-radius: $border-radius-xs;
   }
 
   &__charts {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(toRem(360px), 1fr));
+    gap: $space-md;
+    margin-bottom: $space-md;
   }
 
   &__chart-box {
-    border: 1px solid #e3e8ef;
-    border-radius: 4px;
-    padding: 8px;
-    background: #fff;
+    display: flex;
+    flex-direction: column;
+    gap: $space-xxs;
+    border: $border-grey;
+    border-radius: $border-radius-md;
+    padding: $space-sm;
+    background: $white;
   }
 
   &__chart {
@@ -57,57 +75,48 @@
   }
 
   &__axis {
-    font-size: 10px;
-    fill: #5b6676;
-  }
-
-  &__table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 8px;
-
-    th,
-    td {
-      text-align: left;
-      padding: 6px 8px;
-      border-bottom: 1px solid #e3e8ef;
-      font-size: 13px;
-    }
+    font-size: $text-xxs;
+    fill: $pico-50;
   }
 
   &__best {
-    font-weight: 700;
-    color: #067647;
+    font-weight: 600;
+    color: $success-color-100;
   }
 
   &__differs {
-    background: #fffaeb;
+    background: $warning-color-10;
+    padding: $space-xxxs $space-xxs;
+    border-radius: $border-radius-xs;
   }
 
   &__mono {
-    font-family: monospace;
-    font-size: 12px;
+    @include monospaceFontFamily(12);
+    color: $pico-80;
+  }
+
+  &__toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: $space-xs;
+    margin-bottom: $space-sm;
+    cursor: pointer;
   }
 
   &__packages {
-    margin-top: 8px;
-    font-size: 13px;
+    margin-top: $space-sm;
+
+    summary {
+      cursor: pointer;
+    }
 
     pre {
-      background: #f5f7fa;
-      padding: 8px;
-      border-radius: 4px;
-      max-height: 240px;
+      margin: $space-xs 0 0;
+      padding: $space-sm;
+      border-radius: $border-radius-md;
+      background: $pico-2;
+      max-height: toRem(240px);
       overflow: auto;
     }
-  }
-
-  &__muted {
-    color: #5b6676;
-    font-size: 13px;
-  }
-
-  &__error {
-    color: #b42318;
   }
 }
