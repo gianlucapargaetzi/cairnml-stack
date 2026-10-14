@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-import Button from 'components/kit_v2/Button';
+import { Button, Text, InputWrapper } from 'components/kit';
 
 import jobsService, { IJobRow, IJobSpec } from 'services/api/jobs/jobsService';
 
@@ -115,91 +115,103 @@ function JobRescheduleForm({ job, spec, onCreated, onClose }: IProps) {
       onSubmit={submit}
       aria-label='Copy and reschedule'
     >
-      <h3>Copy and reschedule</h3>
-      <p className='Jobs__muted'>
+      <Text component='h3' size={14} weight={600} tint={100}>
+        Copy and reschedule
+      </Text>
+      <Text size={12} tint={50}>
         Copies &quot;{spec.name}&quot; with the same code, data and runtime.
         Change what you need, then dispatch the copy.
-      </p>
-      <label>
-        Name
-        <input value={name} onChange={(e) => setName(e.target.value)} />
-      </label>
-      <label>
-        Queue
-        <input value={queue} onChange={(e) => setQueue(e.target.value)} />
-      </label>
-      <label>
-        CPU
-        <input
+      </Text>
+      <div className='JobReschedule__fields'>
+        <InputWrapper
+          size='small'
+          labelAppearance='top-labeled'
+          label='Name'
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <InputWrapper
+          size='small'
+          labelAppearance='top-labeled'
+          label='Queue'
+          value={queue}
+          onChange={(e) => setQueue(e.target.value)}
+        />
+        <InputWrapper
+          size='small'
+          labelAppearance='top-labeled'
+          label='CPU'
           type='number'
-          min={1}
           value={cpu}
           onChange={(e) => setCpu(e.target.value)}
         />
-      </label>
-      <label>
-        Memory GB
-        <input
+        <InputWrapper
+          size='small'
+          labelAppearance='top-labeled'
+          label='Memory GB'
           type='number'
-          min={0.1}
-          step='any'
           value={memory}
           onChange={(e) => setMemory(e.target.value)}
         />
-      </label>
-      <label>
-        GPU
-        <input
+        <InputWrapper
+          size='small'
+          labelAppearance='top-labeled'
+          label='GPU'
           type='number'
-          min={0}
           value={gpu}
           onChange={(e) => setGpu(e.target.value)}
         />
-      </label>
-      <label>
-        Labels
-        <input value={labels} onChange={(e) => setLabels(e.target.value)} />
-      </label>
-      <label>
-        Timeout seconds
-        <input
+        <InputWrapper
+          size='small'
+          labelAppearance='top-labeled'
+          label='Labels'
+          value={labels}
+          onChange={(e) => setLabels(e.target.value)}
+        />
+        <InputWrapper
+          size='small'
+          labelAppearance='top-labeled'
+          label='Timeout seconds'
           type='number'
-          min={60}
           placeholder='keep'
           value={timeoutText}
           onChange={(e) => setTimeoutText(e.target.value)}
         />
-      </label>
-      <label>
-        Parameters (key=value per line)
-        <textarea
+        <InputWrapper
+          size='small'
+          labelAppearance='top-labeled'
+          label='Parameters (key=value per line)'
+          multiline
           rows={4}
           value={params}
           onChange={(e) => setParams(e.target.value)}
         />
-      </label>
-      <label>
-        Environment (KEY=value per line)
-        <textarea
+        <InputWrapper
+          size='small'
+          labelAppearance='top-labeled'
+          label='Environment (KEY=value per line)'
+          multiline
           rows={3}
           value={env}
           onChange={(e) => setEnv(e.target.value)}
         />
-      </label>
+      </div>
       {error && (
-        <p className='Jobs__error' role='alert'>
+        <Text size={12} color='error' role='alert'>
           {error}
-        </p>
+        </Text>
       )}
       <div className='JobReschedule__actions'>
-        <Button type='submit' disabled={busy}>
+        <Button type='submit' variant='contained' disabled={busy}>
           Dispatch copy
         </Button>
-        <Button onClick={onClose}>Close</Button>
+        <Button variant='outlined' onClick={onClose}>
+          Close
+        </Button>
       </div>
-      <span className='Jobs__muted'>
+      <Text size={12} tint={50}>
         Copy of {job.id} from {job.run_id}
-      </span>
+      </Text>
     </form>
   );
 }

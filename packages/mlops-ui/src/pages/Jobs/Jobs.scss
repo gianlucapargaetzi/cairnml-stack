@@ -1,143 +1,62 @@
+@use 'src/styles/abstracts' as *;
+
 .Jobs {
-  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: $space-lg;
+  padding: $space-lg;
 
   &__header {
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 12px;
+    justify-content: space-between;
+    gap: $space-sm;
+  }
 
-    h1 {
-      margin: 0;
-      font-size: 20px;
-    }
+  &__title {
+    display: flex;
+    flex-direction: column;
+    gap: $space-xxxs;
   }
 
   &__body {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
-    gap: 16px;
+    gap: $space-lg;
     align-items: start;
   }
 
   &__groups {
     display: flex;
-    gap: 8px;
-    margin-bottom: 8px;
+    flex-wrap: wrap;
+    gap: $space-xs;
+    margin-bottom: $space-sm;
   }
 
-  &__group {
-    border: 1px solid #c9d2df;
-    background: #fff;
-    border-radius: 4px;
-    padding: 4px 10px;
-    cursor: pointer;
-
-    &--active {
-      border-color: #1f6feb;
-      color: #1f6feb;
-      font-weight: 600;
-    }
-  }
-
-  &__table {
-    width: 100%;
-    border-collapse: collapse;
-
-    th,
-    td {
-      text-align: left;
-      padding: 6px 8px;
-      border-bottom: 1px solid #e3e8ef;
-      font-size: 13px;
-    }
-  }
-
-  &__row {
-    cursor: pointer;
-
-    &--selected {
-      background: #eef4ff;
-    }
-  }
-
-  &__detail {
-    border: 1px solid #e3e8ef;
-    border-radius: 4px;
-    padding: 12px;
-    background: #fff;
-
-    h2 {
-      margin: 0 0 8px;
-      font-size: 16px;
-    }
-  }
-
-  &__facts {
-    display: grid;
-    grid-template-columns: max-content 1fr;
-    gap: 4px 12px;
-    font-size: 13px;
-    margin: 0 0 12px;
-
-    dt {
-      color: #5b6676;
-    }
-
-    dd {
-      margin: 0;
-      word-break: break-word;
-    }
-  }
-
-  &__detail-actions,
-  .JobReschedule__actions {
+  &__actions {
     display: flex;
-    gap: 8px;
-    margin: 8px 0;
-  }
-
-  &__muted {
-    color: #5b6676;
-    font-size: 13px;
-  }
-
-  &__error {
-    color: #b42318;
-  }
-
-  &__banner {
-    color: #155724;
-  }
-
-  .mono {
-    font-family: monospace;
-    font-size: 12px;
+    flex-wrap: wrap;
+    gap: $space-xs;
+    margin-top: $space-sm;
   }
 }
 
 .JobReschedule {
-  display: grid;
-  gap: 8px;
-  border-top: 1px solid #e3e8ef;
-  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+  margin-top: $space-md;
+  padding-top: $space-md;
+  border-top: $border-grey;
 
-  h3 {
-    margin: 0;
-    font-size: 15px;
-  }
-
-  label {
+  &__fields {
     display: grid;
-    gap: 4px;
-    font-size: 13px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: $space-sm;
   }
 
-  input,
-  textarea {
-    font: inherit;
-    padding: 4px 6px;
-    border: 1px solid #c9d2df;
-    border-radius: 4px;
+  &__actions {
+    display: flex;
+    gap: $space-xs;
   }
 }
