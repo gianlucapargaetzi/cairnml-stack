@@ -21,10 +21,12 @@ The server and agent setup is in [docs/server-setup.md](docs/server-setup.md). T
 
 ## 1. Install the client
 
-You need a running server (see [server setup](docs/server-setup.md)) and [uv](https://docs.astral.sh/uv/). From a checkout of this repository:
+You need a running server (see [server setup](docs/server-setup.md)) and [uv](https://docs.astral.sh/uv/). Install the `mlops` command for your user straight from Git, without cloning the repository:
 
 ```bash
-uv tool install --editable ./packages/mlops-client --with-editable ./packages/mlops-common
+uv tool install \
+  "git+ssh://git@github.com/gianlucapargaetzi/mlops-framework.git#subdirectory=packages/mlops-client" \
+  --with "git+ssh://git@github.com/gianlucapargaetzi/mlops-framework.git#subdirectory=packages/mlops-common"
 ```
 
 This installs the `mlops` command for your user. Check it:
@@ -33,7 +35,7 @@ This installs the `mlops` command for your user. Check it:
 mlops --help
 ```
 
-To install into a project's `.venv` with pip, straight from Git (the repository is not on PyPI). Install both packages from their subdirectories in one command. Add `@<branch>` before `#subdirectory=` to install a branch other than the default one:
+To install into a project's `.venv` with pip, straight from Git (the repository is not on PyPI). Install both packages from their subdirectories in one command:
 
 ```bash
 cd my-project
