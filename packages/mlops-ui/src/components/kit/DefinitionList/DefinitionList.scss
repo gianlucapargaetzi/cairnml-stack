@@ -1,0 +1,21 @@
+@use 'src/styles/abstracts' as *;
+
+.DefinitionList {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: $space-xs $space-lg;
+  align-items: baseline;
+  margin: 0;
+
+  dt,
+  dd {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  &__mono {
+    @include monospaceFontFamily(12);
+    color: $pico-70;
+  }
+}
