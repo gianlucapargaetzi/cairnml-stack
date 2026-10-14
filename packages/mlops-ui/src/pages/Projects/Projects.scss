@@ -1,67 +1,69 @@
-.Projects {
-  padding: 16px;
+@use 'src/styles/abstracts' as *;
 
-  h1 {
-    font-size: 20px;
-    margin: 0 0 8px;
+.Projects {
+  display: flex;
+  flex-direction: column;
+  gap: $space-lg;
+  padding: $space-lg;
+
+  &__header {
+    display: flex;
+    flex-direction: column;
+    gap: $space-xxxs;
   }
 
-  h2 {
-    font-size: 15px;
-    margin: 20px 0 6px;
+  &__detail {
+    display: flex;
+    flex-direction: column;
+    gap: $space-lg;
   }
 
   &__tree {
     list-style: none;
-    padding-left: 16px;
-    font-size: 14px;
-  }
+    margin: 0;
+    padding-left: $space-md;
+    display: flex;
+    flex-direction: column;
+    gap: $space-xxs;
 
-  &__table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 8px;
-
-    th,
-    td {
-      text-align: left;
-      padding: 6px 8px;
-      border-bottom: 1px solid #e3e8ef;
-      font-size: 13px;
+    summary {
+      cursor: pointer;
     }
   }
 
   &__mono {
-    font-family: monospace;
-    font-size: 12px;
+    @include monospaceFontFamily(12);
+    color: $pico-70;
   }
 
-  &__muted {
-    color: #5b6676;
-    font-size: 13px;
-  }
+  &__link {
+    color: $primary-color;
+    text-decoration: none;
 
-  &__error {
-    color: #b42318;
+    &:hover {
+      text-decoration: underline;
+    }
   }
 }
 
 .RepoGraph {
-  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
 
   &__panel {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
-    gap: 12px;
-    border: 1px solid #e3e8ef;
-    border-radius: 4px;
-    padding: 8px;
-    background: #fff;
+    gap: $space-md;
+    border: $border-grey;
+    border-radius: $border-radius-md;
+    padding: $space-sm;
+    background: $white;
   }
 
   &__svg {
     width: 100%;
-    max-height: 560px;
+    max-height: toRem(560px);
     overflow: auto;
   }
 
@@ -74,32 +76,29 @@
   }
 
   &__label {
-    font-size: 12px;
-    fill: #1d2939;
-    font-family: monospace;
+    @include monospaceFontFamily(12);
+    fill: $pico-80;
   }
 
   &__chip {
-    font-size: 11px;
-    fill: #344054;
-    font-family: monospace;
+    @include monospaceFontFamily(11);
+    fill: $pico-70;
 
     &--default {
-      fill: #1f6feb;
+      fill: $primary-color;
       font-weight: 600;
     }
   }
 
   &__detail {
-    font-size: 13px;
-  }
+    display: flex;
+    flex-direction: column;
+    gap: $space-xxs;
+    font-size: $text-md;
 
-  &__muted {
-    color: #5b6676;
-    font-size: 13px;
-  }
-
-  &__error {
-    color: #b42318;
+    ul {
+      margin: 0;
+      padding-left: $space-md;
+    }
   }
 }

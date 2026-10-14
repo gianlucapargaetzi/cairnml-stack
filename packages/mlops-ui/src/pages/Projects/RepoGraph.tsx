@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { Dropdown, Text } from 'components/kit';
+
 import projectPagesService, {
   IRepoGraph,
 } from 'services/api/projectPages/projectPagesService';
@@ -41,6 +43,7 @@ interface IProps {
 
 // The commit history of one linked repository. A click on a commit shows the runs on it.
 function RepoGraph({ repos, project }: IProps) {
+  const [repoMenuOpen, setRepoMenuOpen] = useState(false);
   const [repo, setRepo] = useState(repos[0]?.repo ?? '');
   const [graph, setGraph] = useState<IRepoGraph | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -138,31 +141,40 @@ function RepoGraph({ repos, project }: IProps) {
 
   return (
     <div className='RepoGraph'>
-      <label>
-        Repository{' '}
-        <select value={repo} onChange={(event) => setRepo(event.target.value)}>
-          {repos.map((item) => (
-            <option
-              key={item.repo}
-              value={item.repo}
-            >{`${item.repo} (${item.role})`}</option>
-          ))}
-        </select>
-      </label>
+      <Dropdown
+        label='Repository'
+        size='medium'
+        value={repo || null}
+        options={repos.map((item) => ({
+          value: item.repo,
+          label: `${item.repo} (${item.role})`,
+        }))}
+        onChange={(option) => setRepo(option?.value ?? repo)}
+        onMenuOpen={() => setRepoMenuOpen(true)}
+        onMenuClose={() => setRepoMenuOpen(false)}
+        open={repoMenuOpen}
+        withPortal
+      />
       {graph && (
-        <p className='RepoGraph__muted'>
-          default branch {graph.default_branch} · head{' '}
-          <code>{graph.head.slice(0, 8)}</code> · {graph.branches.length}{' '}
-          branches
-          {graph.truncated ? ' · history truncated' : ''}
-        </p>
+        <Text size={12} tint={50}>
+          {`default branch ${graph.default_branch} · head ${graph.head.slice(
+            0,
+            8,
+          )} · ${graph.branches.length} branches${
+            graph.truncated ? ' · history truncated' : ''
+          }`}
+        </Text>
       )}
       {error && (
-        <p className='RepoGraph__error' role='alert'>
+        <Text size={12} color='error' role='alert'>
           {error}
-        </p>
+        </Text>
       )}
-      {!graph && !error && <p className='RepoGraph__muted'>Loading history…</p>}
+      {!graph && !error && (
+        <Text size={12} tint={50}>
+          Loading history
+        </Text>
+      )}
       {layout && (
         <div className='RepoGraph__panel'>
           <svg
@@ -268,11 +280,11 @@ function RepoGraph({ repos, project }: IProps) {
             {selectedNode ? (
               <>
                 <strong>{selectedNode.commit.message}</strong>
-                <div className='RepoGraph__muted'>
-                  {selectedNode.commit.author} ·{' '}
-                  {new Date(selectedNode.commit.date).toLocaleString()} ·{' '}
-                  <code>{selectedNode.sha.slice(0, 10)}</code>
-                </div>
+                <Text size={12} tint={50}>
+                  {`${selectedNode.commit.author} · ${new Date(
+                    selectedNode.commit.date,
+                  ).toLocaleString()} · ${selectedNode.sha.slice(0, 10)}`}
+                </Text>
                 {selectedRuns.length ? (
                   <ul>
                     {selectedRuns.map((run) => (
@@ -285,15 +297,15 @@ function RepoGraph({ repos, project }: IProps) {
                     ))}
                   </ul>
                 ) : (
-                  <p className='RepoGraph__muted'>
+                  <Text size={12} tint={50}>
                     No run recorded on this commit.
-                  </p>
+                  </Text>
                 )}
               </>
             ) : (
-              <p className='RepoGraph__muted'>
+              <Text size={12} tint={50}>
                 Click a commit to see the runs that ran on it.
-              </p>
+              </Text>
             )}
           </div>
         </div>
