@@ -8,6 +8,7 @@ import logoImg from 'assets/logo.png';
 import { Icon, Text } from 'components/kit';
 import { IconName } from 'components/kit/Icon';
 import ErrorBoundary from 'components/ErrorBoundary/ErrorBoundary';
+import UserMenu from 'components/UserMenu/UserMenu';
 
 import { PathEnum } from 'config/enums/routesEnum';
 import { AIM_VERSION } from 'config/config';
@@ -77,6 +78,7 @@ function SideBar(): React.FunctionComponentElement<React.ReactNode> {
             </div>
           </ul>
           <div className='Sidebar__bottom'>
+            <UserMenu />
             <Text tint={30}>v{AIM_VERSION}</Text>
           </div>
         </Drawer>

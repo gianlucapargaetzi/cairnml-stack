@@ -1,0 +1,25 @@
+@use 'src/styles/abstracts' as *;
+
+.Table {
+  width: 100%;
+  overflow-x: auto;
+
+  &__table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  &__head {
+    text-align: left;
+    padding: $space-xxs $space-xs;
+    border-bottom: $border-grey;
+    white-space: nowrap;
+  }
+
+  &__cell {
+    text-align: left;
+    padding: $space-xs;
+    border-bottom: $border-grey-light;
+    vertical-align: middle;
+  }
+}

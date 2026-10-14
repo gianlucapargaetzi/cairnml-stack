@@ -107,3 +107,38 @@
     }
   }
 }
+
+.Sidebar__user {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 8px 8px;
+  font-size: 12px;
+
+  &__name {
+    color: inherit;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  &__signout {
+    align-self: flex-start;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+    font-size: 12px;
+  }
+
+  &__error {
+    color: #b42318;
+  }
+}

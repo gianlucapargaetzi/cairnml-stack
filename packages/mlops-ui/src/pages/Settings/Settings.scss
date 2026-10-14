@@ -1,0 +1,28 @@
+@use 'src/styles/abstracts' as *;
+
+.Settings {
+  display: flex;
+  flex-direction: column;
+  gap: $space-lg;
+  padding: $space-lg;
+  max-width: toRem(880px);
+
+  &__header {
+    display: flex;
+    flex-direction: column;
+    gap: $space-xxxs;
+  }
+
+  &__details {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: $space-xs $space-lg;
+    align-items: center;
+    margin: 0;
+
+    dt,
+    dd {
+      margin: 0;
+    }
+  }
+}

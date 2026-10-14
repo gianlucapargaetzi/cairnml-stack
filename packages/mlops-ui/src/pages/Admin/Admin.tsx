@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
+import { Card, Table, Text } from 'components/kit';
 import ErrorBoundary from 'components/ErrorBoundary/ErrorBoundary';
 
 import adminService, {
@@ -54,88 +55,93 @@ function Admin(): React.FunctionComponentElement<React.ReactNode> {
   return (
     <ErrorBoundary>
       <section className='Admin'>
-        <h1>Administration</h1>
-        {forbidden && <p className='Admin__muted'>Administrators only.</p>}
-        {error && (
-          <p className='Admin__error' role='alert'>
-            {error}
-          </p>
+        <header className='Admin__header'>
+          <Text component='h1' size={18} weight={600} tint={100}>
+            Administration
+          </Text>
+          <Text size={12} tint={50}>
+            Read-only view. Use the mlops CLI to revoke clients or agents and to
+            create agent tokens.
+          </Text>
+        </header>
+
+        {forbidden && (
+          <Text size={12} tint={50}>
+            Administrators only.
+          </Text>
         )}
+        {error && (
+          <Text size={12} color='error' role='alert'>
+            {error}
+          </Text>
+        )}
+
         {data && (
           <>
-            <p className='Admin__muted'>
-              Read-only view. Use the mlops CLI to revoke clients or agents and
-              to create agent tokens.
-            </p>
-            <h2>Users</h2>
-            <table className='Admin__table'>
-              <thead>
-                <tr>
-                  <th>User</th>
-                  <th>Roles</th>
-                  <th>Status</th>
-                  <th>Active client keys</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.users.map((user) => (
-                  <tr key={user.id}>
-                    <td>{user.username}</td>
-                    <td>{user.roles.join(', ') || '–'}</td>
-                    <td>{userStatus(user)}</td>
-                    <td>{user.clients_active}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <h2>Agents</h2>
-            <table className='Admin__table'>
-              <thead>
-                <tr>
-                  <th>Id</th>
-                  <th>Name</th>
-                  <th>Queues</th>
-                  <th>State</th>
-                  <th>Last seen</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.agents.map((agent) => (
-                  <tr key={agent.id}>
-                    <td className='Admin__mono'>{agent.id}</td>
-                    <td>{agent.name}</td>
-                    <td>{agent.queues.join(', ')}</td>
-                    <td>{activeLabel(agent.revoked)}</td>
-                    <td>
-                      {agent.last_seen
-                        ? new Date(agent.last_seen).toLocaleString()
-                        : '–'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <h2>Client keys</h2>
-            <table className='Admin__table'>
-              <thead>
-                <tr>
-                  <th>Id</th>
-                  <th>Machine</th>
-                  <th>User</th>
-                  <th>State</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.clients.map((client) => (
-                  <tr key={client.id}>
-                    <td className='Admin__mono'>{client.id}</td>
-                    <td>{client.name}</td>
-                    <td className='Admin__mono'>{client.user_id}</td>
-                    <td>{activeLabel(client.revoked)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <Card
+              title='Users'
+              subtitle='Accounts that have signed in or been synced.'
+            >
+              <Table
+                columns={[
+                  { key: 'user', label: 'User' },
+                  { key: 'roles', label: 'Roles' },
+                  { key: 'status', label: 'Status' },
+                  { key: 'keys', label: 'Active client keys' },
+                ]}
+                rows={data.users.map((user) => ({
+                  id: user.id,
+                  user: user.username,
+                  roles: user.roles.join(', ') || '–',
+                  status: userStatus(user),
+                  keys: user.clients_active,
+                }))}
+                rowKey='id'
+                emptyText='No users yet.'
+              />
+            </Card>
+
+            <Card title='Agents' subtitle='Machines that run jobs.'>
+              <Table
+                columns={[
+                  { key: 'id', label: 'Id' },
+                  { key: 'name', label: 'Name' },
+                  { key: 'queues', label: 'Queues' },
+                  { key: 'state', label: 'State' },
+                  { key: 'seen', label: 'Last seen' },
+                ]}
+                rows={data.agents.map((agent) => ({
+                  id: agent.id,
+                  name: agent.name,
+                  queues: agent.queues.join(', '),
+                  state: activeLabel(agent.revoked),
+                  seen: agent.last_seen
+                    ? new Date(agent.last_seen).toLocaleString()
+                    : '–',
+                }))}
+                rowKey='id'
+                emptyText='No agents enrolled.'
+              />
+            </Card>
+
+            <Card title='Client keys' subtitle='Machines enrolled for a user.'>
+              <Table
+                columns={[
+                  { key: 'id', label: 'Id' },
+                  { key: 'name', label: 'Machine' },
+                  { key: 'user', label: 'User' },
+                  { key: 'state', label: 'State' },
+                ]}
+                rows={data.clients.map((client) => ({
+                  id: client.id,
+                  name: client.name,
+                  user: client.user_id,
+                  state: activeLabel(client.revoked),
+                }))}
+                rowKey='id'
+                emptyText='No machines enrolled.'
+              />
+            </Card>
           </>
         )}
       </section>

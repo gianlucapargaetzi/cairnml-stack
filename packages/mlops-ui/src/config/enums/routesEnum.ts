@@ -9,6 +9,7 @@ enum PathEnum {
   Jobs = '/jobs',
   Resources = '/resources',
   Admin = '/admin',
+  Settings = '/settings',
   Datasets = '/datasets',
   Projects = '/projects',
   Experiment_Page = '/experiment',
