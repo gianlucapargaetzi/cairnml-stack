@@ -94,14 +94,6 @@
         }
       }
     }
-    &::before {
-      content: '';
-      width: toRem(40px);
-      left: calc(50% - 1.25rem);
-      border-top: 1px solid $pico-70;
-      position: absolute;
-      top: 0;
-    }
     & > span {
       text-align: center;
       margin-top: $space-xs;
