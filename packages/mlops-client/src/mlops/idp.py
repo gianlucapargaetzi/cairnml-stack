@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import time
 import webbrowser
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import urlencode, urlsplit
 
 import httpx
 
@@ -10,22 +12,62 @@ class LoginFailed(Exception):
     pass
 
 
+# The CLI listens here for Keycloak's post-logout redirect. The URI must be registered on the
+# mlops-cli client (deploy/idp/realm-mlops.json), so the port is fixed.
+LOGOUT_PORT = 8765
+LOGOUT_PATH = "/logged-out"
+
+
 def end_idp_session(
     issuer: str,
+    client_id: str,
     *,
     http: httpx.Client | None = None,
     open_browser=webbrowser.open,
+    port: int = LOGOUT_PORT,
+    timeout: float = 300.0,
 ) -> None:
-    """Open the IdP logout page so the next device login asks for a user again."""
+    """Log the browser out of the IdP and wait until Keycloak confirms it.
+
+    Only returns once the IdP redirected back to this process, so the device login that follows
+    asks for credentials instead of approving as the previous user.
+    """
     client = http or httpx.Client(timeout=30.0)
     meta = client.get(issuer.rstrip("/") + "/.well-known/openid-configuration").json()
     url = meta.get("end_session_endpoint")
     if not url:
         return
+    redirect = f"http://127.0.0.1:{port}{LOGOUT_PATH}"
+    confirmed = []
+
+    class _Callback(BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802 - the name http.server requires
+            if urlsplit(self.path).path == LOGOUT_PATH:
+                confirmed.append(True)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(b"Logged out. You can close this tab.")
+
+        def log_message(self, *args):  # keep the terminal quiet
+            pass
+
     try:
-        open_browser(url)
-    except Exception:  # best effort: the user can also log out in the browser by hand
-        pass
+        listener = HTTPServer(("127.0.0.1", port), _Callback)
+    except OSError as exc:
+        raise LoginFailed(f"cannot listen on 127.0.0.1:{port} for the logout: {exc}") from None
+    query = urlencode({"client_id": client_id, "post_logout_redirect_uri": redirect})
+    with listener:
+        try:
+            open_browser(f"{url}?{query}")
+        except Exception:  # best effort: the logout URL is printed below
+            print(f"Open {url}?{query} to log out")
+        deadline = time.monotonic() + timeout
+        listener.timeout = 1.0
+        while not confirmed and time.monotonic() < deadline:
+            listener.handle_request()
+    if not confirmed:
+        raise LoginFailed("the IdP logout was not confirmed in time")
 
 
 def device_login(

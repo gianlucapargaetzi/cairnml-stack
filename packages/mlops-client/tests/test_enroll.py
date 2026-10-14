@@ -190,7 +190,7 @@ def test_forced_browser_enrollment_logs_the_old_session_out_first(cfg_env, serve
     enroll(server, "a", idp_token=idp.token(username="alice"))
     calls = []
 
-    def logout(issuer):
+    def logout(issuer, client_id):
         calls.append(("logout", issuer))
 
     def login(issuer, client_id):
@@ -202,23 +202,50 @@ def test_forced_browser_enrollment_logs_the_old_session_out_first(cfg_env, serve
 
 
 def test_first_enrollment_and_token_enrollment_do_not_log_out(cfg_env, server, idp):
-    def logout(issuer):
+    def logout(issuer, client_id):
         raise AssertionError("no logout expected")
 
     enroll(server, "a", login=lambda i, c: idp.token(), logout=logout)
     enroll(server, "b", idp_token=idp.token(), logout=logout, force=True)
 
 
+def _visit_redirect():
+    # urllib, not httpx: respx mocks every httpx request in these tests.
+    from urllib.request import urlopen
+
+    urlopen("http://127.0.0.1:8799/logged-out", timeout=5).read()
+
+
 @respx.mock
-def test_end_idp_session_opens_the_logout_page():
+def test_end_idp_session_waits_for_the_idp_redirect():
+    import threading
+
     from mlops.idp import end_idp_session
 
     respx.get(f"{ISSUER}/.well-known/openid-configuration").respond(
         200, json={"end_session_endpoint": f"{ISSUER}/logout"}
     )
     opened = []
-    end_idp_session(ISSUER, open_browser=opened.append)
-    assert opened == [f"{ISSUER}/logout"]
+
+    def browser(url):
+        opened.append(url)
+        # The IdP sends the browser back to the local redirect once the logout is done.
+        threading.Thread(target=_visit_redirect, daemon=True).start()
+
+    end_idp_session(ISSUER, "mlops-cli", open_browser=browser, port=8799, timeout=10)
+    assert opened and opened[0].startswith(f"{ISSUER}/logout?")
+    assert "client_id=mlops-cli" in opened[0] and "8799%2Flogged-out" in opened[0]
+
+
+@respx.mock
+def test_end_idp_session_fails_when_no_redirect_comes():
+    from mlops.idp import LoginFailed, end_idp_session
+
+    respx.get(f"{ISSUER}/.well-known/openid-configuration").respond(
+        200, json={"end_session_endpoint": f"{ISSUER}/logout"}
+    )
+    with pytest.raises(LoginFailed, match="not confirmed"):
+        end_idp_session(ISSUER, "mlops-cli", open_browser=lambda url: None, port=8798, timeout=1)
 
 
 @respx.mock
@@ -227,5 +254,5 @@ def test_end_idp_session_without_endpoint_opens_nothing():
 
     respx.get(f"{ISSUER}/.well-known/openid-configuration").respond(200, json={})
     opened = []
-    end_idp_session(ISSUER, open_browser=opened.append)
+    end_idp_session(ISSUER, "mlops-cli", open_browser=opened.append)
     assert opened == []
