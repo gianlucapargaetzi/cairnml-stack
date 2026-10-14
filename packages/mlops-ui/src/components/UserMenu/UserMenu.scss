@@ -1,0 +1,39 @@
+@use 'src/styles/abstracts' as *;
+
+.UserMenu {
+  &__avatar {
+    display: inline-flex;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    border-radius: $border-radius-circle;
+
+    &:focus-visible {
+      outline: 2px solid $primary-color-40;
+      outline-offset: 2px;
+    }
+  }
+
+  &__panel {
+    display: flex;
+    flex-direction: column;
+    gap: $space-xxxs;
+    min-width: toRem(220px);
+    padding: $space-md;
+  }
+
+  &__name {
+    overflow-wrap: anywhere;
+  }
+
+  &__actions {
+    display: flex;
+    gap: $space-xs;
+    margin-top: $space-xs;
+  }
+
+  &__error {
+    margin-top: $space-xxxs;
+  }
+}

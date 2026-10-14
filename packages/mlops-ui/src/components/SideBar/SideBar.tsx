@@ -8,27 +8,18 @@ import logoImg from 'assets/logo.png';
 import { Icon, Text } from 'components/kit';
 import { IconName } from 'components/kit/Icon';
 import ErrorBoundary from 'components/ErrorBoundary/ErrorBoundary';
+import UserMenu from 'components/UserMenu/UserMenu';
 
 import { PathEnum } from 'config/enums/routesEnum';
 import { AIM_VERSION } from 'config/config';
 
 import routes, { IRoute } from 'routes/routes';
 
-import { getSession, signOut } from 'services/session/session';
-
 import { getItem } from 'utils/storage';
 
 import './Sidebar.scss';
 
 function SideBar(): React.FunctionComponentElement<React.ReactNode> {
-  const session = getSession();
-  const [signOutError, setSignOutError] = React.useState<string | null>(null);
-
-  function handleSignOut() {
-    setSignOutError(null);
-    signOut().catch((error) => setSignOutError(error.message));
-  }
-
   function getPathFromStorage(route: PathEnum): PathEnum | string {
     const path = getItem(`${route.slice(1)}Url`) ?? '';
     if (path !== '' && path.startsWith(route)) {
@@ -87,28 +78,7 @@ function SideBar(): React.FunctionComponentElement<React.ReactNode> {
             </div>
           </ul>
           <div className='Sidebar__bottom'>
-            {session && (
-              <div className='Sidebar__user'>
-                <NavLink
-                  className='Sidebar__user__name'
-                  to={routes.ACCOUNT.path}
-                >
-                  {session.username ?? 'Account'}
-                </NavLink>
-                <button
-                  type='button'
-                  className='Sidebar__user__signout'
-                  onClick={handleSignOut}
-                >
-                  Sign out
-                </button>
-                {signOutError && (
-                  <Text tint={30} className='Sidebar__user__error'>
-                    {signOutError}
-                  </Text>
-                )}
-              </div>
-            )}
+            <UserMenu />
             <Text tint={30}>v{AIM_VERSION}</Text>
           </div>
         </Drawer>
