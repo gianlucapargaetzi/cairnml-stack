@@ -12,6 +12,7 @@ import AttachedTagsList from 'components/AttachedTagsList/AttachedTagsList';
 import { PathEnum } from 'config/enums/routesEnum';
 import { DATE_WITH_SECONDS } from 'config/dates/dates';
 
+import { experimentPageLink } from 'utils/experiments/experiments';
 import { processDurationTime } from 'utils/processDurationTime';
 import { formatValue } from 'utils/formatValue';
 import { formatSystemMetricName } from 'utils/formatSystemMetricName';
@@ -50,10 +51,7 @@ function BoxFullViewPopover({
           icon: 'link',
           value: (
             <Link
-              to={PathEnum.Experiment.replace(
-                ':experimentId',
-                runData.experimentId,
-              )}
+              to={experimentPageLink(runData.experimentId)}
               component={RouteLink}
             >
               {runData.experiment}

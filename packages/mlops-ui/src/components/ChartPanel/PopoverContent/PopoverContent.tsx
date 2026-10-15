@@ -27,6 +27,7 @@ import { formatSystemMetricName } from 'utils/formatSystemMetricName';
 import getValueByField from 'utils/getValueByField';
 import { isMetricHash } from 'utils/isMetricHash';
 import { decode } from 'utils/encoder/encoder';
+import { experimentPageLink } from 'utils/experiments/experiments';
 
 import './PopoverContent.scss';
 
@@ -284,10 +285,7 @@ const PopoverContent = React.forwardRef(function PopoverContent(
               <div>Run Details</div>
             </Link>
             <Link
-              to={PathEnum.Experiment.replace(
-                ':experimentId',
-                run?.props?.experiment?.id,
-              )}
+              to={experimentPageLink(run?.props?.experiment?.id ?? '')}
               component={RouteLink}
               className='PopoverContent__runDetails'
               underline='none'

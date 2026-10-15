@@ -4,7 +4,7 @@ import classNames from 'classnames';
 
 import { Link, Tooltip } from '@material-ui/core';
 
-import { PathEnum } from 'config/enums/routesEnum';
+import { experimentPageLink } from 'utils/experiments/experiments';
 
 import { IExperimentNameBoxProps } from '.';
 
@@ -19,13 +19,7 @@ const ExperimentNameBox = ({
     <div className={classNames('ExperimentNameBox', { isHidden: hidden })}>
       <Tooltip title={experimentName}>
         <div className='ExperimentNameBox__experimentName'>
-          <Link
-            to={
-              PathEnum.Experiment.replace(':experimentId', experimentId) +
-              '/overview'
-            }
-            component={RouteLink}
-          >
+          <Link to={experimentPageLink(experimentId)} component={RouteLink}>
             {experimentName}
           </Link>
         </div>

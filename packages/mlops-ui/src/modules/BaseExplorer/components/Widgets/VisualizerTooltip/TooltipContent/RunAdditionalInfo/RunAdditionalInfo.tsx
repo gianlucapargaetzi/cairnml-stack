@@ -9,6 +9,8 @@ import AttachedTagsList from 'components/AttachedTagsList/AttachedTagsList';
 
 import { PathEnum } from 'config/enums/routesEnum';
 
+import { experimentPageLink } from 'utils/experiments/experiments';
+
 import { IRunAdditionalInfoProps } from '../index';
 
 import './RunAdditionalInfo.scss';
@@ -30,7 +32,7 @@ function RunAdditionalInfo(props: IRunAdditionalInfoProps) {
             <div>Run Details</div>
           </Link>
           <Link
-            to={PathEnum.Experiment.replace(':experimentId', experimentId)}
+            to={experimentPageLink(experimentId)}
             component={RouteLink}
             className='RunAdditionalInfo__links__link'
             underline='none'

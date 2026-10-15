@@ -1,5 +1,12 @@
 // Helpers for the experiment page: the run table's sort, the best run, the parameters that vary
-// across runs, and the text of a save error.
+// across runs, the text of a save error, and the link to an experiment.
+
+import { PathEnum } from 'config/enums/routesEnum';
+
+// The experiment page reads its experiment from the `id` query parameter.
+export function experimentPageLink(experimentId: string): string {
+  return `${PathEnum.Experiment_Page}?id=${encodeURIComponent(experimentId)}`;
+}
 
 export const EXPERIMENT_KINDS = [
   'training',

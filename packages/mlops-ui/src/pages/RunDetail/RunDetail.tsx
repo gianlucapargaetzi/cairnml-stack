@@ -305,10 +305,11 @@ function RunDetail(): React.FunctionComponentElement<React.ReactNode> {
                             >
                               <div className='RunDetail__runDetailContainer__appBarContainer__appBarTitleBox__container'>
                                 <Link
-                                  to={PathEnum.Experiment.replace(
-                                    ':experimentId',
-                                    runData?.runInfo?.experiment?.id,
-                                  )}
+                                  to={`${
+                                    PathEnum.Experiment_Page
+                                  }?id=${encodeURIComponent(
+                                    runData?.runInfo?.experiment?.id ?? '',
+                                  )}`}
                                   className='RunDetail__runDetailContainer__appBarContainer__appBarTitleBox__experimentName'
                                 >
                                   <Text tint={100} size={16} weight={600}>
