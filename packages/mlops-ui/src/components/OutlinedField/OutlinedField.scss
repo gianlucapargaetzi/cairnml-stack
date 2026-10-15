@@ -1,0 +1,90 @@
+@use 'src/styles/abstracts' as *;
+
+// Every text, number and dropdown box. The reference look is the kit search box: a box of
+// $input-height with the label inside until the field is focused or has a value.
+.OutlinedField {
+  width: 100%;
+
+  label {
+    font-size: $text-md;
+  }
+
+  .MuiFormLabel-root {
+    top: $space-xxxxs;
+  }
+
+  .MuiInputLabel-outlined {
+    z-index: 1;
+    transform: translate(14px, 6px) scale(1);
+    pointer-events: none;
+
+    &.MuiInputLabel-shrink {
+      transform: translate(14px, -6px) scale(0.75);
+    }
+  }
+
+  .MuiOutlinedInput-root {
+    height: $input-height;
+  }
+
+  input {
+    font-size: $text-md;
+
+    &::placeholder {
+      font-size: $text-md;
+    }
+  }
+
+  // Dropdown text is the same size as the text boxes, and the display area fills the box, so the
+  // list opens right under it.
+  .MuiSelect-root {
+    font-size: $text-md;
+    display: flex;
+    align-items: center;
+    height: 100%;
+    padding-top: 0;
+    padding-bottom: 0;
+    background-color: transparent;
+
+    &:focus {
+      background-color: transparent;
+    }
+  }
+}
+
+// A multi-line box grows with its text instead of keeping the single-line height.
+.OutlinedField_multiline .MuiOutlinedInput-root {
+  height: auto;
+}
+
+// The search box: the search icon or the clear button sits at the end of the box.
+.SearchInput {
+  margin-right: toRem(10px);
+
+  &.activeCloseButton {
+    .MuiInputBase-root {
+      padding-right: $space-xxs;
+    }
+  }
+
+  .MuiOutlinedInput-adornedEnd {
+    padding-right: toRem(10px);
+  }
+
+  .EndAdornment {
+    display: flex;
+    align-items: center;
+
+    .divider-vertical {
+      width: toRem(1px);
+      height: toRem(20px);
+      margin: 0 toRem(6px) 0 toRem(8px);
+      background: $cuddle-70;
+      border-radius: toRem(1px);
+    }
+
+    .Mui-disabled {
+      color: $pico-30;
+    }
+  }
+}

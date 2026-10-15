@@ -223,7 +223,7 @@ function getParamsTableColumns(
                 monospace
                 size='xSmall'
                 color={COLORS[0][0]}
-                label={metricContext === '' ? 'Empty context' : metricContext}
+                label={metricContext === '' ? 'No context' : metricContext}
               />
               {onSort && (
                 <TableSortIcons

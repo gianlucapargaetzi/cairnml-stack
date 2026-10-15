@@ -1,7 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useHistory, useLocation } from 'react-router-dom';
 
+import { MenuItem } from '@material-ui/core';
+
+import { Badge, Button, Card, Table, Text } from 'components/kit';
 import ErrorBoundary from 'components/ErrorBoundary/ErrorBoundary';
+import OutlinedField from 'components/OutlinedField/OutlinedField';
+
+import { STATUS_COLORS } from 'config/colors/colors';
 
 import experimentPagesService, {
   IExperimentSummary,
@@ -66,9 +72,9 @@ function ValueChart({ values, label }: { values: number[]; label: string }) {
       role='img'
       aria-label={`${label} by run`}
     >
-      <polyline points={points} fill='none' stroke='#2563eb' strokeWidth={2} />
+      <polyline points={points} />
       {values.map((v, i) => (
-        <circle key={i} cx={x(i)} cy={y(v)} r={3} fill='#2563eb' />
+        <circle key={i} cx={x(i)} cy={y(v)} r={3} />
       ))}
     </svg>
   );
@@ -108,50 +114,59 @@ function SettingsForm({
 
   return (
     <form className='Experiment__settings' onSubmit={submit}>
-      <label>
-        Kind
-        <select value={kind} onChange={(e) => setKind(e.target.value)}>
+      <div className='Experiment__fields'>
+        <OutlinedField
+          id='experiment-kind'
+          label='Kind'
+          select
+          value={kind}
+          onValueChange={setKind}
+        >
           {EXPERIMENT_KINDS.map((k) => (
-            <option key={k} value={k}>
+            <MenuItem key={k} value={k}>
               {k}
-            </option>
+            </MenuItem>
           ))}
-        </select>
-      </label>
-      <label>
-        Description
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-      </label>
-      <label>
-        Primary metric
-        <input
-          value={metric}
+        </OutlinedField>
+        <OutlinedField
+          id='experiment-metric'
+          label='Primary metric'
           placeholder='e.g. val_loss'
+          value={metric}
           onChange={(e) => setMetric(e.target.value)}
         />
-      </label>
-      <label>
-        Better is
-        <select
+        <OutlinedField
+          id='experiment-direction'
+          label='Better is'
+          select
           value={direction}
-          onChange={(e) => setDirection(e.target.value)}
+          onValueChange={setDirection}
         >
           {DIRECTIONS.map((d) => (
-            <option key={d} value={d}>
+            <MenuItem key={d} value={d}>
               {d}
-            </option>
+            </MenuItem>
           ))}
-        </select>
-      </label>
-      <div>
-        <button type='submit'>Save</button>
+        </OutlinedField>
       </div>
-      <p className='Experiment__muted' role='status'>
-        {message}
-      </p>
+      <OutlinedField
+        id='experiment-description'
+        label='Description'
+        multiline
+        rows={3}
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+      />
+      <div className='Experiment__actions'>
+        <Button variant='contained' type='submit'>
+          Save settings
+        </Button>
+        {message && (
+          <Text size={12} tint={70} role='status'>
+            {message}
+          </Text>
+        )}
+      </div>
     </form>
   );
 }
@@ -201,13 +216,17 @@ function ExperimentDetail({ id }: { id: string }) {
 
   if (error) {
     return (
-      <p className='Experiment__error' role='alert'>
+      <Text size={12} color='error' role='alert'>
         {error}
-      </p>
+      </Text>
     );
   }
   if (!summary) {
-    return <p className='Experiment__muted'>Loading…</p>;
+    return (
+      <Text size={12} tint={50}>
+        Loading…
+      </Text>
+    );
   }
   const { experiment, stats } = summary;
   const direction = experiment.direction ?? 'min';
@@ -231,152 +250,176 @@ function ExperimentDetail({ id }: { id: string }) {
 
   return (
     <>
-      <p>
+      <header className='Experiment__header'>
         <Link
+          className='Experiment__link'
           to={`/projects?project=${encodeURIComponent(experiment.project)}`}
         >
           ← {experiment.project}
         </Link>
-      </p>
-      <h1>
-        {experiment.name}{' '}
-        <span className='Experiment__kind'>{experiment.kind}</span>
-      </h1>
-      {experiment.description && (
-        <p className='Experiment__muted'>{experiment.description}</p>
-      )}
+        <div className='Experiment__title'>
+          <Text component='h1' size={18} weight={600} tint={100}>
+            {experiment.name}
+          </Text>
+          <Badge
+            label={experiment.kind}
+            color={STATUS_COLORS.neutral}
+            size='small'
+          />
+        </div>
+        {experiment.description && (
+          <Text size={12} tint={50}>
+            {experiment.description}
+          </Text>
+        )}
+      </header>
 
-      <details className='Experiment__settings-box'>
-        <summary>Settings</summary>
+      <Card
+        title='Settings'
+        subtitle='How this experiment is described and judged.'
+      >
         <SettingsForm
           summary={summary}
           onSaved={() => setReload((n) => n + 1)}
         />
-      </details>
+      </Card>
 
-      <div className='Experiment__cards'>
-        <div className='Experiment__card'>
-          <div className='Experiment__card-value'>
-            {stats.best ? fmtNumber(stats.best.value) : '–'}
-          </div>
-          <div className='Experiment__muted'>
-            {stats.best ? (
-              <>
-                best {experiment.primary_metric} ({direction}) ·{' '}
-                <Link to={`/runs/${encodeURIComponent(stats.best.run_id)}`}>
-                  {stats.best.name}
-                </Link>
-              </>
-            ) : (
-              'Set a primary metric to see the best result'
-            )}
-          </div>
-        </div>
-        <div className='Experiment__card'>
-          <div className='Experiment__card-value'>{stats.runs}</div>
-          <div className='Experiment__muted'>
-            runs ({stats.running} running)
-          </div>
-        </div>
-      </div>
-
-      <h2>Runs</h2>
-      <div className='Experiment__toolbar'>
-        <label>
-          Sort{' '}
-          <select value={sort} onChange={(e) => setSort(e.target.value)}>
-            <option value='created_at:desc'>newest first</option>
-            <option value='created_at:asc'>oldest first</option>
-            <option value='primary_value:best'>best first</option>
-          </select>
-        </label>{' '}
-        <button
-          type='button'
-          disabled={selected.length < 2 || selected.length > MAX_COMPARE}
-          onClick={() => history.push(compareUrl(selected))}
-        >
-          {selected.length
-            ? `Compare selected (${selected.length})`
-            : 'Compare selected'}
-        </button>{' '}
-        <button
-          type='button'
-          disabled={ranked.length < 2}
-          onClick={() =>
-            history.push(compareUrl(ranked.slice(0, TOP).map((r) => r.id)))
+      <div className='Experiment__stats'>
+        <Card
+          title={stats.best ? fmtNumber(stats.best.value) : '–'}
+          subtitle={
+            stats.best
+              ? `best ${experiment.primary_metric} (${direction})`
+              : 'Set a primary metric to see the best result'
           }
         >
-          {`Compare top ${Math.min(TOP, ranked.length)}`}
-        </button>
+          {stats.best && (
+            <Link
+              className='Experiment__link'
+              to={`/runs/${encodeURIComponent(stats.best.run_id)}`}
+            >
+              {stats.best.name}
+            </Link>
+          )}
+        </Card>
+        <Card
+          title={`${stats.runs}`}
+          subtitle={`runs (${stats.running} running)`}
+        />
       </div>
-      <table className='Experiment__table'>
-        <thead>
-          <tr>
-            <th />
-            <th>Run</th>
-            <th>Status</th>
-            <th>{experiment.primary_metric || 'Primary value'}</th>
-            {keys.map((key) => (
-              <th key={key}>{key}</th>
-            ))}
-            <th>Started</th>
-            <th>Duration</th>
-            <th>Commit</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((run) => (
-            <tr key={run.id}>
-              <td>
+
+      <Card title='Runs' subtitle='Select runs to compare them side by side.'>
+        <div className='Experiment__toolbar'>
+          <div className='Experiment__sort'>
+            <OutlinedField
+              id='experiment-sort'
+              label='Sort'
+              select
+              value={sort}
+              onValueChange={setSort}
+            >
+              <MenuItem value='created_at:desc'>newest first</MenuItem>
+              <MenuItem value='created_at:asc'>oldest first</MenuItem>
+              <MenuItem value='primary_value:best'>best first</MenuItem>
+            </OutlinedField>
+          </div>
+          <Button
+            variant={selected.length ? 'contained' : 'outlined'}
+            disabled={selected.length < 2 || selected.length > MAX_COMPARE}
+            onClick={() => history.push(compareUrl(selected))}
+          >
+            {selected.length
+              ? `Compare selected (${selected.length})`
+              : 'Compare selected'}
+          </Button>
+          <Button
+            variant='outlined'
+            disabled={ranked.length < 2}
+            onClick={() =>
+              history.push(compareUrl(ranked.slice(0, TOP).map((r) => r.id)))
+            }
+          >
+            {`Compare top ${Math.min(TOP, ranked.length)}`}
+          </Button>
+        </div>
+        <Table
+          columns={[
+            { key: 'select', label: '' },
+            { key: 'run', label: 'Run' },
+            { key: 'status', label: 'Status' },
+            {
+              key: 'value',
+              label: experiment.primary_metric || 'Primary value',
+            },
+            ...keys.map((key) => ({ key: `param:${key}`, label: key })),
+            { key: 'started', label: 'Started' },
+            { key: 'duration', label: 'Duration' },
+            { key: 'commit', label: 'Commit' },
+          ]}
+          rows={rows.map((run) => {
+            const cells: Record<string, React.ReactNode> = {
+              id: run.id,
+              select: (
                 <input
                   type='checkbox'
+                  className='Experiment__checkbox'
                   aria-label={`select ${run.name}`}
                   checked={selected.includes(run.id)}
                   onChange={(event) => toggle(run.id, event.target.checked)}
                 />
-              </td>
-              <td>
-                <Link to={`/runs/${encodeURIComponent(run.id)}`}>
+              ),
+              run: (
+                <Link
+                  className='Experiment__link'
+                  to={`/runs/${encodeURIComponent(run.id)}`}
+                >
                   {run.name}
                 </Link>
-              </td>
-              <td>{run.status}</td>
-              <td className={run.id === best ? 'Experiment__best' : undefined}>
-                {fmtNumber(run.primary_value)}
-              </td>
-              {keys.map((key) => (
-                <td key={key} className='Experiment__mono'>
-                  {run.params && key in run.params
-                    ? paramText(run.params[key])
-                    : '–'}
-                </td>
-              ))}
-              <td>{formatTime(run.started_at ?? run.created_at)}</td>
-              <td>{duration(run)}</td>
-              <td className='Experiment__mono'>
-                {run.commit ? run.commit.slice(0, 8) : '–'}
-                {run.dirty ? ' +changes' : ''}
-              </td>
-            </tr>
-          ))}
-          {rows.length === 0 && (
-            <tr>
-              <td colSpan={7 + keys.length} className='Experiment__muted'>
-                No runs in this experiment yet.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+              ),
+              status: run.status,
+              value: (
+                <span
+                  className={run.id === best ? 'Experiment__best' : undefined}
+                >
+                  {fmtNumber(run.primary_value)}
+                </span>
+              ),
+              started: formatTime(run.started_at ?? run.created_at),
+              duration: duration(run),
+              commit: (
+                <span className='Experiment__mono'>
+                  {run.commit ? run.commit.slice(0, 8) : '–'}
+                  {run.dirty ? ' +changes' : ''}
+                </span>
+              ),
+            };
+            keys.forEach((key) => {
+              cells[`param:${key}`] =
+                run.params && key in run.params ? (
+                  <span className='Experiment__mono'>
+                    {paramText(run.params[key])}
+                  </span>
+                ) : (
+                  '–'
+                );
+            });
+            return cells;
+          })}
+          rowKey='id'
+          emptyText='No runs in this experiment yet.'
+        />
+      </Card>
 
       {valued.length > 0 && (
-        <>
-          <h3>{experiment.primary_metric} by run</h3>
+        <Card
+          title={`${experiment.primary_metric} by run`}
+          subtitle='Oldest run on the left.'
+        >
           <ValueChart
             values={valued}
             label={experiment.primary_metric ?? 'primary metric'}
           />
-        </>
+        </Card>
       )}
     </>
   );
@@ -392,9 +435,9 @@ function Experiment(): React.FunctionComponentElement<React.ReactNode> {
         {id ? (
           <ExperimentDetail key={id} id={id} />
         ) : (
-          <p className='Experiment__error'>
+          <Text size={12} color='error'>
             No experiment was given. Open an experiment from its project.
-          </p>
+          </Text>
         )}
       </section>
     </ErrorBoundary>

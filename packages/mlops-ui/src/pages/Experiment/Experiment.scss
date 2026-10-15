@@ -1,112 +1,107 @@
+@use 'src/styles/abstracts' as *;
+
 .Experiment {
-  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: $space-lg;
+  padding: $space-lg;
 
-  h1 {
-    font-size: 20px;
-    margin: 0 0 6px;
+  .InputWrapper,
+  .MuiFormControl-root,
+  .MuiInputBase-root {
+    width: 100%;
   }
 
-  h2 {
-    font-size: 15px;
-    margin: 20px 0 6px;
+  &__header {
+    display: flex;
+    flex-direction: column;
+    gap: $space-xxxs;
   }
 
-  &__kind {
-    font-size: 12px;
-    color: #344054;
-    background: #eef1f5;
-    border-radius: 3px;
-    padding: 1px 6px;
-    margin-left: 4px;
+  &__link {
+    color: $primary-color;
+    text-decoration: none;
+    font-size: $text-sm;
+
+    &:hover {
+      text-decoration: underline;
+    }
   }
 
-  &__settings-box {
-    margin: 8px 0;
+  &__title {
+    display: flex;
+    align-items: center;
+    gap: $space-xs;
+  }
+
+  &__fields {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: $space-sm;
+
+    @media (max-width: $md) {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
 
   &__settings {
-    display: grid;
-    gap: 8px;
-    max-width: 480px;
-    padding: 8px 0;
-    font-size: 13px;
-
-    label {
-      display: grid;
-      gap: 4px;
-    }
-
-    textarea,
-    input,
-    select {
-      font: inherit;
-      padding: 4px 6px;
-      border: 1px solid #c9d2df;
-      border-radius: 4px;
-    }
-  }
-
-  &__cards {
     display: flex;
-    gap: 16px;
-    margin: 12px 0;
+    flex-direction: column;
+    gap: $space-sm;
   }
 
-  &__card {
-    border: 1px solid #e3e8ef;
-    border-radius: 4px;
-    padding: 12px 16px;
-    min-width: 220px;
-    background: #fff;
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: $space-xs;
   }
 
-  &__card-value {
-    font-size: 22px;
-    font-weight: 600;
+  &__stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    align-items: start;
+    gap: $space-lg;
   }
 
   &__toolbar {
-    margin-bottom: 8px;
-    font-size: 13px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: $space-xs;
+    margin-bottom: $space-sm;
   }
 
-  &__table {
-    width: 100%;
-    border-collapse: collapse;
-
-    th,
-    td {
-      text-align: left;
-      padding: 6px 8px;
-      border-bottom: 1px solid #e3e8ef;
-      font-size: 13px;
-    }
+  &__sort {
+    min-width: 11rem;
   }
 
   &__best {
-    font-weight: 700;
-    color: #067647;
+    font-weight: 600;
+    color: $success-color-100;
+  }
+
+  &__checkbox {
+    accent-color: $primary-color;
+    cursor: pointer;
   }
 
   &__chart {
     width: 100%;
-    max-width: 640px;
-    border: 1px solid #e3e8ef;
-    border-radius: 4px;
-    background: #fff;
+    max-width: 40rem;
+
+    polyline {
+      fill: none;
+      stroke: $primary-color;
+      stroke-width: 2;
+    }
+
+    circle {
+      fill: $primary-color;
+    }
   }
 
   &__mono {
-    font-family: monospace;
-    font-size: 12px;
-  }
-
-  &__muted {
-    color: #5b6676;
-    font-size: 13px;
-  }
-
-  &__error {
-    color: #b42318;
+    @include monospaceFontFamily(12);
+    color: $pico-70;
   }
 }

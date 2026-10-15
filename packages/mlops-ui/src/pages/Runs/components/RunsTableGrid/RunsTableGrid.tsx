@@ -155,7 +155,7 @@ function getRunsTableColumns(
               monospace
               size='xSmall'
               color={COLORS[0][0]}
-              label={metricContext === '' ? 'Empty context' : metricContext}
+              label={metricContext === '' ? 'No context' : metricContext}
             />
           ),
           topHeader: isSystem ? 'System Metrics' : metricName,

@@ -1,82 +1,58 @@
+@use 'src/styles/abstracts' as *;
+
 .Tags {
-  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: $space-lg;
+  padding: $space-lg;
 
-  h1 {
-    font-size: 20px;
-    margin: 0 0 8px;
+  .InputWrapper,
+  .MuiFormControl-root,
+  .MuiInputBase-root {
+    width: 100%;
   }
 
-  h2 {
-    font-size: 15px;
-    margin: 16px 0 6px;
-  }
-
-  h3 {
-    font-size: 14px;
-    margin: 0 0 6px;
+  &__header {
+    display: flex;
+    flex-direction: column;
+    gap: $space-xxxs;
   }
 
   &__project {
-    display: grid;
-    gap: 4px;
-    max-width: 320px;
-    font-size: 13px;
-    margin-bottom: 8px;
+    max-width: 20rem;
   }
 
-  &__table {
-    width: 100%;
-    border-collapse: collapse;
+  &__fields {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: $space-sm;
 
-    th,
-    td {
-      text-align: left;
-      padding: 6px 8px;
-      border-bottom: 1px solid #e3e8ef;
-      font-size: 13px;
+    @media (max-width: $md) {
+      grid-template-columns: minmax(0, 1fr);
     }
+  }
 
-    input {
-      font: inherit;
-      width: 100%;
-      padding: 3px 6px;
-      border: 1px solid #c9d2df;
-      border-radius: 4px;
-    }
+  &__create {
+    display: flex;
+    flex-direction: column;
+    gap: $space-sm;
   }
 
   &__actions {
     display: flex;
-    gap: 6px;
+    flex-wrap: wrap;
     align-items: center;
+    gap: $space-xs;
+    margin-top: $space-sm;
   }
 
-  &__create {
-    display: grid;
-    gap: 8px;
-    max-width: 420px;
-    margin-top: 20px;
-    font-size: 13px;
-
-    label {
-      display: grid;
-      gap: 4px;
-    }
-
-    input {
-      font: inherit;
-      padding: 4px 6px;
-      border: 1px solid #c9d2df;
-      border-radius: 4px;
-    }
+  &__destructive {
+    color: $error-color !important;
+    border-color: $error-color !important;
   }
 
-  &__muted {
-    color: #5b6676;
-    font-size: 13px;
-  }
-
-  &__error {
-    color: #b42318;
+  &__mono {
+    @include monospaceFontFamily(12);
+    color: $pico-70;
   }
 }

@@ -39,4 +39,8 @@
       height: 100%;
     }
   }
+  &__mono {
+    @include monospaceFontFamily(12);
+    color: $pico-70;
+  }
 }

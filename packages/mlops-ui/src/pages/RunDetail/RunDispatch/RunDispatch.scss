@@ -1,36 +1,51 @@
+@use 'src/styles/abstracts' as *;
+
 .RunDispatch {
-  display: grid;
-  gap: 8px;
-  max-width: 420px;
-  margin: 16px 0 24px;
-  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+  margin: 0;
+  width: 100%;
 
-  h3 {
-    margin: 0;
-    font-size: 15px;
+  form {
+    display: flex;
+    flex-direction: column;
+    gap: $space-sm;
   }
 
-  label {
+  .MuiFormControl-root,
+  .MuiInputBase-root {
+    width: 100%;
+  }
+
+  &__fields {
     display: grid;
-    gap: 4px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: $space-sm;
+
+    @media (max-width: $md) {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
 
-  input {
-    font: inherit;
-    padding: 4px 6px;
-    border: 1px solid #c9d2df;
-    border-radius: 4px;
+  &__wide {
+    grid-column: 1 / -1;
+  }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: $space-xs;
   }
 
   &__mono {
-    font-family: monospace;
+    @include monospaceFontFamily(12);
   }
+}
 
-  &__muted {
-    color: #5b6676;
-  }
-
-  &__error {
-    color: #b42318;
-  }
+// The overview makes its last card inline-block, which shrinks this card to its content.
+.RunOverviewTab__cardBox.RunDispatch:last-child {
+  display: flex;
+  width: 100%;
+  max-width: none;
 }

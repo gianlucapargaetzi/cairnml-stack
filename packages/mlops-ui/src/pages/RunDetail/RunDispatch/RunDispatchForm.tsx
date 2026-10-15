@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { Button, Card, Text } from 'components/kit';
 import ErrorBoundary from 'components/ErrorBoundary/ErrorBoundary';
+import OutlinedField from 'components/OutlinedField/OutlinedField';
 
 import jobsService from 'services/api/jobs/jobsService';
 
@@ -24,7 +26,7 @@ function RunDispatchForm({ runId }: { runId: string }) {
   const [busy, setBusy] = useState(false);
 
   function set(field: keyof typeof form) {
-    return (event: React.ChangeEvent<HTMLInputElement>) =>
+    return (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setForm((current) => ({ ...current, [field]: event.target.value }));
   }
 
@@ -60,56 +62,67 @@ function RunDispatchForm({ runId }: { runId: string }) {
 
   return (
     <ErrorBoundary>
-      <form
+      <Card
+        title='Run on an agent'
+        subtitle='Schedules this run as a job on an agent, as mlops dispatch does.'
         className='RunDispatch'
-        onSubmit={submit}
-        aria-label='Run on an agent'
       >
-        <h3>Run on an agent</h3>
-        <label>
-          Queue
-          <input value={form.queue} onChange={set('queue')} />
-        </label>
-        <label>
-          CPU
-          <input type='number' min={0} value={form.cpu} onChange={set('cpu')} />
-        </label>
-        <label>
-          Memory GB
-          <input
-            type='number'
-            min={0}
-            step='any'
-            value={form.memory_gb}
-            onChange={set('memory_gb')}
-          />
-        </label>
-        <label>
-          GPU
-          <input type='number' min={0} value={form.gpu} onChange={set('gpu')} />
-        </label>
-        <label>
-          Labels
-          <input
-            placeholder='comma separated'
-            value={form.labels}
-            onChange={set('labels')}
-          />
-        </label>
-        <button type='submit' disabled={busy}>
-          Dispatch as job
-        </button>
-        {error && (
-          <p className='RunDispatch__error' role='alert'>
-            {error}
-          </p>
-        )}
-        {message && (
-          <p className='RunDispatch__muted' role='status'>
-            {message}
-          </p>
-        )}
-      </form>
+        <form onSubmit={submit} aria-label='Run on an agent'>
+          <div className='RunDispatch__fields'>
+            <OutlinedField
+              id='dispatch-queue'
+              label='Queue'
+              value={form.queue}
+              onChange={set('queue')}
+            />
+            <OutlinedField
+              id='dispatch-cpu'
+              label='CPU'
+              numeric
+              value={form.cpu}
+              onChange={set('cpu')}
+            />
+            <OutlinedField
+              id='dispatch-memory-gb'
+              label='Memory GB'
+              numeric
+              value={form.memory_gb}
+              onChange={set('memory_gb')}
+            />
+            <OutlinedField
+              id='dispatch-gpu'
+              label='GPU'
+              numeric
+              value={form.gpu}
+              onChange={set('gpu')}
+            />
+            <div className='RunDispatch__wide'>
+              <OutlinedField
+                id='dispatch-labels'
+                label='Labels'
+                placeholder='comma separated'
+                value={form.labels}
+                onChange={set('labels')}
+              />
+            </div>
+          </div>
+          <div className='RunDispatch__actions'>
+            <Button variant='contained' type='submit' disabled={busy}>
+              Dispatch as job
+            </Button>
+          </div>
+          {error && (
+            <Text size={12} color='error' role='alert'>
+              {error}
+            </Text>
+          )}
+          {message && (
+            <Text size={12} tint={70} role='status'>
+              {message}
+            </Text>
+          )}
+        </form>
+      </Card>
     </ErrorBoundary>
   );
 }

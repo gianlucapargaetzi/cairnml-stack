@@ -125,6 +125,9 @@ $text-lg: 1rem;
 $text-xl: 1.125rem;
 $text-xxl: 1.5rem;
 $text-xxxl: 2.25rem;
+
+// Height of a text box or dropdown (OutlinedField), the same as the kit search box.
+$input-height: 1.75rem;
 $xs: 23.5em; // 376px @media (max-width: $xs) {}
 $sm: 36em; // (min-width: 576px)
 $md: 48em; // (min-width: 768px)

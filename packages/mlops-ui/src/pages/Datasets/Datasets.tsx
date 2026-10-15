@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
-import { Card, Dropdown, Table, Text, InputWrapper } from 'components/kit';
+import { MenuItem } from '@material-ui/core';
+
+import { Card, Table, Text } from 'components/kit';
 import ErrorBoundary from 'components/ErrorBoundary/ErrorBoundary';
+import OutlinedField from 'components/OutlinedField/OutlinedField';
 
 import datasetsService from 'services/api/datasets/datasetsService';
 
@@ -27,7 +30,6 @@ function DatasetList({
   const [project, setProject] = useState(initialProject);
   const [type, setType] = useState('');
   const [query, setQuery] = useState('');
-  const [openMenu, setOpenMenu] = useState<'project' | 'type' | null>(null);
   const projects = useMemo(
     () => [...new Set(rows.map((row) => row.project))].sort(),
     [rows],
@@ -57,38 +59,36 @@ function DatasetList({
         subtitle={`${shown.length} of ${rows.length} shown.`}
       >
         <div className='Datasets__toolbar'>
-          <Dropdown
+          <OutlinedField
+            id='datasets-project'
             label='Project'
-            size='medium'
-            placeholder='All projects'
-            value={project || null}
-            options={[
-              { value: '', label: 'All projects' },
-              ...projects.map((name) => ({ value: name, label: name })),
-            ]}
-            onChange={(option) => setProject(option?.value ?? '')}
-            onMenuOpen={() => setOpenMenu('project')}
-            onMenuClose={() => setOpenMenu(null)}
-            open={openMenu === 'project'}
-            withPortal
-          />
-          <Dropdown
+            select
+            value={project}
+            onValueChange={setProject}
+          >
+            <MenuItem value=''>All projects</MenuItem>
+            {projects.map((name) => (
+              <MenuItem key={name} value={name}>
+                {name}
+              </MenuItem>
+            ))}
+          </OutlinedField>
+          <OutlinedField
+            id='datasets-type'
             label='Type'
-            size='medium'
-            placeholder='Any type'
-            value={type || null}
-            options={[
-              { value: '', label: 'Any type' },
-              ...types.map((name) => ({ value: name, label: name })),
-            ]}
-            onChange={(option) => setType(option?.value ?? '')}
-            onMenuOpen={() => setOpenMenu('type')}
-            onMenuClose={() => setOpenMenu(null)}
-            open={openMenu === 'type'}
-            withPortal
-          />
-          <InputWrapper
-            labelAppearance='top-labeled'
+            select
+            value={type}
+            onValueChange={setType}
+          >
+            <MenuItem value=''>Any type</MenuItem>
+            {types.map((name) => (
+              <MenuItem key={name} value={name}>
+                {name}
+              </MenuItem>
+            ))}
+          </OutlinedField>
+          <OutlinedField
+            id='datasets-search'
             label='Search'
             value={query}
             onChange={(event) => setQuery(event.target.value)}

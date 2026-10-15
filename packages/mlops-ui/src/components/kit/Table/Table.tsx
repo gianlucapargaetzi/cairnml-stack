@@ -75,7 +75,7 @@ function Table({
                   onClick={onRowClick ? () => onRowClick(key) : undefined}
                 >
                   {columns.map((column) => (
-                    <td key={column.key} className='Table__cell'>
+                    <td key={column.key} className='Table__kitCell'>
                       {typeof row[column.key] === 'string' ||
                       typeof row[column.key] === 'number' ? (
                         <Text size={12}>{row[column.key]}</Text>

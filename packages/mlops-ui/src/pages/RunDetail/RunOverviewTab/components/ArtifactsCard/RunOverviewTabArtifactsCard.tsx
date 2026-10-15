@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 
+import { Button, Card, Table, Text } from 'components/kit';
 import ErrorBoundary from 'components/ErrorBoundary/ErrorBoundary';
 import BusyLoaderWrapper from 'components/BusyLoaderWrapper/BusyLoaderWrapper';
 
@@ -31,38 +32,41 @@ function RunOverviewTabArtifactsCard({
   return (
     <ErrorBoundary>
       <BusyLoaderWrapper isLoading={isRunInfoLoading} height='100%'>
-        <section className='RunOverviewTab__cardBox'>
-          <h3>Run Artifacts ({artifacts.length})</h3>
-          {error && <p role='alert'>{error}</p>}
-          {artifacts.length === 0 ? (
-            <p>No artifacts were uploaded for this run.</p>
-          ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Kind</th>
-                  <th>Size</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {artifacts.map((artifact) => (
-                  <tr key={artifact.id}>
-                    <td>{artifact.name}</td>
-                    <td>{artifact.kind}</td>
-                    <td>{formatBytes(artifact.size)}</td>
-                    <td>
-                      <button type='button' onClick={() => download(artifact)}>
-                        Download
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <Card
+          title={`Run artifacts (${artifacts.length})`}
+          className='RunOverviewTab__cardBox'
+        >
+          {error && (
+            <Text size={12} color='error' role='alert'>
+              {error}
+            </Text>
           )}
-        </section>
+          <Table
+            columns={[
+              { key: 'name', label: 'Name' },
+              { key: 'kind', label: 'Kind' },
+              { key: 'size', label: 'Size' },
+              { key: 'download', label: '' },
+            ]}
+            rows={artifacts.map((artifact) => ({
+              id: artifact.id,
+              name: artifact.name,
+              kind: artifact.kind,
+              size: formatBytes(artifact.size),
+              download: (
+                <Button
+                  variant='outlined'
+                  size='small'
+                  onClick={() => download(artifact)}
+                >
+                  Download
+                </Button>
+              ),
+            }))}
+            rowKey='id'
+            emptyText='No artifacts were uploaded for this run.'
+          />
+        </Card>
       </BusyLoaderWrapper>
     </ErrorBoundary>
   );

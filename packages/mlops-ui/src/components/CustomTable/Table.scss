@@ -1,6 +1,7 @@
 @use 'src/styles/abstracts' as *;
 
 $border-color: $cuddle-50;
+$row-border-color: $cuddle-30;
 $box-shadow: 0 3px 9px rgba(0, 0, 0, 0.1);
 $border-radius: 0.2rem;
 
@@ -13,7 +14,7 @@ $border-radius: 0.2rem;
 .Table {
   position: relative;
   display: flex;
-  width: max-content;
+  width: 100%;
   min-width: 100%;
   min-height: 100%;
   box-sizing: border-box;
@@ -124,6 +125,16 @@ $border-radius: 0.2rem;
 .Table__pane--middle {
   position: relative;
 
+  // The last column is anchored to the pane's right edge, so it takes the space that the other
+  // columns do not use.
+  .Table__column:last-of-type {
+    width: auto !important;
+    right: 0;
+  }
+  // Takes the space left over when the columns are narrower than the table; never below their content.
+  flex: 1 1 auto;
+  min-width: max-content;
+
   .Table__column {
     position: absolute;
   }
@@ -137,6 +148,7 @@ $border-radius: 0.2rem;
   width: stretch;
   width: -webkit-fill-available;
   width: -moz-available;
+  min-width: max-content;
   max-width: 500px;
   .Table__column__defaultSelectIcon {
     border: 1.5px solid $pico-80;
@@ -184,6 +196,7 @@ $border-radius: 0.2rem;
     }
   }
   &.Table__column--selection {
+    min-width: 0;
     padding: 0;
     .Table__cell--header {
       padding: 0;
@@ -284,8 +297,8 @@ $border-radius: 0.2rem;
   align-items: center;
   font-size: var(--cell-font-size);
   padding: 0 $space-unit;
-  border-bottom: 1px solid $border-color;
-  border-right: 1px solid $border-color;
+  border-bottom: 1px solid $row-border-color;
+  border-right: 1px solid $row-border-color;
   text-align: left;
   box-sizing: border-box;
   background-color: #fff;
@@ -396,6 +409,8 @@ $border-radius: 0.2rem;
   border-color: $border-color;
   z-index: 3;
   overflow: visible;
+  white-space: nowrap;
+  min-width: max-content;
   font-family: 'Inter', sans-serif;
 
   & > *:first-child {
@@ -407,6 +422,10 @@ $border-radius: 0.2rem;
       margin-right: toRem(14px);
     }
   }
+}
+
+.Table__cell--header > *:not(:first-child) {
+  flex: none;
 }
 
 .Table__column__resizeHandler {

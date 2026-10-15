@@ -101,7 +101,7 @@ function RunMetricCard({
                 monospace
                 size='large'
                 color={COLORS[0][(i + index) % COLORS[0].length]}
-                label={label || 'Empty context'}
+                label={label || 'No context'}
               />
             ))}
         </div>

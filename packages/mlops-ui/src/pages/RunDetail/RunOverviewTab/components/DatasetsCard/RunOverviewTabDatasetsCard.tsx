@@ -1,5 +1,7 @@
 import React from 'react';
 
+import { Card, Table, Text } from 'components/kit';
+
 export interface IRunDatasetRef {
   path: string;
   repo?: string | null;
@@ -15,33 +17,30 @@ function RunOverviewTabDatasetsCard({
   datasets: IRunDatasetRef[];
 }) {
   return (
-    <section className='RunOverviewTab__cardBox'>
-      <h3>Datasets ({datasets.length})</h3>
-      {datasets.length === 0 ? (
-        <p>No datasets were used by this run.</p>
-      ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Path</th>
-              <th>Repository</th>
-              <th>Version (DVC hash)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {datasets.map((dataset, index) => (
-              <tr key={`${dataset.repo ?? ''}-${dataset.path}-${index}`}>
-                <td>{dataset.path}</td>
-                <td>{dataset.repo ?? '–'}</td>
-                <td>
-                  <code>{dataset.dvc_hash ?? 'unversioned'}</code>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </section>
+    <Card
+      title={`Datasets (${datasets.length})`}
+      className='RunOverviewTab__cardBox'
+    >
+      <Table
+        columns={[
+          { key: 'path', label: 'Path' },
+          { key: 'repo', label: 'Repository' },
+          { key: 'version', label: 'Version (DVC hash)' },
+        ]}
+        rows={datasets.map((dataset, index) => ({
+          id: `${dataset.repo ?? ''}-${dataset.path}-${index}`,
+          path: dataset.path,
+          repo: dataset.repo ?? '–',
+          version: (
+            <Text size={12} className='RunOverviewTab__mono'>
+              {dataset.dvc_hash ?? 'unversioned'}
+            </Text>
+          ),
+        }))}
+        rowKey='id'
+        emptyText='No datasets were used by this run.'
+      />
+    </Card>
   );
 }
 

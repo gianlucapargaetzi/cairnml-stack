@@ -70,7 +70,7 @@ function useActiveRunsTable() {
                 <Badge
                   monospace
                   size='xSmall'
-                  label={metricContext === '' ? 'Empty context' : metricContext}
+                  label={metricContext === '' ? 'No context' : metricContext}
                 />
               ),
               topHeader: isSystem

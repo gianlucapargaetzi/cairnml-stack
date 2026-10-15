@@ -23,7 +23,7 @@ The UI is built from the kit in `src/components/kit` and the tokens in `src/styl
 - Read-only data is shown as text, never as a disabled input.
 - Icons come from `Icon`. People are shown as a round `Avatar` (`react-avatar`, `round`), coloured with `stringToColor(name)`.
 - Use `components/kit` only. `components/kit_v2` belongs to the Aim fork and is not used in new or restyled code.
-- Read-only label and value pairs use `DefinitionList`. Form fields use the kit `Input` (`components/kit/Input`), and dropdowns are `Input` with `select` and `MenuItem`. Status uses `Badge` with the colours in `config/colors/colors.ts` (`STATUS_COLORS`).
+- Read-only label and value pairs use `DefinitionList`. Every text, number and dropdown box in our pages uses `OutlinedField` (`components/OutlinedField`), with `select` and `MenuItem` for dropdowns and `numeric` for number boxes (digits and one decimal point only). Do not use `InputWrapper`, the kit `Dropdown` (react-select, its own label animation) or `type='number'` in new code. Status uses `Badge` with the colours in `config/colors/colors.ts` (`STATUS_COLORS`).
 - Links inside a page use a page-local class in `$primary-color` with no underline until hover.
 - Filter groups are `Button`s: the active one `variant='contained' color='secondary'`, the others `variant='outlined'`.
 - One primary action per view. Destructive actions use the error colour and sit apart from other actions.
@@ -57,6 +57,13 @@ The UI is built from the kit in `src/components/kit` and the tokens in `src/styl
 - Secondary: `variant='outlined'`.
 - Text-only link action: `variant='text'`, sparingly.
 - Destructive: `color='secondary'` with error text, or a confirmation through `ConfirmModal`. Never a single click for a destructive action.
+- Form actions: the submit button goes in its own row after the last field, right-aligned (`justify-content: flex-end`), with `$space-sm` above the row. A button never sits directly against a field or on the left under one field.
+- Every button is a kit `Button`. Do not style a `<button>` by hand.
+
+**Form fields** (`OutlinedField`, `components/OutlinedField`)
+- Text: `OutlinedField`. Number (digits and one decimal point only): `OutlinedField` with `numeric`. Dropdown: `OutlinedField` with `select` and `MenuItem` children. Multi-line text: `OutlinedField` with `multiline` and `rows`.
+- Do not hand-style these boxes, and do not add a page-local class to change their height, font, label or menu. If a field needs something new, change `OutlinedField` and its stylesheet, then use it everywhere.
+- The label sits inside the box until the field is focused or has a value (text), or until the menu is open or a value is chosen (dropdown).
 
 **User menu**
 - The signed-in user is shown only as a round avatar (32px) at the bottom of the sidebar. Clicking it opens a small `ControlPopover` with the text "Signed in as:", the username in bold, and two buttons: **Settings** (outlined) and **Sign out** (outlined).
@@ -69,3 +76,4 @@ The UI is built from the kit in `src/components/kit` and the tokens in `src/styl
 **Checking a change**
 - `npm run lint`, `npx tsc --noEmit`, and a `build:server` build must pass.
 - Look at the page in a browser at desktop width and at phone width (16px side gutters, no horizontal scroll) before opening a pull request.
+- For a form or field change, measure it in the browser, not only by eye: the box height of every field in a row must match, the label must sit inside when empty and move onto the outline when filled, a dropdown menu must open directly below its box with no gap, and a button must line up with the form edge. Compare against an existing reference (for example the Packages search on a run's overview) and say in the report what was compared.
