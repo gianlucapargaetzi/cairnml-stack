@@ -17,3 +17,6 @@ deploy/data/
 
 # Built explorer (npm run build:server in packages/mlops-ui)
 packages/mlops-server/src/mlops_server/ui/next/
+
+# Sphinx build output of packages/mlops-client
+packages/mlops-client/docs/_build/

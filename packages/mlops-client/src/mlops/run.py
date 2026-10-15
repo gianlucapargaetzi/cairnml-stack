@@ -52,6 +52,7 @@ class RunError(Exception):
 
 
 def current_run() -> Run | None:
+    """Return the run that is recording now, or ``None`` when no run is active."""
     return _current
 
 
@@ -75,6 +76,18 @@ def _transient(exc: Exception) -> bool:
 
 
 class Run:
+    """One run of an experiment: its metrics, parameters, artifacts and status.
+
+    Created with :func:`mlops.init`, which starts the recording. Use it as a context
+    manager, or call :meth:`close` at the end, so the run is marked finished or failed.
+
+    Attributes:
+        id: The server's identifier of the run.
+        project: The project the run belongs to, such as ``"vision/seg"``.
+        name: The name given to :func:`mlops.init`.
+        mode: ``"local"``, ``"offline"`` or ``"job"``.
+    """
+
     def __init__(
         self,
         *,
@@ -137,9 +150,22 @@ class Run:
         )
 
     def log_metric(self, name: str, value: float, step: int | None = None) -> None:
+        """Record one value of a metric. Same as :meth:`track` without a context.
+
+        Args:
+            name: The metric's name, such as ``"loss"``.
+            value: The value to record.
+            step: The training step the value belongs to, if any.
+        """
         self.track(value, name, step=step)
 
     def log_metrics(self, values: dict, step: int | None = None) -> None:
+        """Record several metrics at the same step.
+
+        Args:
+            values: Metric names mapped to their values.
+            step: The training step the values belong to, if any.
+        """
         for name, value in values.items():
             self.track(value, name, step=step)
 
@@ -167,6 +193,14 @@ class Run:
     def log_text(
         self, name: str, text: str, step: int | None = None, *, context: dict | None = None
     ) -> None:
+        """Record a text, such as a sample output or a note, under a metric-like name.
+
+        Args:
+            name: The name the text is listed under.
+            text: The text to record.
+            step: The training step the text belongs to, if any.
+            context: Extra labels such as ``{"subset": "val"}``.
+        """
         self._log_inline("text", name, step, context, text=encode_text(text))
 
     def log_figure(
@@ -242,6 +276,12 @@ class Run:
             log.warning("could not spool a sequence blob, dropping it: %s", exc)
 
     def log_params(self, params: dict) -> None:
+        """Record parameters of the run. The server merges them with those already recorded.
+
+        Args:
+            params: Parameter names mapped to their values. Values that are not JSON
+                serialisable are stored as text.
+        """
         self._patch(params=redact_mapping(json.loads(json.dumps(params, default=str))))
 
     def __setitem__(self, key: str, value) -> None:
@@ -263,6 +303,26 @@ class Run:
     def upload_artifact(
         self, name: str, path=None, obj=None, kind: str = "file", meta: dict | None = None
     ):
+        """Store a file or an object with the run, under the given name.
+
+        Pass exactly one of ``path`` or ``obj``. If the server cannot be reached, the
+        artifact is kept locally and sent later.
+
+        Args:
+            name: The artifact's name, with ``/`` for folders. Must not contain ``..``.
+            path: The file to upload.
+            obj: Bytes, text, or a JSON-serialisable value to upload instead of a file.
+            kind: What the artifact is, such as ``"file"`` or ``"script"``.
+            meta: Extra information stored with the artifact.
+
+        Returns:
+            The storage key of the uploaded artifact, or ``None`` when it was rejected
+            or saved for later.
+
+        Raises:
+            ValueError: If both or neither of ``path`` and ``obj`` are given, the name is
+                invalid, or ``path`` is not an existing file.
+        """
         from mlops import transfer
 
         if (path is None) == (obj is None):
@@ -335,6 +395,12 @@ class Run:
         return job
 
     def close(self, status: str | None = None) -> None:
+        """Finish the run and send what is still buffered. Calling it again does nothing.
+
+        Args:
+            status: The final status. Defaults to ``"finished"``, ``"failed"`` after an
+                exception, or ``"cancelled"`` after Ctrl+C.
+        """
         global _current
         with self._lock:
             if self._closed:
@@ -436,7 +502,33 @@ def init(
     primary_metric: str | None = None,
     direction: str | None = None,
 ) -> Run:
-    """Start recording. In a job run the experiment comes from the run record instead."""
+    """Start recording a run and return it.
+
+    Inside a job the run is the one the agent started, and the experiment comes from its
+    run record instead of ``experiment``.
+
+    Args:
+        project: The project the run belongs to, such as ``"vision/seg"``.
+        name: The run's name, shown in the UI.
+        config: Parameters to record at the start, such as ``{"lr": 0.1}``.
+        script: The script that started the run. Found automatically when omitted.
+        capture_stdout: Record what the program prints as the run's log.
+        capture_args: Record the command-line arguments as parameters.
+        capture_git: Record the Git commit and state of the repository.
+        datasets: Paths of the datasets the run uses.
+        api: The server client. Only needed for tests.
+        experiment: The experiment the run is grouped under. Created when it does not exist.
+        primary_metric: The metric that decides which run of the experiment is best.
+        direction: ``"min"`` or ``"max"``: whether lower or higher values of the
+            primary metric are better.
+
+    Returns:
+        The started :class:`Run`. Use it as a context manager, or call ``close()`` on it.
+
+    Raises:
+        RunError: If the server rejects the run, such as for an unknown project. When the
+            server cannot be reached, the run is recorded offline instead and nothing is raised.
+    """
     global _current
     token, run_id = os.environ.get("MLOPS_RUN_TOKEN"), os.environ.get("MLOPS_RUN_ID")
     if token and run_id:
