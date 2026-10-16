@@ -28,10 +28,10 @@ Spikes S1 to S4 come first, because they decide whether the design works at all.
 
 ### S3. Agent Git access with a short-lived GitHub token
 
-- **Question:** does `clearml-agent` clone a GitHub repository over HTTPS when the password is a short-lived GitHub App installation token, and does it accept that token without storing it in its configuration?
-- **Why it matters:** section 4.8 and gap row 9. If this fails, the agent needs a different way to clone.
-- **How:** check `clearml_agent/helper/repo.py` and the credential handling in `session.py`. Clone a private test repository with an installation token.
-- **Pass:** the clone succeeds, and the token does not appear in any file the agent writes.
+- **Question:** can the agent clone a private GitHub repository at one commit, using a short-lived GitHub App installation token passed as an HTTP header through the environment (the mode of our current agent, `workspace.py`), without the token reaching argv, any file, or any error message?
+- **Why it matters:** section 4.8 and gap row 9.
+- **How:** port `_git` and `clone_at` into a scratch copy of the agent and clone a private test repository with an installation token. Then grep the agent's working directory, the process list during the clone, and a forced failure's error text for the token.
+- **Pass:** the clone succeeds at the given commit; the token appears nowhere on disk or in output.
 - **Time box:** 2 days.
 
 ### S4. Admin-only agent approval
