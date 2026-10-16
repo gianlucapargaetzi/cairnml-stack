@@ -13,67 +13,10 @@ Every pull request raises the version of each package it changes, before it is o
 - Patch (0.1.0 to 0.1.1) for fixes, minor (0.1.0 to 0.2.0) for new features. A package changed only in docs or tests does not need a bump.
 - Name the new versions in the pull request description.
 
-# UI styling guide (packages/mlops-ui)
+# UI styling guide
 
-The UI is built from the kit in `src/components/kit` and the tokens in `src/styles/abstracts/_variables.scss`. Use them. A page that needs its own colours, sizes or spacing is a sign that a kit component or token is missing: add it to the kit or the tokens, do not hard-code it in a page.
+The UI is the ClearML web app in our fork `clearml-web` (branch `idp-port`, checked out next to this repository). Its guide is `clearml-web/CLAUDE.md`: page layout, which component to use for what, buttons, colour, type, spacing, and a checklist.
 
-**Rules**
-- No hard-coded colours, font sizes, radii or spacing in page styles. Use the tokens (`$pico-80`, `$primary-color`, `$text-md`, `$space-md`, `$border-radius-md`, `$border-grey`).
-- Titles, body text and labels use `Text`. Buttons use `Button`. Cards use `Card`. Context menus use `ControlPopover`. Plain `<h1>`/`<table>` with page-local CSS is not allowed in new code.
-- Read-only data is shown as text, never as a disabled input.
-- Icons come from `Icon`. People are shown as a round `Avatar` (`react-avatar`, `round`), coloured with `stringToColor(name)`.
-- Use `components/kit` only. `components/kit_v2` belongs to the Aim fork and is not used in new or restyled code.
-- Read-only label and value pairs use `DefinitionList`. Every text, number and dropdown box in our pages uses `OutlinedField` (`components/OutlinedField`), with `select` and `MenuItem` for dropdowns and `numeric` for number boxes (digits and one decimal point only). Do not use `InputWrapper`, the kit `Dropdown` (react-select, its own label animation) or `type='number'` in new code. Status uses `Badge` with the colours in `config/colors/colors.ts` (`STATUS_COLORS`).
-- Links inside a page use a page-local class in `$primary-color` with no underline until hover.
-- Filter groups are `Button`s: the active one `variant='contained' color='secondary'`, the others `variant='outlined'`.
-- One primary action per view. Destructive actions use the error colour and sit apart from other actions.
+The guide for the old `mlops-ui` package (kit, tokens, `OutlinedField`, the user menu in the sidebar) belonged to the removed platform and no longer applies. Do not follow it.
 
-**Typography** (font: Inter)
-| Role | Component | Size | Weight | Colour |
-|---|---|---|---|---|
-| Page title | `Text component='h1'` | 18 | 600 | `primary` tint 100 |
-| Section title | `Text component='h2'` | 14 | 600 | `primary` tint 100 |
-| Body | `Text` | 12 | 400 | `primary` (default) |
-| Muted hint, description | `Text` | 12 | 400 | `primary` tint 50 |
-| Labels in tables | `Text` | 12 | 600 | `primary` tint 60 |
-| Identifiers, ids, commands | monospace (`@include monospaceFontFamily`) | 12 | 400 | `primary` tint 70 |
-| Error | `Text` | 12 | 500 | `error` |
-
-**Colour**
-- Brand and primary action: `$primary-color` (`#1473E6`), through `Button` `variant='contained'`.
-- Secondary action: `Button` `variant='outlined'`.
-- Navigation rail and sidebar: `$pico-100` background (existing sidebar).
-- Borders: `$border-grey` for cards and tables, `$border-grey-light` for row separators.
-- Status: `success` for active, `error` for revoked or failed, `warning` for attention. Use the `-10` tints for backgrounds.
-
-**Layout and spacing**
-- Page padding: `$space-lg` (24px). Space between sections: `$space-lg`. Space between a title and its description: `$space-xxxs`. Space between related items: `$space-xs`.
-- Cards: `Card`, padding `$space-lg`, radius `$border-radius-lg`, border `$border-grey`.
-- Tables: use the kit `Table` (`components/kit/Table`) for read-only lists. Rows can be clickable and selectable (`onRowClick`, `selectedRowKey`). Global styles set `td` and `th` to `display: flex`, so the kit `Table` pins its own table display values; do not build tables by hand. Header labels use the table-label style above, rows are separated by `$border-grey-light`, no zebra striping. Use `DataList` only for large or sortable data.
-- Empty states: one muted sentence that says what to do next.
-
-**Buttons** (`Button`, size `medium`, 32px high)
-- Primary: `variant='contained'`, one per view.
-- Secondary: `variant='outlined'`.
-- Text-only link action: `variant='text'`, sparingly.
-- Destructive: `color='secondary'` with error text, or a confirmation through `ConfirmModal`. Never a single click for a destructive action.
-- Form actions: the submit button goes in its own row after the last field, right-aligned (`justify-content: flex-end`), with `$space-sm` above the row. A button never sits directly against a field or on the left under one field.
-- Every button is a kit `Button`. Do not style a `<button>` by hand.
-
-**Form fields** (`OutlinedField`, `components/OutlinedField`)
-- Text: `OutlinedField`. Number (digits and one decimal point only): `OutlinedField` with `numeric`. Dropdown: `OutlinedField` with `select` and `MenuItem` children. Multi-line text: `OutlinedField` with `multiline` and `rows`.
-- Do not hand-style these boxes, and do not add a page-local class to change their height, font, label or menu. If a field needs something new, change `OutlinedField` and its stylesheet, then use it everywhere.
-- The label sits inside the box until the field is focused or has a value (text), or until the menu is open or a value is chosen (dropdown).
-
-**User menu**
-- The signed-in user is shown only as a round avatar (32px) at the bottom of the sidebar. Clicking it opens a small `ControlPopover` with the text "Signed in as:", the username in bold, and two buttons: **Settings** (outlined) and **Sign out** (outlined).
-- Nothing else about the user is shown in the sidebar.
-
-**Settings page**
-- Read-only: profile values (username, roles, administrator), projects, enrolled machines.
-- Name, email and password are not editable in the app. The password is changed in the identity provider's account console, opened from a single button.
-
-**Checking a change**
-- `npm run lint`, `npx tsc --noEmit`, and a `build:server` build must pass.
-- Look at the page in a browser at desktop width and at phone width (16px side gutters, no horizontal scroll) before opening a pull request.
-- For a form or field change, measure it in the browser, not only by eye: the box height of every field in a row must match, the label must sit inside when empty and move onto the outline when filled, a dropdown menu must open directly below its box with no gap, and a button must line up with the form edge. Compare against an existing reference (for example the Packages search on a run's overview) and say in the report what was compared.
+Before you change or add a page, read `clearml-web/CLAUDE.md` and look at the running app: a page that already exists is the reference for spacing, components and theme. Check light and dark mode.
