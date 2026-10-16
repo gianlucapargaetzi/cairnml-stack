@@ -94,6 +94,8 @@ services:
       CLEARML__apiserver__idp__sdk_client_id: clearml-sdk
       CLEARML__apiserver__idp__directory_client_id: clearml-server
       CLEARML__apiserver__idp__sync_enabled: "true"
+      # Set CLEARML_COOKIE_SECURE=true when the addresses above are https; the server refuses to start otherwise.
+      CLEARML__apiserver__auth__cookies__secure: ${CLEARML_COOKIE_SECURE:-false}
       CLEARML__apiserver__idp__github_app_id: ${GITHUB_APP_ID:-}
       CLEARML__apiserver__idp__github_api_url: ${GITHUB_API_URL:-https://api.github.com}
       CLEARML__services__async_urls_delete__enabled: "true"
