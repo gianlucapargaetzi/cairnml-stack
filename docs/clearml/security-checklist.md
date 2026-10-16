@@ -45,6 +45,7 @@ Results were taken from the identity suite run inside the server container on br
 | 33 | A signing key the IdP removes keeps verifying tokens | `test_jwks_lifespan`: the key set expires after `key_lifespan_sec` (300 s) and a removed key is refused | passes |
 | 34 | Test-only settings in production (`jwks_file`, `CLEARML_ALLOW_CONFIG_SECRET`) | `test_only_settings_in_use` (`test_legacy_settings`): both are refused unless `CLEARML_TEST_MODE=1` | passes |
 | 35 | Cookie sent over plain HTTP | `cookie_settings_problems` (`test_legacy_settings`): an https public address with an insecure cookie is refused at start-up. `deploy/clearml/compose.yaml` sets the flag from `CLEARML_COOKIE_SECURE` | passes at unit level; the deployed host is checked at STOP-4 |
+| 36 | File server accepts uploads, downloads or deletes without a valid token | `fileserver/tests/test_token_check.py` (valid, refused and unreachable checks); live on the stack: upload, download and delete without a token, and with a forged token, all return 401 | passes; a token that is valid but revoked is refused within the 60 s token cache |
 
 ## Manual scenarios still to run (STOP-4)
 
