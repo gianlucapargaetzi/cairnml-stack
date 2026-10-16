@@ -4,7 +4,7 @@ Written for: the person doing the independent security review, and the owner who
 
 Each row is one attack or failure. The proof is an existing test in `clearml-server/apiserver/tests/idp/` (or a manual scenario from the port plan where a test cannot show it). A row marked **gap** has no test yet; it must be closed or accepted in writing before cut-over.
 
-Results were taken from the identity suite run inside the server container on branch `idp-port`: 143 tests, all passing. The automated suite runs 146 tests with two known failures that are not security-related (a project-name clash and a missing test setting).
+Results were taken from the identity suite run inside the server container on branch `idp-port`: 146 tests, all passing. The automated suite runs 146 tests with two known failures that are not security-related (a project-name clash and a missing test setting).
 
 ## Checks
 
