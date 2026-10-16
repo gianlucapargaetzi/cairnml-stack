@@ -112,11 +112,10 @@ docker run --rm -v "$PWD/data/clearml:/data" alpine:3.20 sh -c '
   chown -R 999:999 /data/mongo /data/redis &&
   chown -R 1000:1000 /data/elastic'
 
-# The realm is imported only on Keycloak's first start, so the ClearML clients are created here when
-# they are missing. The directory client's secret is then written to secrets/clearml.
-if [ ! -s secrets/clearml/idp_directory_secret ]; then
-  clients_dir=$(mktemp -d)
-  python3 - "$clients_dir" <<'PY'
+# The realm is imported only on Keycloak's first start, so the ClearML clients are created here, and
+# updated to the realm file on every run. The directory client's secret is written once, to secrets/clearml.
+clients_dir=$(mktemp -d)
+python3 - "$clients_dir" <<'PY'
 import json, pathlib, sys
 realm = json.load(open("idp/realm-mlops.json"))
 out = pathlib.Path(sys.argv[1])
@@ -124,10 +123,10 @@ for client in realm["clients"]:
     if client["clientId"].startswith("clearml-"):
         (out / (client["clientId"] + ".json")).write_text(json.dumps(client))
 PY
-  docker compose -f compose.yaml cp "$clients_dir" mlops-idp:/tmp/clearml-clients >/dev/null
-  rm -rf "$clients_dir"
+docker compose -f compose.yaml cp "$clients_dir" mlops-idp:/tmp/clearml-clients >/dev/null
+rm -rf "$clients_dir"
 
-  CLEARML_KC_SETUP='
+CLEARML_KC_SETUP='
 set -e
 K=/opt/keycloak/bin/kcadm.sh
 ok=0
@@ -139,7 +138,11 @@ done
 [ "$ok" = 1 ] || { echo "keycloak did not become ready" >&2; exit 1; }
 for file in /tmp/clearml-clients/*.json; do
   id=$(basename "$file" .json)
-  if ! $K get clients -r mlops -q clientId="$id" --fields id | grep -q "\"id\""; then
+  existing=$($K get clients -r mlops -q clientId="$id" --fields id \
+    | sed -n "s/.*\"id\" *: *\"\([^\"]*\)\".*/\1/p" | head -n1)
+  if [ -n "$existing" ]; then
+    $K update "clients/$existing" -r mlops -f "$file" >/dev/null
+  else
     $K create clients -r mlops -f "$file" >/dev/null
   fi
 done
@@ -150,9 +153,10 @@ uuid=$($K get clients -r mlops -q clientId=clearml-server --fields id \
 $K get "clients/$uuid/client-secret" -r mlops --fields value \
   | sed -n "s/.*\"value\" *: *\"\([^\"]*\)\".*/\1/p"
 '
-  directory_secret=$(docker compose -f compose.yaml exec -T \
-    -e KC_MASTER_USER="$KC_ADMIN" -e KC_MASTER_PW="$KC_ADMIN_PASSWORD" \
-    mlops-idp sh -c "$CLEARML_KC_SETUP")
+directory_secret=$(docker compose -f compose.yaml exec -T \
+  -e KC_MASTER_USER="$KC_ADMIN" -e KC_MASTER_PW="$KC_ADMIN_PASSWORD" \
+  mlops-idp sh -c "$CLEARML_KC_SETUP")
+if [ ! -s secrets/clearml/idp_directory_secret ]; then
   if [ -z "$directory_secret" ]; then
     echo "could not read the clearml-server client secret from Keycloak" >&2
     exit 1

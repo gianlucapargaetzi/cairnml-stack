@@ -90,7 +90,7 @@
       "serviceAccountsEnabled": false,
       "fullScopeAllowed": true,
       "redirectUris": [
-        "http://127.0.0.1:*/callback"
+        "http://127.0.0.1:8765/callback"
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
