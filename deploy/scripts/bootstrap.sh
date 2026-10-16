@@ -10,7 +10,7 @@ command -v uv >/dev/null || { echo "uv is required" >&2; exit 1; }
 
 # The role hostnames must resolve to this machine so the host sees the same URLs as the containers.
 missing=()
-for host in mlops-server mlops-idp mlops-nas; do
+for host in mlops-server mlops-idp mlops-nas mlops-clearml; do
   getent hosts "$host" | grep -q '^127\.0\.0\.1\|^::1' || missing+=("$host")
 done
 if [ "${#missing[@]}" -gt 0 ]; then
@@ -89,10 +89,86 @@ docker compose -f compose.yaml exec -T \
   mlops-idp sh -c "$KC_USER_SETUP" >/dev/null
 echo "admin login set from deploy/.env: user $KC_ADMIN, same password for Keycloak and mlops"
 
+# ClearML: its secrets, its Keycloak clients, then its stack (clearml/compose.yaml). Each secret is
+# written once and kept; nothing is printed.
+mkdir -p secrets/clearml
+for name in token_secret session_secret; do
+  if [ ! -s "secrets/clearml/$name" ]; then
+    openssl rand -base64 48 | tr -d '\n' > "secrets/clearml/$name"
+    chmod 600 "secrets/clearml/$name"
+    echo "wrote secrets/clearml/$name"
+  fi
+done
+if [ -f secrets/github-app.pem ]; then
+  cp secrets/github-app.pem secrets/clearml/github_app_key
+  chmod 600 secrets/clearml/github_app_key
+fi
+
+# ClearML keeps its data in host folders too (deploy/data/clearml/). Mongo and Redis run as uid 999,
+# Elasticsearch as 1000.
+mkdir -p data/clearml/mongo/db data/clearml/mongo/configdb data/clearml/redis data/clearml/elastic \
+  data/clearml/logs data/clearml/fileserver
+docker run --rm -v "$PWD/data/clearml:/data" alpine:3.20 sh -c '
+  chown -R 999:999 /data/mongo /data/redis &&
+  chown -R 1000:1000 /data/elastic'
+
+# The realm is imported only on Keycloak's first start, so the ClearML clients are created here when
+# they are missing. The directory client's secret is then written to secrets/clearml.
+if [ ! -s secrets/clearml/idp_directory_secret ]; then
+  clients_dir=$(mktemp -d)
+  python3 - "$clients_dir" <<'PY'
+import json, pathlib, sys
+realm = json.load(open("idp/realm-mlops.json"))
+out = pathlib.Path(sys.argv[1])
+for client in realm["clients"]:
+    if client["clientId"].startswith("clearml-"):
+        (out / (client["clientId"] + ".json")).write_text(json.dumps(client))
+PY
+  docker compose -f compose.yaml cp "$clients_dir" mlops-idp:/tmp/clearml-clients >/dev/null
+  rm -rf "$clients_dir"
+
+  CLEARML_KC_SETUP='
+set -e
+K=/opt/keycloak/bin/kcadm.sh
+ok=0
+for _ in $(seq 1 90); do
+  if $K config credentials --server http://localhost:8180 --realm master \
+       --user "$KC_MASTER_USER" --password "$KC_MASTER_PW" >/dev/null 2>&1; then ok=1; break; fi
+  sleep 2
+done
+[ "$ok" = 1 ] || { echo "keycloak did not become ready" >&2; exit 1; }
+for file in /tmp/clearml-clients/*.json; do
+  id=$(basename "$file" .json)
+  if ! $K get clients -r mlops -q clientId="$id" --fields id | grep -q "\"id\""; then
+    $K create clients -r mlops -f "$file" >/dev/null
+  fi
+done
+$K add-roles -r mlops --uusername service-account-clearml-server \
+  --cclientid realm-management --rolename view-users >/dev/null 2>&1 || true
+uuid=$($K get clients -r mlops -q clientId=clearml-server --fields id \
+  | sed -n "s/.*\"id\" *: *\"\([^\"]*\)\".*/\1/p" | head -n1)
+$K get "clients/$uuid/client-secret" -r mlops --fields value \
+  | sed -n "s/.*\"value\" *: *\"\([^\"]*\)\".*/\1/p"
+'
+  directory_secret=$(docker compose -f compose.yaml exec -T \
+    -e KC_MASTER_USER="$KC_ADMIN" -e KC_MASTER_PW="$KC_ADMIN_PASSWORD" \
+    mlops-idp sh -c "$CLEARML_KC_SETUP")
+  if [ -z "$directory_secret" ]; then
+    echo "could not read the clearml-server client secret from Keycloak" >&2
+    exit 1
+  fi
+  printf '%s' "$directory_secret" > secrets/clearml/idp_directory_secret
+  chmod 600 secrets/clearml/idp_directory_secret
+  echo "wrote secrets/clearml/idp_directory_secret"
+fi
+
+docker compose -f clearml/compose.yaml up -d --build
+
 echo "waiting for the server..."
 for _ in $(seq 1 60); do
   curl -fsS "${MLOPS_SERVER_URL}/api/v1/healthz" >/dev/null 2>&1 && { echo "server is up"; break; }
   sleep 2
 done
-echo "next: sign in as $KC_ADMIN (device login), create a project, create an agent token, then:"
+echo "ClearML: web http://mlops-clearml:8080, API http://mlops-clearml:8008 (sign in with the same identity provider)"
+echo "next: sign in as $KC_ADMIN, create a project, enrol an agent with clearml-agent init, then:"
 echo "  docker compose -f compose.yaml up -d mlops-agent   (from deploy/)"

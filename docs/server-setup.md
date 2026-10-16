@@ -91,6 +91,19 @@ Without a GitHub App, jobs that clone a repository are refused. Jobs that run an
 docker compose -f deploy/compose.yaml up -d --force-recreate mlops-server
 ```
 
+## 9. ClearML (the port)
+
+The ClearML server, built from our forks of `clearml-server` and `clearml-web`, runs next to the mlops stack and signs people in through the same identity provider. It is in `deploy/clearml/compose.yaml`. It is started by `bootstrap.sh`, after the stack in section 3.
+
+- **Hosts.** Add `mlops-clearml` to the same hosts line as the other host names (`127.0.0.1 mlops-clearml`). `bootstrap.sh` checks for it.
+- **Forks.** The images are built from `../../mlops-clearml/clearml-server` and `../../mlops-clearml/clearml-web`, next to this repository. Set `CLEARML_SERVER_SRC` and `CLEARML_WEB_SRC` in `deploy/.env` to use other checkouts.
+- **Secrets.** `bootstrap.sh` writes `secrets/clearml/token_secret` and `session_secret` (random, 600), copies `secrets/github-app.pem` to `secrets/clearml/github_app_key` if it exists, and writes `idp_directory_secret`, the secret of the read-only `clearml-server` client in Keycloak. The folder is mounted read-only in the API server and is git-ignored.
+- **Keycloak clients.** The realm is imported only on Keycloak's first start, so `bootstrap.sh` creates the three `clearml-*` clients when they are missing, and gives the directory client the `view-users` role. Their definitions are in `deploy/idp/realm-mlops.json`.
+- **Addresses.** Web app `http://mlops-clearml:8080`; API `http://mlops-clearml:8008`.
+- **Signing in.** Open the web app; you are sent to the identity provider. On a laptop, run `clearml-init` once: the browser opens the sign-in page and the machine is enrolled, with no key to copy. An agent is enrolled with `clearml-agent init`, which only an admin can approve.
+
+Until cut-over (see `docs/clearml/cutover.md`), the mlops stack keeps serving its own users. Do not move users to ClearML before the cut-over runbook says to.
+
 ## Troubleshooting
 
 | Symptom | Where to look |
