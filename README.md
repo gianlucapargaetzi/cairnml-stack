@@ -176,6 +176,33 @@ clearml-agent daemon --queue default
 
 Each job runs with its own token, issued to this agent when the job starts. The job never gets the agent's own token, and the repository is cloned with a short-lived GitHub token for that one repository.
 
+### Managed mode: resource-aware scheduling
+
+Instead of a queue, a machine can run in managed mode. The server then offers the machine the tasks that fit it, and the agent runs each one in its own container with the CPUs, memory and GPUs of its reservation:
+
+```bash
+clearml-agent daemon --managed
+```
+
+The machine is one worker. The agent keeps a share of it for the operating system and the host services (by default 1 CPU and 10 % of RAM and disk). Each job is held to its reservation by Docker: its CPUs, a memory limit, its GPUs, and a process limit.
+
+A task says what it needs, or nothing:
+
+```python
+from clearml import Task
+
+task = Task.init(project_name="demo", task_name="training")
+task.set_requirements(cpus=4, ram_gb=12, gpus=1, gpu_memory_gb=24, disk_gb=50, max_runtime_min=720)
+task.set_priority(80)          # 0 to 100, higher runs first; default 50
+Task.enqueue(task)             # no queue is needed
+```
+
+All of `cpus`, `ram_gb`, `gpus` and `disk_gb` are given together, or none is. A task with none runs alone on a machine.
+
+A job that ends badly is reported with its reason: `oom` (out of memory, with the limit and the peak), `time_limit`, `gpu_error`, `disk_full` or `error`. The reason is on the task and in its log. A job whose machine is lost is retried once, then failed.
+
+The Workers tab shows each machine with its live usage; expanding a machine shows its jobs. The Jobs tab lists the running and waiting jobs, and says why a waiting job waits.
+
 ## 4. Web app
 
 Open `http://mlops-clearml:8080`. To run the web app from its source for development, see `clearml-web/docs/dev-proxy.md`.
