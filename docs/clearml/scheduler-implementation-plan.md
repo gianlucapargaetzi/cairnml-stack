@@ -331,3 +331,25 @@ About 14 to 18 weeks for one experienced developer: phase 0 one week; phases 1 t
 - The Workers tab shows every registered worker with live paired allocation and usage bars, and expanding it shows every running job of that worker with its own bars. The Jobs tab lists every running and waiting job with the reason it waits.
 - A job killed for memory shows, on the task, in its console log, in the Jobs list and in the Workers tree, the same sentence naming the limit and the peak.
 - No secret in any log, event or API response of the new endpoints.
+
+## Status (feature/ressource-aware-scheduling)
+
+Done, with tests or a live check:
+
+| Phase | What | Evidence |
+|---|---|---|
+| 0 | Spikes S1 to S3, S5; baseline recorded | REPORT-SCHED-S1 (workspace), NOTES |
+| 1 | Models, requirement and priority rules, enqueue at 2.36 | Scheduler tests (server) |
+| 2 | Placement, ledger, simulator, randomised and parallel tests | Scheduler tests; 500 tasks on 50 machines: 42 ms median |
+| 3 | Agent protocol, offers, claims, releases, lost workers, stop and ended, audit, drain, usage history (Elasticsearch), overview, jobs, events | Scheduler tests (server); live runs |
+| 4 | Agent managed mode: capacity, reserve, Docker limits, failure classes, usage sampling, orphan cleanup, registration retry | Agent tests, including real containers; live time-limit run |
+| 5 | SDK requirements and priority; pipeline steps take them | SDK tests |
+| 6 | Workers tree, Jobs list, live Dashboard, enqueue dialog with compute and priority | Browser checks (Workers, Jobs, Dashboard); build and lint |
+
+Not done:
+- Phase 3: the Elasticsearch per-job load test and the sync p95 measurement.
+- Phase 4: GPU usage sampling; exclusivity for virtualenv jobs (all managed jobs run in containers).
+- Phase 5: migration helper; the CLI help text for the managed path.
+- Phase 6: browser check of the enqueue dialog (the task used for the check did not open the enqueue action in time).
+- Phase 7: the full scenario list; the load test at 500 tasks through the API.
+- Phase 8: queue removal. Queues still back the task state machine and the older agent modes; removing them needs its own review, because it changes behaviour that existing users rely on.
