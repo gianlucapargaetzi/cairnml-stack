@@ -46,6 +46,16 @@ Results were taken from the identity suite run inside the server container on br
 | 34 | Test-only settings in production (`jwks_file`, `CLEARML_ALLOW_CONFIG_SECRET`) | `test_only_settings_in_use` (`test_legacy_settings`): both are refused unless `CLEARML_TEST_MODE=1` | passes |
 | 35 | Cookie sent over plain HTTP | `cookie_settings_problems` (`test_legacy_settings`): an https public address with an insecure cookie is refused at start-up. `deploy/clearml/compose.yaml` sets the flag from `CLEARML_COOKIE_SECURE` | passes at unit level; the deployed host is checked at STOP-4 |
 | 36 | File server accepts uploads, downloads or deletes without a valid token | `fileserver/tests/test_token_check.py` (valid, refused and unreachable checks); live on the stack: upload, download and delete without a token, and with a forged token, all return 401 | passes; a token that is valid but revoked is refused within the 60 s token cache |
+| 37 | An agent claims or releases a job on a worker that is not its own | `test_protocol.test_another_device_cannot_sync_or_claim_for_this_worker` | passes |
+| 38 | A user token calls the agent endpoints | `test_protocol.test_a_user_token_cannot_use_the_agent_calls` | passes |
+| 39 | A second claim of the same offer | `test_protocol.test_a_second_claim_of_the_same_offer_is_refused` | passes |
+| 40 | An offer that expired is claimed | `test_lifecycle.test_an_unclaimed_offer_expires_and_the_task_is_pending_again` | passes |
+| 41 | A job runs past its time limit | `test_docker_real.test_the_time_limit_kills_the_container_and_reports_time_limit` (real container, killed and removed) | passes |
+| 42 | Two placements of one task, or one CPU given to two jobs, under parallel placement passes | `test_concurrency` (six parallel passes over twelve tasks) | passes |
+| 43 | A job container left by a daemon that restarted runs the job again | `test_orphans` (real container stopped at start-up) | passes |
+| 44 | A reported failure is lost after the job was cancelled | `test_protocol.test_a_failure_reported_after_the_cancel_is_still_recorded` | passes |
+| 45 | A stopped or unreported job keeps its reservation | `test_protocol.test_a_stopped_task_is_told_to_the_agent_and_its_reservation_ends`, `test_a_claimed_job_the_agent_does_not_report_is_retried_once` | passes |
+| 46 | A job token issued to a device other than the one that claimed the task | `last_device` is set by claim; `devices.job_token` checks it (`test_job_tokens_api`) | passes |
 
 ## Manual scenarios still to run (STOP-4)
 
