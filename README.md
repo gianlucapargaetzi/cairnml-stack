@@ -108,13 +108,30 @@ python3 -m venv .venv
 pip install -e .
 ```
 
-Sign in and enrol the machine once:
+Sign in and enrol the machine once, naming the server on the command line. Your browser opens the sign-in page, and the sign-in always asks for your credentials:
 
 ```bash
-clearml-init
+clearml-init --server http://mlops-clearml:8008
+clearml-whoami
 ```
 
-Enter `http://mlops-clearml:8080` as the web address. The command shows the API address it derives from it. Your browser opens the sign-in page; approve it there. The command then creates a device key in `~/.clearml/device.key` (readable by you only) and writes `~/clearml.conf` with the device's name. No access key is copied.
+`clearml-whoami` shows the user and the device this machine signs in as. It uses the device key, and needs no browser. The key is in `~/.clearml/device.key` (readable by you only); the configuration is `~/clearml.conf`. No access key is copied.
+
+To enrol again, for example as another person, use `--force`. The previous device is revoked first:
+
+```bash
+clearml-init --server http://mlops-clearml:8008 --force
+```
+
+To sign this machine out, revoke it and remove its key:
+
+```bash
+clearml-logout
+```
+
+If the device cannot be revoked (for example, the server is unreachable), `clearml-logout` removes nothing, and you can run it again later.
+
+The machine must be able to resolve `mlops-clearml` and `mlops-idp` to the server, as in "Host names" above.
 
 Check it with a short run:
 
@@ -130,7 +147,7 @@ task.close()
 
 The run appears in the web app under the project `demo`, with its metrics.
 
-To enrol a second laptop, repeat `clearml-init` on it. Each machine has its own key. A lost machine is revoked with the `devices.revoke` call of the API (its owner or an admin may do it), and its key stops working at once. There is no page for this in the web app yet.
+To enrol a second laptop, run `clearml-init --server ...` on it. Each machine has its own key. A lost machine is revoked by its owner or an admin with the `devices.revoke` call of the API, and its key stops working at once. There is no page for this in the web app yet.
 
 ## 3. Agent (a machine that runs jobs)
 
