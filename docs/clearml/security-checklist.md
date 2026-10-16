@@ -4,7 +4,7 @@ Written for: the person doing the independent security review, and the owner who
 
 Each row is one attack or failure. The proof is an existing test in `clearml-server/apiserver/tests/idp/` (or a manual scenario from the port plan where a test cannot show it). A row marked **gap** has no test yet; it must be closed or accepted in writing before cut-over.
 
-Results were taken from the identity suite run inside the server container on branch `idp-port` (commit `f66022f`): 133 tests, all passing. The automated suite runs 146 tests with two known failures that are not security-related (a project-name clash and a missing test setting).
+Results were taken from the identity suite run inside the server container on branch `idp-port`: 143 tests, all passing. The automated suite runs 146 tests with two known failures that are not security-related (a project-name clash and a missing test setting).
 
 ## Checks
 
@@ -37,14 +37,14 @@ Results were taken from the identity suite run inside the server container on br
 | 25 | Server starts with the public default token secret | `test_default_secret_is_refused` (`test_secrets`) checks the refusal; the start-up path itself is verified at STOP-4 (scenario 9) | passes at unit level |
 | 26 | Server starts with access keys or fixed users configured | `test_access_keys_refuse_to_start`; `test_fixed_users_refuse_to_start` | passes |
 | 27 | Audit event for each sign-in, enrolment, exchange, revoke, refusal | `test_enrolment_and_exchange_and_revoke_are_recorded`; `test_a_refused_exchange_is_recorded`; `test_a_refused_agent_enrolment_is_recorded`; `test_a_refused_job_token_is_recorded`; `test_a_cross_site_cookie_change_is_recorded` | passes |
-| 28 | Secret appears in an API response | `test_the_settings_name_the_issuer_and_the_sdk_client` checks that the settings answer holds no secret | **gap**: no test over the other endpoints; add a sweep of every response for the token and key values |
-| 29 | Secret appears in logs | none | **gap**: grep the server and agent logs for the token secret and key headers after a run |
-| 30 | Secret committed to the repository | none automated | **gap**: `git grep` for the token secret, `BEGIN` key headers and `.env` before cut-over. The existing `deploy/idp/realm-mlops.json` has a client secret for `mlops-server` in plain text; it predates this port and is outside it, but it should be moved out |
+| 28 | Secret appears in an API response | `test_no_secret_in_responses` (`test_no_answer_holds_a_server_secret`) asks seven endpoints, signed in and not, for the token and session secrets | passes |
+| 29 | Secret appears in logs | Checked on the live API server's log after the identity suite: neither secret appears. Repeat at review (`docker logs clearml-apiserver | grep -c <value>`) | passes at the last run; repeat at review |
+| 30 | Secret committed to the repository | `deploy/scripts/check-clearml-secrets.sh` searches the four ClearML repositories and this one for the workspace's secret values, private keys, tracked `.env` files and plain-text `"secret"` values. The realm's `mlops-server` secret is the placeholder `${MLOPS_IDP_SYNC_SECRET}`, not a value | passes |
 | 31 | Agent job can call any endpoint with its token | by design (job token is accepted by every endpoint the job's SDK uses) | **accepted for now**: restricting job tokens to the endpoints a job needs is hardening item H1 |
-| 32 | Session secret for the web (`http.session_secret`) is in the configuration | none | **gap**: move it to a secret file (plan section 4.9), before cut-over |
-| 33 | JWKS keys are cached without an expiry | none | **gap**: add a time-to-live and a re-fetch on an unknown key id |
-| 34 | Test-only settings in production (`jwks_file`, `CLEARML_ALLOW_CONFIG_SECRET`) | none | **gap**: refuse to start when either is set outside a test run |
-| 35 | Cookie is sent over plain HTTP | none | **gap**: the `Secure` flag follows the URL scheme; check it on the deployed host |
+| 32 | Web session key is a repository value | `test_session_secret` (key read from the secrets folder, missing key is an error, repository default refused). `secure.conf` keeps an empty value, used only with `CLEARML_ALLOW_CONFIG_SECRET=1` | passes |
+| 33 | A signing key the IdP removes keeps verifying tokens | `test_jwks_lifespan`: the key set expires after `key_lifespan_sec` (300 s) and a removed key is refused | passes |
+| 34 | Test-only settings in production (`jwks_file`, `CLEARML_ALLOW_CONFIG_SECRET`) | `test_only_settings_in_use` (`test_legacy_settings`): both are refused unless `CLEARML_TEST_MODE=1` | passes |
+| 35 | Cookie sent over plain HTTP | `cookie_settings_problems` (`test_legacy_settings`): an https public address with an insecure cookie is refused at start-up. `deploy/clearml/compose.yaml` sets the flag from `CLEARML_COOKIE_SECURE` | passes at unit level; the deployed host is checked at STOP-4 |
 
 ## Manual scenarios still to run (STOP-4)
 
@@ -63,4 +63,4 @@ These need a running stack and a person at the browser. They are listed in `port
 
 ## Decision needed from the reviewer
 
-Rows 28, 29, 30, 32, 33, 34 and 35 are gaps. Each is small. The recommendation is to close them before cut-over, not to accept them.
+Rows 28 to 30 and 32 to 35 were gaps and are now closed by the tests and checks named above. Row 29 is checked once and must be repeated at review; row 35 needs the deployed host to be checked. Row 31 stays accepted (hardening item H1).
