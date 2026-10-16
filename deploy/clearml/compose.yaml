@@ -113,7 +113,10 @@ services:
       - mlops
 
   fileserver:
-    <<: *clearml_build
+    # Uses the image the API server builds; building it again here would race with it.
+    image: clearml-server-fork:local
+    pull_policy: never
+    restart: unless-stopped
     container_name: clearml-fileserver
     command:
       - fileserver
@@ -129,7 +132,10 @@ services:
       - frontend
 
   webserver:
-    <<: *clearml_build
+    # Uses the image the API server builds; building it again here would race with it.
+    image: clearml-server-fork:local
+    pull_policy: never
+    restart: unless-stopped
     container_name: clearml-webserver
     command:
       - webserver
