@@ -1,207 +1,184 @@
-# MLOps Flow
+# ClearML MLOps
 
-Self-hosted MLOps: experiment tracking with autologging, remote jobs on your own agents, Git and DVC for datasets, and one identity provider for people. Each machine has its own key, and the server issues short-lived tokens for it.
+Our experiment tracking, remote jobs and dataset setup, on a fork of [ClearML](https://clear.ml).
 
-- **Track** a training script with a few lines of Python. Metrics, parameters, logs, artifacts and the code state are recorded on the server.
-- **Explore** runs in the web UI: charts, parameters, images, comparisons, experiments and resources.
-- **Dispatch** a run to an agent, from the command line or from the UI.
-- **Version** datasets with Git and DVC, and link them to the runs that used them.
+- **Track** a training script with a few lines of Python: metrics, parameters, logs and artifacts are recorded on our server.
+- **Explore** runs in the web app.
+- **Run** jobs on agents that we operate, from a queue.
+- **Sign in** with our identity provider (Keycloak). Each machine has its own key; nobody copies access keys.
 
-The server and agent setup is in [docs/server-setup.md](docs/server-setup.md). The architecture and the security model are in ARCHITECTURE.md, which is kept with the design documents outside this repository.
+This repository holds the setup: the sign-in service, the ClearML server, and the scripts to start them. The ClearML code itself is in four forks (below). The design, the security checks and the migration are in [docs/clearml](docs/clearml/).
 
-## Contents
+## What is where
 
-1. [Install the client](#1-install-the-client)
-2. [Your first run](#2-your-first-run)
-3. [Dispatch a job to an agent](#3-dispatch-a-job-to-an-agent)
-4. [Generate a dataset](#4-generate-a-dataset)
-5. [Use a dataset in a run](#5-use-a-dataset-in-a-run)
-6. [Tests](#tests)
-7. [Documentation](#documentation)
-
-## 1. Install the client
-
-You need a running server (see [server setup](docs/server-setup.md)) and [uv](https://docs.astral.sh/uv/). Install the `mlops` command for your user straight from Git, without cloning the repository:
-
-```bash
-uv tool install \
-  "git+ssh://git@github.com/gianlucapargaetzi/mlops-framework.git#subdirectory=packages/mlops-client" \
-  --with "git+ssh://git@github.com/gianlucapargaetzi/mlops-framework.git#subdirectory=packages/mlops-common"
-```
-
-This installs the `mlops` command for your user. Check it:
-
-```bash
-mlops --help
-```
-
-To install into a project's `.venv` with pip, straight from Git (the repository is not on PyPI). Install both packages from their subdirectories in one command:
-
-```bash
-cd my-project
-python3 -m venv .venv
-source .venv/bin/activate
-pip install \
-  "git+ssh://git@github.com/gianlucapargaetzi/mlops-framework.git#subdirectory=packages/mlops-common" \
-  "git+ssh://git@github.com/gianlucapargaetzi/mlops-framework.git#subdirectory=packages/mlops-client"
-mlops --help
-```
-
-To use the client in a script, add `mlops-client` to that project's dependencies, or install it with `uv pip install -e packages/mlops-client`.
-
-Enroll this machine once. A browser opens for the login:
-
-```bash
-mlops enroll --server http://mlops-server:8000
-mlops whoami
-```
-
-`whoami` prints the client it is enrolled as. It uses the key and needs no login.
-
-> *GIF: enrollment*
-
-## 2. Your first run
-
-Save this as `first_run.py` in any folder:
-
-```python
-import mlops
-
-exp = mlops.init(project="vision/seg", name="first-run", config={"lr": 0.1})
-for step in range(3):
-    exp.log_metric("loss", 1.0 / (step + 1), step=step)
-print("first run finished")
-
-with open("model.txt", "w") as f:
-    f.write("weights")
-exp.upload_artifact("model.txt", path="model.txt")
-exp.close()
-```
-
-Run it with plain Python:
-
-```bash
-python first_run.py
-mlops ls --project vision/seg
-```
-
-The run is recorded on the server. `mlops ls` lists the recent runs with their IDs, and `mlops logs <id>` prints its output. Add `-f` to follow a run that is still going.
-
-### Explore it in the UI
-
-Open **http://mlops-server:8000/ui-next/** and sign in with your account.
-
-> *GIF: first run in the UI*
-
-| Page | What you see |
+| Path | What it is |
 |---|---|
-| **Runs** | All runs of the projects you belong to. Filter them with the search bar, and open one to see its detail. |
-| **Metrics** | Metric charts of the selected runs, one line per run. |
-| **Params** | Parameters of the runs, as a table you can sort and group. |
-| **Scatters** | Two parameters or metrics against each other. |
-| **Images** | Images the runs logged, with sliders for steps and indices. |
-| **Projects** | Each project's experiments, its best result, its linked repositories (with the commit graph) and its datasets. |
-| **Experiment** | One experiment: its settings, its best run and its runs. Select runs and compare them. |
-| **Compare** | Two to ten runs side by side: metrics, parameters, code and data. |
-| **Datasets** | Dataset cards and their versions. |
-| **Jobs** | Scheduled, running and finished jobs. Cancel a job, or copy and reschedule it. |
-| **Resources** | Agents and queues, with their allocated and actual load. |
-| **Tags** | Tags of a project. Attach them to runs from the run's side bar. |
+| `deploy/idp/` | Keycloak (sign-in) and the realm with the ClearML clients |
+| `deploy/clearml/` | The ClearML server, built from our forks |
+| `deploy/scripts/bootstrap.sh` | Sets up the sign-in service and the ClearML server on a host |
+| `deploy/scripts/check-clearml-secrets.sh` | Fails if a secret is committed to a ClearML repository |
+| `docs/clearml/` | Design, plan, security checklist, migration guide and cut-over runbook |
 
-A **run detail** page has the overview (command line, environment, packages, git state, datasets and artifacts), the metrics, the images, and a **Run on an agent** form.
+The old platform (`mlops`) is removed from this branch. It is still in the history of `main` until the cut-over.
 
-## 3. Dispatch a job to an agent
+## Requirements
 
-A job runs a recorded run on an agent, on a queue the agent serves. Resource requests are `--cpu`, `--memory-gb`, `--gpu` and `--label`.
+On the server host: Linux (`bootstrap.sh` uses `getent`), Docker Engine with Compose v2.20 or newer, `git`, `openssl`, `python3` and `curl`.
 
-### From the command line
+On the machines of users and agents: Python 3 and `git`; the SDK and agent install from source. Agents also need Docker for jobs that run in containers.
 
-Dispatching a recorded run needs the code it ran from on GitHub, because the agent clones it. Commit and push, then:
+The forks are checked out next to this repository, in the same parent folder:
+
+```
+Documents/
+  mlops/              this repository
+  mlops-clearml/
+    clearml-server/   our fork of the server and the API (branch idp-port)
+    clearml-web/      our fork of the web app (branch idp-port)
+    clearml/          our fork of the Python SDK (branch idp-port)
+    clearml-agent/    our fork of the agent (branch idp-port)
+```
+
+The forks are local checkouts; they have no remote yet. Keep them on `idp-port`.
+
+## 1. Server
+
+### Host names
+
+The sign-in service and the server are reached by name, and the name must be the same on every machine. Add this line to `/etc/hosts` on the server host, and on every other machine that uses the server, with the server's address in place of `127.0.0.1` on the other machines:
+
+```
+127.0.0.1 mlops-idp mlops-clearml
+```
+
+`bootstrap.sh` refuses to run until both names resolve.
+
+### Start
 
 ```bash
-git push
-mlops dispatch <run id> --queue default
+cd deploy
+./scripts/bootstrap.sh
 ```
 
-A job can also come from a spec file. This one runs an image, so it needs no repository:
+The first run takes a while: it builds the ClearML images from the forks. It does the following, and prints nothing secret:
 
-```yaml
-# job.yaml
-name: hello
-project: vision/seg
-queue: default
-resources: {cpu: 1, memory_gb: 0.5}
-runtime:
-  type: image
-  image: alpine:3.20
-  entrypoint: [/bin/sh, -c]
-  command: ['echo hello from the agent']
-```
+1. Starts Keycloak with the `mlops` realm, and sets the admin login from `deploy/.env` (created on the first run with a generated password).
+2. Writes the ClearML secrets to `deploy/secrets/clearml/` (once; they are kept on later runs): the token and session keys. If `deploy/secrets/github-app.pem` exists, it is copied there as the GitHub key.
+3. Creates the three ClearML clients in Keycloak (`clearml-web`, `clearml-sdk`, `clearml-server`) and updates them to `deploy/idp/realm-mlops.json` on every run. It stores the secret of `clearml-server` (used to read users from Keycloak) in `deploy/secrets/clearml/idp_directory_secret`.
+4. Starts the ClearML server (`deploy/clearml/compose.yaml`).
+
+Check that the server answers:
 
 ```bash
-mlops dispatch --file job.yaml        # prints the job ID
-mlops job show <job id>
+curl -X POST http://mlops-clearml:8008/v2.8/login.supported_modes -H 'Content-Type: application/json' -d '{}'
 ```
 
-Dispatching needs the server. When it is unreachable, the client refuses to dispatch.
+### First sign-in
 
-### From the UI (reschedule a run)
+Open `http://mlops-clearml:8080`. You are sent to the sign-in page of Keycloak. Sign in as the admin user named by `KC_ADMIN` in `deploy/.env`, with the password from the same file. Your ClearML account is created at that first sign-in.
 
-1. Open the run in the UI.
-2. Click **Run on an agent**.
-3. Pick the queue and the resources, and submit. The run is queued as a job.
+Admins are the users with the `mlops-admin` role in Keycloak. Give other people the role, or leave them as plain users. Keycloak's admin console is at `http://mlops-idp:8180`.
 
-To run the same job again with a change, open it in **Jobs**, choose **Copy and reschedule**, and change the queue, the resources or the parameters. Only the fields you change are sent.
+### Optional: GitHub
 
-> *GIF: dispatch from the UI*
-
-## 4. Generate a dataset
-
-Datasets are DVC-tracked folders in a Git repository. The framework stores references only. Inside a clone of the project's code repository (with at least one commit, and DVC installed with `pip install 'mlops-client[dvc]'`):
+Jobs that clone a GitHub repository need a GitHub App. Put its private key in `deploy/secrets/github-app.pem`, set `GITHUB_APP_ID` in `deploy/.env`, and run `./scripts/bootstrap.sh` again. Then restart the API server:
 
 ```bash
-mlops repo init --project vision/seg
-dvc add data/train
-git add .mlops data/train.dvc data/.gitignore .dvc
-git commit -m "add training data"
-git push
-mlops data push data/train
+docker compose -f clearml/compose.yaml up -d --force-recreate apiserver
 ```
 
-`repo init` links the repository to the project. `data push` uploads the data with temporary storage credentials from the server, so no credentials are kept in the repository. Commit the `.dvc` file and `.mlops/project.yaml`, never the data.
+Without the App, jobs that clone a repository are refused when they are queued.
 
-To describe the dataset in the UI, add a card (`mlops dataset card init data/train`). The card appears on the **Datasets** page.
+### Addresses and https
 
-## 5. Use a dataset in a run
+The addresses are set in `deploy/clearml/compose.yaml` (`CLEARML__apiserver__idp__*`): the web app at `http://mlops-clearml:8080`, the API at `http://mlops-clearml:8008`. To serve over https, change those addresses to https, and set `CLEARML_COOKIE_SECURE=true` in `deploy/.env`. The server refuses to start with https addresses and an insecure session cookie.
 
-In your script, name the dataset. The path is relative to the working directory, and it must be DVC-tracked in the Git repository:
+### Keep the data
+
+The server's data is in `deploy/data/` and its keys in `deploy/secrets/`. Both are git-ignored. Back up both folders; losing `deploy/secrets/clearml/token_secret` signs everyone out, and losing the database loses the runs.
+
+## 2. Client (a person's machine)
+
+Install the SDK from the fork, in a virtual environment:
+
+```bash
+cd ../mlops-clearml/clearml
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -e .
+```
+
+Sign in and enrol the machine once:
+
+```bash
+clearml-init
+```
+
+Enter `http://mlops-clearml:8080` as the web address. The command shows the API address it derives from it. Your browser opens the sign-in page; approve it there. The command then creates a device key in `~/.clearml/device.key` (readable by you only) and writes `~/clearml.conf` with the device's name. No access key is copied.
+
+Check it with a short run:
 
 ```python
-import mlops
+from clearml import Task
 
-exp = mlops.init(project="vision/seg", name="train-on-dataset", config={"lr": 0.1})
-exp.use_dataset("data/train")
-# ... train ...
-exp.close()
+task = Task.init(project_name="demo", task_name="first run")
+logger = task.get_logger()
+for step in range(10):
+    logger.report_scalar(title="loss", series="train", value=1.0 / (step + 1), iteration=step)
+task.close()
 ```
 
-The run's detail page lists the dataset with its version (the DVC hash of the data). `mlops dataset show data/train --project vision/seg` lists the runs that used the dataset.
+The run appears in the web app under the project `demo`, with its metrics.
 
-Pull the data on another machine with `mlops data pull data/train` before you reproduce a run there.
+To enrol a second laptop, repeat `clearml-init` on it. Each machine has its own key. A lost machine is revoked with the `devices.revoke` call of the API (its owner or an admin may do it), and its key stops working at once. There is no page for this in the web app yet.
 
-## Tests
+## 3. Agent (a machine that runs jobs)
+
+An agent is enrolled by an admin, because it runs other people's code.
+
+Install the agent from the fork, in its own virtual environment:
 
 ```bash
-uv run pytest                        # unit and integration tests, no Docker needed
-uv run pytest -m docker              # tests that need a local Docker daemon
-MLOPS_E2E=1 uv run pytest tests/e2e  # end-to-end tests against the running compose stack
+cd ../mlops-clearml/clearml-agent
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -e .
 ```
 
-The end-to-end suite needs the stack from the server setup and the settings in [docs/e2e-test-repo.md](docs/e2e-test-repo.md).
+Enrol it. An admin signs in when the browser opens; a non-admin is refused, and no configuration is written:
 
-## Documentation
+```bash
+clearml-agent init
+```
 
-- [docs/server-setup.md](docs/server-setup.md): server and agent setup, from an empty machine.
-- [docs/runbook.md](docs/runbook.md): the full workflow, moving roles to their own machines, and troubleshooting.
-- [docs/glossary.md](docs/glossary.md): the terms used in the code, the CLI, the web UI and the documentation.
-- [docs/plans/finished/AIM_IMPLEMENTATION_SUMMARY.md](docs/plans/finished/AIM_IMPLEMENTATION_SUMMARY.md): how the web UI was built, and what is still open.
+Create the queue the agent should serve in the web app, then start the agent:
+
+```bash
+clearml-agent daemon --queue default
+```
+
+Each job runs with its own token, issued to this agent when the job starts. The job never gets the agent's own token, and the repository is cloned with a short-lived GitHub token for that one repository.
+
+## 4. Web app
+
+Open `http://mlops-clearml:8080`. To run the web app from its source for development, see `clearml-web/docs/dev-proxy.md`.
+
+## 5. Checks
+
+- `deploy/scripts/check-clearml-secrets.sh` fails if a secret, a private key or an `.env` file is committed to one of the ClearML repositories.
+- The security checks, with the test that proves each one, are in [docs/clearml/security-checklist.md](docs/clearml/security-checklist.md).
+
+## 6. Troubleshooting
+
+| Symptom | What to do |
+|---|---|
+| `bootstrap.sh` asks you to add a host line | Add the line from "Host names", then run it again |
+| The server does not answer after bootstrap | Elasticsearch takes a minute to start. Check `docker compose -f deploy/clearml/compose.yaml logs apiserver` |
+| Sign-in loops, or the web app shows a sign-in error | The addresses in `deploy/clearml/compose.yaml` must match the address you use in the browser |
+| `clearml-init` says the machine is enrolled | The key file `~/.clearml/device.key` exists. Remove it only to enrol again, and revoke the old device in the web app |
+| `clearml-agent init` is refused | Only an admin may enrol an agent. Ask an admin to run it |
+| A job is refused at the queue | The repository's commit is not on GitHub, or the GitHub App is not installed on it. The message says which |
+
+## 7. Status
+
+The setup is complete, and the checks in `docs/clearml/security-checklist.md` are written and mostly passing. Not yet verified end to end on a live stack: the browser sign-in for each kind of machine, and a job from a queue through to its artifacts. Those are the checks of the review in `docs/clearml/cutover.md`.

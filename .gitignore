@@ -3,20 +3,13 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .ruff_cache/
-deploy/.env
-deploy/secrets/
-deploy/wheels/
 dist/
 node_modules/
 
-# Host-side data of the stack (deploy/scripts/prune.sh empties it)
+# Local secrets and the data of the stack (never committed)
+deploy/.env
+deploy/secrets/
 deploy/data/
 
 # Playwright MCP session files
 .playwright-mcp/
-
-# Built explorer (npm run build:server in packages/mlops-ui)
-packages/mlops-server/src/mlops_server/ui/next/
-
-# Sphinx build output of packages/mlops-client
-packages/mlops-client/docs/_build/

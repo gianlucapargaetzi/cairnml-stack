@@ -1,9 +1,0 @@
-.RunOverviewTabCLIArgumentsCard {
-  .IllustrationBlock {
-    margin-bottom: 1.75rem;
-  }
-
-  // A long command line wraps inside the card, instead of pushing the overview sideways.
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}

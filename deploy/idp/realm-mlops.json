@@ -13,52 +13,6 @@
   },
   "clients": [
     {
-      "clientId": "mlops-cli",
-      "name": "mlops command line client",
-      "enabled": true,
-      "publicClient": true,
-      "standardFlowEnabled": false,
-      "directAccessGrantsEnabled": false,
-      "serviceAccountsEnabled": false,
-      "fullScopeAllowed": true,
-      "attributes": {
-        "oauth2.device.authorization.grant.enabled": "true",
-        "post.logout.redirect.uris": "http://127.0.0.1:8765/logged-out"
-      }
-    },
-    {
-      "clientId": "mlops-web",
-      "name": "mlops web dashboard",
-      "enabled": true,
-      "publicClient": true,
-      "standardFlowEnabled": true,
-      "implicitFlowEnabled": false,
-      "directAccessGrantsEnabled": false,
-      "serviceAccountsEnabled": false,
-      "fullScopeAllowed": true,
-      "redirectUris": [
-        "http://mlops-server:8000/ui/auth/callback"
-      ],
-      "webOrigins": [
-        "http://mlops-server:8000"
-      ],
-      "attributes": {
-        "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://mlops-server:8000/ui/*##http://mlops-server:8000/ui-next/*"
-      }
-    },
-    {
-      "clientId": "mlops-server",
-      "name": "mlops server (user directory sync, read-only)",
-      "enabled": true,
-      "publicClient": false,
-      "secret": "${MLOPS_IDP_SYNC_SECRET}",
-      "standardFlowEnabled": false,
-      "implicitFlowEnabled": false,
-      "directAccessGrantsEnabled": false,
-      "serviceAccountsEnabled": true
-    },
-    {
       "clientId": "clearml-web",
       "name": "ClearML web app",
       "enabled": true,
@@ -108,27 +62,7 @@
       "serviceAccountsEnabled": true
     }
   ],
-  "users": [
-    {
-      "username": "carol",
-      "enabled": true,
-      "emailVerified": true,
-      "email": "carol@example.test",
-      "firstName": "Carol",
-      "lastName": "Lifecycle"
-    },
-    {
-      "username": "service-account-mlops-server",
-      "enabled": true,
-      "serviceAccountClientId": "mlops-server",
-      "clientRoles": {
-        "realm-management": [
-          "view-users",
-          "query-users"
-        ]
-      }
-    }
-  ],
+  "users": [],
   "components": {
     "org.keycloak.userprofile.UserProfileProvider": [
       {
