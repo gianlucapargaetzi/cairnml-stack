@@ -17,7 +17,7 @@ Results were taken from the identity suite run inside the server container on br
 | 5 | Revoked device, on its next request | `test_revoked_device_is_refused_on_its_next_request`; `test_revoked_device_is_refused` (checks) | passes |
 | 6 | Disabled user (in the IdP), within about 60 s | `test_disabled_in_the_idp_is_disabled_here_and_its_devices_are_refused`; `test_user_sync` (disabled, missing, mass anomaly, failed lookup) | **partly**: the 60 s bound is the sync interval and is measured only at STOP-4 (scenario 4) |
 | 7 | Non-admin enrols an agent | `test_agent_enrolment_is_refused_for_a_non_admin`; `test_agent_enrolment_is_allowed_for_an_admin` | passes |
-| 8 | Disabled admin enrols an agent | `test_disabled_user_cannot_sign_in` (web); the enrolment path refuses a disabled user (`devices.enroll`) | **gap**: no test that enrols an agent as a disabled admin |
+| 8 | Disabled admin enrols an agent | `test_a_disabled_admin_is_refused_for_an_agent` | passes |
 | 9 | Forged sign-in when enrolling a device | `test_enrol_refuses_a_forged_sign_in` | passes |
 | 10 | Job token after the task stops or is cancelled | `test_the_job_token_is_refused_once_the_task_stops`; `test_finished_or_stopped_jobs_are_refused` (checks) | passes |
 | 11 | Job token for another task | `test_a_job_token_for_another_task_is_refused`; `test_another_agents_task_is_refused` | passes |
@@ -63,4 +63,4 @@ These need a running stack and a person at the browser. They are listed in `port
 
 ## Decision needed from the reviewer
 
-Rows 8, 28, 29, 30, 32, 33, 34 and 35 are gaps. Each is small. The recommendation is to close them before cut-over, not to accept them.
+Rows 28, 29, 30, 32, 33, 34 and 35 are gaps. Each is small. The recommendation is to close them before cut-over, not to accept them.
