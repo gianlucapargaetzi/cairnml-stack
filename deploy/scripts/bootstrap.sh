@@ -123,6 +123,7 @@ for client in realm["clients"]:
     if client["clientId"].startswith("clearml-"):
         (out / (client["clientId"] + ".json")).write_text(json.dumps(client))
 PY
+docker compose -f compose.yaml exec -T mlops-idp rm -rf /tmp/clearml-clients
 docker compose -f compose.yaml cp "$clients_dir" mlops-idp:/tmp/clearml-clients >/dev/null
 rm -rf "$clients_dir"
 
