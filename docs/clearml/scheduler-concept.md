@@ -12,6 +12,17 @@ Written for: the owner of the platform, who decides the design, and the people w
 
 The mechanism is the same for one large machine with several jobs side by side and for a fleet of machines.
 
+### Terms and rules (decided)
+
+- **Worker** = one physical machine. **Jobs** (tasks) are assigned to it dynamically. There are no sub-workers.
+- **All or nothing:** a task either states all its compute requirements (CPUs, RAM, GPUs, disk) or none. A partial set is refused at submit time.
+- **No requirements = whole machine:** a task without requirements gets a worker to itself, so it runs alone. Only a task with full requirements can share a worker with others.
+- **Virtualenv jobs are exclusive:** a task running in a virtualenv blocks its whole worker for its duration. No other task is placed on it.
+- **Host reservation:** each worker sets aside CPU cores, RAM and disk for the operating system and the host's services. The scheduler never hands these out.
+- **Priority:** a plain integer, higher first, ties by submission time. No preemption and no quotas in version 1.
+- **Lost worker:** retry once, then fail.
+- **Failure reasons are logged:** every failed task records why it failed, in particular **failure due to bad compute** (see 5.6).
+
 ## 2. Where we are today
 
 | Part | Today | Consequence |
@@ -45,7 +56,8 @@ The gap is in four places: a task has no requirements, a worker has no declared 
 - `gpus.min_memory_gb`, `gpus.model`: a GPU must match both (model optional).
 - `max_runtime_min`: the job is stopped after this time (protects the machine from runaway jobs).
 - `priority`: integer, higher runs first. Ties go to the earlier submission.
-- A task with no requirements gets defaults (1 CPU, 1 GB RAM, no GPU), set by the server configuration.
+- **All or nothing.** `cpus`, `ram_gb`, `gpus` (count may be 0) and `disk_gb` are given together or not at all. A task with only some of them is refused when it is enqueued, with a message naming the missing ones. `max_runtime_min` is optional.
+- **No requirements:** the task is placed on a worker that has nothing else running and blocks the whole machine until it ends. The scheduler cannot plan around it, so it never shares a worker.
 
 ### 3.2 Capacity on a worker
 
@@ -53,7 +65,7 @@ Sent once at registration, and again when the hardware changes:
 
 ```json
 {
-  "worker": "gpu-box-01:daemon-a",
+  "worker": "gpu-box-01",
   "capacity": {
     "cpus": 32,
     "ram_gb": 32,
@@ -63,11 +75,11 @@ Sent once at registration, and again when the hardware changes:
       {"index": 1, "model": "NVIDIA L40S", "memory_gb": 48}
     ]
   },
-  "limits": {"max_concurrent_tasks": 4}
+  "reserved": {"cpus": 2, "ram_gb": 4, "disk_gb": 100}
 }
 ```
 
-A machine is one worker. Its `capacity` is the whole machine. Sub-workers are not needed any more.
+A machine is one worker; there are no sub-workers. `capacity` is the whole machine as detected. `reserved` is set aside for the operating system and the host's other services, and is set in the agent configuration (default: 1 CPU, 10 % of RAM rounded up, 10 % of disk). The schedulable amount is `capacity - reserved`. The reserve is enforced, not only subtracted: the agent starts jobs in a cgroup or Docker limits whose total never exceeds the schedulable amount, so a job cannot eat the host's share.
 
 ### 3.3 Allocation: the server's ledger
 
@@ -184,7 +196,7 @@ The ledger is written to disk. On restart, the agent reads it and reconciles it 
 
 - **Docker (required for hard limits):** `--memory`, `--memory-swap`, `--cpuset-cpus`, `--gpus device=…`, `--pids-limit`, and a timeout that stops the container at `max_runtime_min`.
 - **OOM:** the kernel kills the container. The agent reads the exit reason and reports `failed` with `reason: oom` and the reserved and observed memory. This is the behaviour you asked for.
-- **Virtualenv jobs:** no kernel-enforced limits without cgroups. For the first version, a task that asks for hard limits must run in Docker; the agent refuses a claim for such a task if Docker is not available. Virtualenv stays available for tasks that accept soft limits.
+- **Virtualenv jobs:** a task that runs in a virtualenv has no kernel-enforced limits, so it blocks the whole worker while it runs, whatever it declared. A worker running one is not offered to any other task. A task with requirements runs in Docker when it should share a worker; the agent refuses a shared claim when Docker is not available.
 - **Disk:** checked at start and reported; hard enforcement needs a quota filesystem.
 
 ### 5.5 Failure handling
@@ -192,6 +204,21 @@ The ledger is written to disk. On restart, the agent reads it and reconciles it 
 - **Container crash:** reservation released, task failed with the exit reason.
 - **Agent crash:** the server stops receiving heartbeats; after the timeout it releases the worker's reservations and requeues or fails the tasks. On restart, the agent reconciles running containers: a container still running for a task the server has released is stopped.
 - **Network loss:** the agent keeps running its tasks. It does not accept new claims until the server answers again.
+
+### 5.6 Failure reasons
+
+Every task that ends in `failed` stores a structured reason, shown in the task page and the Scheduling view:
+
+| Reason | How it is detected |
+|---|---|
+| `oom` (bad compute: memory) | Container state `OOMKilled`, or the scheduler's out-of-memory state; stores reserved and peak memory |
+| `time_limit` | Stopped at `max_runtime_min` |
+| `gpu_error` | CUDA out of memory or a GPU fault in the job log tail, with the GPU index |
+| `disk_full` | Quota or free-space check at exit |
+| `worker_lost` | Heartbeat expired (retried once) |
+| `error` | Exit code of the task, with the last lines of the log |
+
+The reason is written by whoever observes the exit (agent or scheduler), never inferred from the log alone when a stronger signal exists.
 
 ## 6. SDK
 
@@ -233,6 +260,19 @@ The ledger is written to disk. On restart, the agent reads it and reconciles it 
 - **Keep queues as priorities:** a queue can carry a priority, but it still forces the user to pick a queue and still cannot express "12 GB". Rejected.
 - **Kubernetes scheduling:** would replace the agent with pods. Possible, but it is a platform change, not a feature of this design.
 
+## 9a. Existing solutions (checked October 2026)
+
+We checked whether a ready scheduler could do the placing, with the agent only starting jobs. Summary:
+
+| Candidate | Fits | Does not fit |
+|---|---|---|
+| **Nomad** (single binary) | Memory limit is a hard cgroup limit; `reserved` block for the host; exclusive cores; NVIDIA GPU through a device plugin; bin-packing placement | `priority` only matters when preemption is on, and does not order pending jobs; business source licence (internal use allowed); a second cluster to run, with its own state and ACLs, next to Keycloak |
+| **Slurm** | `MemSpecLimit` and `CoreSpecCount` reserve resources for the host; cgroup limits; reports `OUT_OF_MEMORY` | Needs a controller, a database and munge keys, and its own user model. ClearML's Slurm glue is Enterprise only; the open-source way is `srun clearml-agent execute --id <task>` per task |
+| **HTCondor** | Partitionable slots split a machine by request | Memory enforcement depends on the setup; heavy to administer |
+| **Build it in the ClearML agent and server** | One identity system, one audit log, one UI; the model above is about 4 small parts | We own the code |
+
+No ready ClearML integration for Nomad was found, and none of the candidates would remove the work of translating a task into a job, mapping its states back, and giving the web app a view. They add a second system with its own security surface, which conflicts with Keycloak being the only security layer. **Recommendation: build it in the agent and server, using the kernel (Docker or cgroups) for limits.** What we copy from the others is their model: the reserve block from Nomad and Slurm, and cgroup out-of-memory detection.
+
 ## 10. Phases
 
 | Phase | Content | Outcome |
@@ -248,15 +288,17 @@ The ledger is written to disk. On restart, the agent reads it and reconciles it 
 
 Estimate for one experienced developer working on the agent, server and SDK: about 10 to 14 weeks, plus the review of phases 3 and 4. Phase 4 is the largest risk and should be built first on one machine.
 
-## 11. Decisions needed
+## 11. Decisions
 
-1. **Placement on the server (section 4.1)** or worker pulls. Recommended: the server.
-2. **Hard limits only through Docker** for tasks that declare RAM. Virtualenv jobs keep soft limits. Recommended: yes.
-3. **Priority model:** static integer with aging (recommended), or priority classes (for example `low`, `normal`, `urgent`).
-4. **Preemption** (stopping a running low-priority task for a high-priority one): not in version 1. Do you want it later?
-5. **Per-user or per-project quotas**: not in version 1. Needed before many people share the machines?
-6. **Default requirements** when a task declares none: proposed 1 CPU, 1 GB RAM, no GPU.
-7. **Retry policy** when a worker is lost: proposed retry once, then fail.
+| # | Question | Decision |
+|---|---|---|
+| 1 | Where placement runs | On the server |
+| 2 | Hard limits | Docker or cgroups only for tasks with requirements; venv tasks are exclusive (see rules above) |
+| 3 | Priority model | Plain integer |
+| 4 | Preemption | Not now |
+| 5 | Quotas per user or project | Not now |
+| 6 | Defaults without requirements | The whole machine, one job per worker |
+| 7 | Retry when a worker is lost | Retry once, then fail |
 
 ## 12. Risks
 
