@@ -69,14 +69,14 @@
       "serviceAccountsEnabled": false,
       "fullScopeAllowed": true,
       "redirectUris": [
-        "http://localhost:8008/v2.8/login.idp_callback"
+        "http://mlops-clearml:8008/v2.8/login.idp_callback"
       ],
       "webOrigins": [
-        "http://localhost:8080"
+        "http://mlops-clearml:8080"
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:8080/*"
+        "post.logout.redirect.uris": "http://mlops-clearml:8080/*"
       }
     },
     {
