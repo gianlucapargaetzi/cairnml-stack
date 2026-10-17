@@ -20,3 +20,9 @@ The UI is the ClearML web app in our fork `clearml-web` (branch `idp-port`, chec
 The guide for the old `mlops-ui` package (kit, tokens, `OutlinedField`, the user menu in the sidebar) belonged to the removed platform and no longer applies. Do not follow it.
 
 Before you change or add a page, read `clearml-web/CLAUDE.md` and look at the running app: a page that already exists is the reference for spacing, components and theme. Check light and dark mode.
+
+# Branches
+
+Every feature starts from `main`. Create its branch from an up-to-date `main`, never from another feature branch.
+
+Name the branch `feature/<short-name>` (lowercase, hyphens, e.g. `feature/job-retries`). Use the same name in this repository and in each submodule the feature touches (`clearml`, `clearml-server`, `clearml-web`, `clearml-agent`), so one feature is one branch name everywhere. Repositories the feature does not touch get no branch.
