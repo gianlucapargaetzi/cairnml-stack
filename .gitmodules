@@ -1,16 +1,16 @@
 [submodule "clearml"]
 	path = clearml
 	url = git@github.com:gianlucapargaetzi/clearml.git
-	branch = feature/ressource-aware-scheduling
+	branch = main
 [submodule "clearml-server"]
 	path = clearml-server
 	url = git@github.com:gianlucapargaetzi/clearml-server.git
-	branch = feature/ressource-aware-scheduling
+	branch = main
 [submodule "clearml-agent"]
 	path = clearml-agent
 	url = git@github.com:gianlucapargaetzi/clearml-agent.git
-	branch = feature/ressource-aware-scheduling
+	branch = main
 [submodule "clearml-web"]
 	path = clearml-web
 	url = git@github.com:gianlucapargaetzi/clearml-web.git
-	branch = feature/ressource-aware-scheduling
+	branch = main
