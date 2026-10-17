@@ -184,6 +184,36 @@ services:
       - mlops
 
 
+  async-delete:
+    # Removes objects of deleted tasks and models from storage. Uses the image the API server builds.
+    image: clearml-server-fork:local
+    pull_policy: never
+    restart: unless-stopped
+    container_name: clearml-async-delete
+    command:
+      - async_delete
+    depends_on:
+      - redis
+      - mongo
+      - rustfs-init
+    environment:
+      CLEARML_SECRETS_DIR: /run/secrets-dir
+      CLEARML_MONGODB_SERVICE_HOST: mongo
+      CLEARML_MONGODB_SERVICE_PORT: 27017
+      CLEARML_REDIS_SERVICE_HOST: redis
+      CLEARML_REDIS_SERVICE_PORT: 6379
+      CLEARML_SERVER_DEPLOYMENT_TYPE: linux
+      CLEARML__apiserver__storage__endpoint: http://rustfs:9000
+      CLEARML__apiserver__storage__public_endpoint: ${MLOPS_STORAGE_PUBLIC_URL:-http://localhost:9000}
+      CLEARML__apiserver__storage__access_key: ${MLOPS_S3_ACCESS_KEY:-mlops-server}
+      CLEARML__services__async_urls_delete__enabled: "true"
+    volumes:
+      - ./data/clearml/logs:/var/log/clearml
+      - ./secrets/clearml:/run/secrets-dir:ro
+    networks:
+      - backend
+      - mlops
+
   webserver:
     # Uses the image the API server builds; building it again here would race with it.
     image: clearml-server-fork:local
