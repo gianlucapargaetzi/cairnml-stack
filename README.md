@@ -1,6 +1,6 @@
-# ClearML MLOps
+# MLOps Flow
 
-Our experiment tracking, remote jobs and dataset setup, on a fork of [ClearML](https://clear.ml).
+Our experiment tracking, remote jobs and dataset setup, on a modified fork of [ClearML](https://clear.ml). MLOps Flow is not ClearML and is not endorsed by ClearML, Inc.; see [DISCLAIMER.md](DISCLAIMER.md).
 
 - **Track** a training script with a few lines of Python: metrics, parameters, logs and artifacts are recorded on our server.
 - **Explore** runs in the web app.
