@@ -13,3 +13,6 @@ deploy/data/
 
 # Playwright MCP session files
 .playwright-mcp/
+
+# graphify knowledge graph output
+graphify-out/
