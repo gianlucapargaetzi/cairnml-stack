@@ -28,7 +28,7 @@ On the server host: Linux (`bootstrap.sh` uses `getent`), Docker Engine with Com
 
 On the machines of users and agents: Python 3 and `git`; the SDK and agent install from source. Agents also need Docker for jobs that run in containers.
 
-The four forks are git submodules at the root of this repository, on the branch `feature/ressource-aware-scheduling`. Clone the repository with its submodules:
+The four forks are git submodules at the root of this repository, on their `main` branches. Clone the repository with its submodules:
 
 ```bash
 git clone --recurse-submodules git@github.com:gianlucapargaetzi/mlops-framework.git
