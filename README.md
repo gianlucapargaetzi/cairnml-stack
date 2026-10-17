@@ -202,6 +202,16 @@ The Workers tab shows each machine with its live usage; expanding a machine show
 
 Open `http://mlops-clearml:8080`. To run the web app from its source for development, see `clearml-web/docs/dev-proxy.md`.
 
+The dashboard lists the projects at the top and the recent experiments at the bottom. Double-click a project to open its dashboard: the project's tasks as folders at the top, and its recent experiments at the bottom. Double-click a task folder to list its experiments, numbered in the order they were created. "All experiments" lists every experiment in the project.
+
+### Terms
+
+- **Task**: a procedure, such as "train model X". Its runs are experiments, and they are grouped under it by name.
+- **Experiment**: one execution of a task. Each run is an experiment, whether it was started from the web app, with `execute_remotely()` or `enqueue()`, or run locally with `Task.init`. Each experiment has its own id, metrics and artifacts.
+- **Job**: one scheduled experiment, from the moment the scheduler places it on a machine until it ends. A job that is lost with its machine is retried once; a second loss fails the task.
+
+In the SDK and the API, the record of an experiment is still called a `Task`.
+
 ## 5. Checks
 
 - `deploy/scripts/check-clearml-secrets.sh` fails if a secret, a private key or an `.env` file is committed to one of the ClearML repositories.
