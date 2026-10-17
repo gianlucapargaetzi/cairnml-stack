@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Removes the mlops-clearml setup from this machine:
+# Removes the mlops setup from this machine:
 #   1. the local sign-in keys and the ClearML config that point at our server (revokes this machine's access),
-#   2. the containers and networks of the sign-in service and the ClearML server,
+#   2. the containers, volumes and network of the stack (deploy/compose.yaml),
 #   3. the data of the stack: users, databases, logs, and the Keycloak data,
-#   4. the images we built for the stack,
+#   4. the images built for the stack,
 #   5. (optional) everything else in Docker.
 #
 # Kept unless you ask for it:
@@ -21,11 +21,10 @@ ASSUME_YES=0
 INCLUDE_NAS=0
 INCLUDE_SECRETS=0
 PRUNE_DOCKER=0
-DEV_DATA=""
 
 usage() {
-  sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
   cat <<'EOF'
+Usage: deploy/scripts/teardown.sh [options]
 
 Options:
   --dry-run           print what would be removed, change nothing
@@ -33,7 +32,6 @@ Options:
   --include-nas       also remove the artifact and dataset store
   --include-secrets   also remove deploy/secrets and deploy/.env
   --prune-docker      also run docker system prune -a --volumes (every unused image, network and volume)
-  --dev-data DIR      also remove the data of the development stack, e.g. ~/Documents/mlops-clearml/data
 EOF
 }
 
@@ -44,7 +42,6 @@ while [ $# -gt 0 ]; do
     --include-nas) INCLUDE_NAS=1 ;;
     --include-secrets) INCLUDE_SECRETS=1 ;;
     --prune-docker) PRUNE_DOCKER=1 ;;
-    --dev-data) shift; DEV_DATA="${1:?--dev-data needs a directory}" ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown option: $1" >&2; usage >&2; exit 1 ;;
   esac
@@ -81,26 +78,25 @@ wipe_dir() {
 }
 
 # ---------------------------------------------------------------- plan
-say "mlops-clearml teardown"
+say "mlops teardown"
 say "deploy folder: $DEPLOY_DIR"
 say ""
 say "This removes:"
 say "  - the sign-in keys and the ClearML config on this machine (~/.clearml, ~/clearml.conf if it names our server)"
-say "  - the containers, volumes and network of the sign-in service and of the ClearML server (project mlops-clearml)"
+say "  - the containers, volumes and network of the stack (deploy/compose.yaml)"
 say "  - the data of the stack: deploy/data/clearml (users, MongoDB, Redis, Elasticsearch, logs, file server), deploy/data/idp (Keycloak), deploy/data/postgres"
-say "  - the images clearml-server-fork:local and clearml-server-idp:baseline, and the images of the sign-in service"
+say "  - the images clearml-server-fork:local and the Keycloak image"
 [ "$INCLUDE_NAS" -eq 1 ] && say "  - deploy/data/nas: artifacts and datasets (--include-nas)"
 [ "$INCLUDE_SECRETS" -eq 1 ] && say "  - deploy/secrets and deploy/.env (--include-secrets)"
-[ -n "$DEV_DATA" ] && say "  - the development data in $DEV_DATA (--dev-data)"
 [ "$PRUNE_DOCKER" -eq 1 ] && say "  - every unused Docker image, network and volume on this machine, including other projects (--prune-docker)"
 say ""
-say "Kept: the source code, docs, the /etc/hosts line, and the other Docker projects (unless --prune-docker)."
+say "Kept: the source code, the submodules, docs, the /etc/hosts line, and the other Docker projects (unless --prune-docker)."
 say ""
 
 if [ "$DRY_RUN" -eq 0 ] && [ "$ASSUME_YES" -eq 0 ]; then
-  say "Type 'delete mlops-clearml' to continue:"
+  say "Type 'delete mlops' to continue:"
   read -r answer
-  if [ "$answer" != "delete mlops-clearml" ]; then
+  if [ "$answer" != "delete mlops" ]; then
     say "not confirmed; nothing removed"
     exit 1
   fi
@@ -123,21 +119,10 @@ if [ -f "$HOME/clearml.conf" ] && grep -q "mlops-clearml" "$HOME/clearml.conf"; 
 fi
 
 # ---------------------------------------------------------------- 2. containers and networks
+# deploy/.env is read by compose from this folder, because compose.yaml is here.
 say "2. Stopping and removing the containers"
-# Compose looks for .env next to the first compose file (deploy/idp/), not in deploy/, so the
-# variables of deploy/.env are passed explicitly
-ENV_FILE_ARGS=()
-if [ -f "$DEPLOY_DIR/.env" ]; then
-  ENV_FILE_ARGS=(--env-file "$DEPLOY_DIR/.env")
-fi
-run docker compose ${ENV_FILE_ARGS[@]+"${ENV_FILE_ARGS[@]}"} -p mlops-clearml -f clearml/compose.yaml down -v --remove-orphans
-run docker compose ${ENV_FILE_ARGS[@]+"${ENV_FILE_ARGS[@]}"} -f idp/compose.yaml down -v --remove-orphans
-if [ -n "$DEV_DATA" ]; then
-  # the development stack uses the same project name; this stops its containers too
-  run docker compose ${ENV_FILE_ARGS[@]+"${ENV_FILE_ARGS[@]}"} -p mlops-clearml down -v --remove-orphans
-fi
-run docker network rm mlops || true
-for image in clearml-server-fork:local clearml-server-idp:baseline; do
+run docker compose -f compose.yaml down -v --remove-orphans
+for image in clearml-server-fork:local; do
   if [ "$DRY_RUN" -eq 1 ] || docker image inspect "$image" >/dev/null 2>&1; then
     run docker image rm -f "$image"
   fi
@@ -152,9 +137,6 @@ if [ "$INCLUDE_NAS" -eq 1 ]; then
   wipe_dir "$DEPLOY_DIR/data/nas"
 else
   say "  kept: deploy/data/nas (artifacts and datasets; use --include-nas to remove)"
-fi
-if [ -n "$DEV_DATA" ]; then
-  wipe_dir "$DEV_DATA"
 fi
 
 # ---------------------------------------------------------------- 4. secrets

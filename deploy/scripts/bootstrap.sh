@@ -21,8 +21,6 @@ if [ "${#missing[@]}" -gt 0 ]; then
   exit 1
 fi
 
-docker network inspect mlops >/dev/null 2>&1 || docker network create mlops
-
 if [ ! -f .env ]; then
   cp .env.example .env
   sed -i "s|^KC_ADMIN_PASSWORD=.*|KC_ADMIN_PASSWORD=$(openssl rand -hex 16)|" .env
@@ -35,7 +33,7 @@ mkdir -p secrets/clearml
 mkdir -p data/idp
 docker run --rm -v "$PWD/data:/data" alpine:3.20 sh -c 'chown 1000:1000 /data/idp && chmod 700 /data/idp'
 
-docker compose -f idp/compose.yaml up -d mlops-idp
+docker compose up -d mlops-idp
 
 # One admin login for both Keycloak's master realm and the mlops realm: KC_ADMIN and KC_ADMIN_PASSWORD
 # from deploy/.env, applied on every run so the password in .env is the one that works. Nothing is printed.
@@ -59,7 +57,7 @@ else
   $K set-password -r mlops --username "$ADMIN_USER" --new-password "$ADMIN_PW"
 fi
 '
-docker compose -f idp/compose.yaml exec -T \
+docker compose exec -T \
   -e KC_MASTER_USER="$KC_ADMIN" -e KC_MASTER_PW="$KC_ADMIN_PASSWORD" \
   -e ADMIN_USER="$KC_ADMIN" -e ADMIN_PW="$KC_ADMIN_PASSWORD" \
   mlops-idp sh -c "$KC_USER_SETUP" >/dev/null
@@ -97,8 +95,8 @@ for client in realm["clients"]:
     if client["clientId"].startswith("clearml-"):
         (out / (client["clientId"] + ".json")).write_text(json.dumps(client))
 PY
-docker compose -f idp/compose.yaml exec -T mlops-idp rm -rf /tmp/clearml-clients
-docker compose -f idp/compose.yaml cp "$clients_dir" mlops-idp:/tmp/clearml-clients >/dev/null
+docker compose exec -T mlops-idp rm -rf /tmp/clearml-clients
+docker compose cp "$clients_dir" mlops-idp:/tmp/clearml-clients >/dev/null
 rm -rf "$clients_dir"
 
 CLEARML_KC_SETUP='
@@ -128,7 +126,7 @@ uuid=$($K get clients -r mlops -q clientId=clearml-server --fields id \
 $K get "clients/$uuid/client-secret" -r mlops --fields value \
   | sed -n "s/.*\"value\" *: *\"\([^\"]*\)\".*/\1/p"
 '
-directory_secret=$(docker compose -f idp/compose.yaml exec -T \
+directory_secret=$(docker compose exec -T \
   -e KC_MASTER_USER="$KC_ADMIN" -e KC_MASTER_PW="$KC_ADMIN_PASSWORD" \
   mlops-idp sh -c "$CLEARML_KC_SETUP")
 if [ ! -s secrets/clearml/idp_directory_secret ]; then
@@ -141,7 +139,7 @@ if [ ! -s secrets/clearml/idp_directory_secret ]; then
   echo "wrote secrets/clearml/idp_directory_secret"
 fi
 
-docker compose -f clearml/compose.yaml up -d --build
+docker compose up -d --build
 
 echo "waiting for the ClearML server..."
 for _ in $(seq 1 90); do

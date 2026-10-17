@@ -7,17 +7,18 @@ Our experiment tracking, remote jobs and dataset setup, on a fork of [ClearML](h
 - **Run** jobs on agents that we operate. The scheduler places each job on a machine with the resources it asks for.
 - **Sign in** with our identity provider (Keycloak). Each machine has its own key; nobody copies access keys.
 
-This repository holds the setup: the sign-in service, the ClearML server, and the scripts to start them. The ClearML code itself is in four forks (below). The design, the security checks and the migration are in [docs/clearml](docs/clearml/).
+This repository holds the setup: the sign-in service, the ClearML server, and the scripts to start them. The ClearML code itself is in four forks, included as submodules (below).
 
 ## What is where
 
 | Path | What it is |
 |---|---|
-| `deploy/idp/` | Keycloak (sign-in) and the realm with the ClearML clients |
-| `deploy/clearml/` | The ClearML server, built from our forks |
-| `deploy/scripts/bootstrap.sh` | Sets up the sign-in service and the ClearML server on a host |
+| `deploy/compose.yaml` | The whole stack: Keycloak (sign-in), and the ClearML server built from our forks |
+| `deploy/idp/realm-mlops.json` | The realm, with the ClearML clients |
+| `deploy/scripts/bootstrap.sh` | Sets up the stack on a host |
+| `deploy/scripts/teardown.sh` | Removes the stack and this machine's keys (`--dry-run` first) |
 | `deploy/scripts/check-clearml-secrets.sh` | Fails if a secret is committed to a ClearML repository |
-| `docs/clearml/` | Design, plan, security checklist, migration guide and cut-over runbook |
+| `clearml-server`, `clearml-web`, `clearml`, `clearml-agent` | Our forks, as submodules |
 
 The old platform (`mlops`) is removed from this branch. It is still in the history of `main` until the cut-over.
 
@@ -27,19 +28,15 @@ On the server host: Linux (`bootstrap.sh` uses `getent`), Docker Engine with Com
 
 On the machines of users and agents: Python 3 and `git`; the SDK and agent install from source. Agents also need Docker for jobs that run in containers.
 
-The forks are checked out next to this repository, in the same parent folder:
+The four forks are git submodules at the root of this repository, on the branch `feature/ressource-aware-scheduling`. Clone the repository with its submodules:
 
-```
-Documents/
-  mlops/              this repository
-  mlops-clearml/
-    clearml-server/   our fork of the server and the API (branch idp-port)
-    clearml-web/      our fork of the web app (branch idp-port)
-    clearml/          our fork of the Python SDK (branch idp-port)
-    clearml-agent/    our fork of the agent (branch idp-port)
+```bash
+git clone --recurse-submodules git@github.com:<your-user>/mlops.git
+# or, after a plain clone:
+git submodule update --init
 ```
 
-The forks are local checkouts; they have no remote yet. Keep them on `idp-port`.
+Each fork has `origin` (our private copy) and `upstream` (ClearML, fetch only). To take ClearML changes: `git -C <fork> fetch upstream --tags`.
 
 ## 1. Server
 
@@ -65,7 +62,7 @@ The first run takes a while: it builds the ClearML images from the forks. It doe
 1. Starts Keycloak with the `mlops` realm, and sets the admin login from `deploy/.env` (created on the first run with a generated password).
 2. Writes the ClearML secrets to `deploy/secrets/clearml/` (once; they are kept on later runs): the token and session keys. If `deploy/secrets/github-app.pem` exists, it is copied there as the GitHub key.
 3. Creates the three ClearML clients in Keycloak (`clearml-web`, `clearml-sdk`, `clearml-server`) and updates them to `deploy/idp/realm-mlops.json` on every run. It stores the secret of `clearml-server` (used to read users from Keycloak) in `deploy/secrets/clearml/idp_directory_secret`.
-4. Starts the ClearML server (`deploy/clearml/compose.yaml`).
+4. Starts the ClearML server (`deploy/compose.yaml`).
 
 Check that the server answers:
 
@@ -84,14 +81,14 @@ Admins are the users with the `mlops-admin` role in Keycloak. Give other people 
 Jobs that clone a GitHub repository need a GitHub App. Put its private key in `deploy/secrets/github-app.pem`, set `GITHUB_APP_ID` in `deploy/.env`, and run `./scripts/bootstrap.sh` again. Then restart the API server:
 
 ```bash
-docker compose -f clearml/compose.yaml up -d --force-recreate apiserver
+docker compose -f deploy/compose.yaml up -d --force-recreate apiserver
 ```
 
 Without the App, jobs that clone a repository are refused when they are enqueued.
 
 ### Addresses and https
 
-The addresses are set in `deploy/clearml/compose.yaml` (`CLEARML__apiserver__idp__*`): the web app at `http://mlops-clearml:8080`, the API at `http://mlops-clearml:8008`. To serve over https, change those addresses to https, and set `CLEARML_COOKIE_SECURE=true` in `deploy/.env`. The server refuses to start with https addresses and an insecure session cookie.
+The addresses are set in `deploy/compose.yaml` (`CLEARML__apiserver__idp__*`): the web app at `http://mlops-clearml:8080`, the API at `http://mlops-clearml:8008`. To serve over https, change those addresses to https, and set `CLEARML_COOKIE_SECURE=true` in `deploy/.env`. The server refuses to start with https addresses and an insecure session cookie.
 
 ### Keep the data
 
@@ -102,7 +99,7 @@ The server's data is in `deploy/data/` and its keys in `deploy/secrets/`. Both a
 Install the SDK from the fork, in a virtual environment:
 
 ```bash
-cd ../mlops-clearml/clearml
+cd clearml   # from the root of this repository
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -e .
@@ -156,7 +153,7 @@ An agent is enrolled by an admin, because it runs other people's code.
 Install the agent from the fork, in its own virtual environment:
 
 ```bash
-cd ../mlops-clearml/clearml-agent
+cd clearml-agent   # from the root of this repository
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -e .
@@ -206,19 +203,18 @@ Open `http://mlops-clearml:8080`. To run the web app from its source for develop
 ## 5. Checks
 
 - `deploy/scripts/check-clearml-secrets.sh` fails if a secret, a private key or an `.env` file is committed to one of the ClearML repositories.
-- The security checks, with the test that proves each one, are in [docs/clearml/security-checklist.md](docs/clearml/security-checklist.md).
 
 ## 6. Troubleshooting
 
 | Symptom | What to do |
 |---|---|
 | `bootstrap.sh` asks you to add a host line | Add the line from "Host names", then run it again |
-| The server does not answer after bootstrap | Elasticsearch takes a minute to start. Check `docker compose -f deploy/clearml/compose.yaml logs apiserver` |
-| Sign-in loops, or the web app shows a sign-in error | The addresses in `deploy/clearml/compose.yaml` must match the address you use in the browser |
+| The server does not answer after bootstrap | Elasticsearch takes a minute to start. Check `docker compose -f deploy/compose.yaml logs apiserver` |
+| Sign-in loops, or the web app shows a sign-in error | The addresses in `deploy/compose.yaml` must match the address you use in the browser |
 | `clearml-init` says the machine is enrolled | The key file `~/.clearml/device.key` exists. Remove it only to enrol again, and revoke the old device in the web app |
 | `clearml-agent init` is refused | Only an admin may enrol an agent. Ask an admin to run it |
 | A job is refused when it is enqueued | The repository's commit is not on GitHub, or the GitHub App is not installed on it. The message says which |
 
 ## 7. Status
 
-The setup is complete, and the checks in `docs/clearml/security-checklist.md` are written and mostly passing. Not yet verified end to end on a live stack: the browser sign-in for each kind of machine, and a job from enqueue through to its artifacts. Those are the checks of the review in `docs/clearml/cutover.md`.
+The setup is complete. Not yet verified end to end on a live stack: the browser sign-in for each kind of machine, and a job from enqueue through to its artifacts.

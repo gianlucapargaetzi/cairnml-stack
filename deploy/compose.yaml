@@ -1,0 +1,176 @@
+# The whole stack: the sign-in service (Keycloak) and the ClearML server built from our forks.
+#
+# Started by scripts/bootstrap.sh. Compose reads deploy/.env from this folder, so the variables
+# there apply to every service. By hand, from deploy/:
+#   docker compose up -d --build
+#
+# The forks are the submodules at the root of this repository (clearml-server, clearml-web).
+# The service names are the ones the fork's web server expects (it finds the API server by
+# name) and the names used in the realm (mlops-idp), so they stay as they are.
+name: mlops
+
+x-clearml-build: &clearml_build
+  build:
+    context: ../clearml-server
+    dockerfile: docker/build/Dockerfile
+    additional_contexts:
+      clearml_web: ../clearml-web
+  image: clearml-server-fork:local
+  restart: unless-stopped
+
+services:
+  mlops-idp:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: mlops-idp
+    restart: unless-stopped
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_ADMIN:-kcadmin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD:?set KC_ADMIN_PASSWORD in deploy/.env}
+      KC_HOSTNAME: http://mlops-idp:8180
+      KC_HTTP_PORT: "8180"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+    volumes:
+      - ./idp/realm-mlops.json:/opt/keycloak/data/import/realm-mlops.json:ro
+      - ./data/idp:/opt/keycloak/data/h2
+    ports:
+      - "8180:8180"
+    networks:
+      - mlops
+
+  mongo:
+    image: mongo:8.0.15
+    container_name: clearml-mongo
+    restart: unless-stopped
+    command: --setParameter internalQueryMaxBlockingSortMemoryUsageBytes=196100200
+    volumes:
+      - ./data/clearml/mongo/db:/data/db
+      - ./data/clearml/mongo/configdb:/data/configdb
+    networks:
+      - backend
+
+  redis:
+    image: redis:8.2.3
+    container_name: clearml-redis
+    restart: unless-stopped
+    volumes:
+      - ./data/clearml/redis:/data
+    networks:
+      - backend
+
+  elasticsearch:
+    image: elasticsearch:8.19.9
+    container_name: clearml-elastic
+    restart: unless-stopped
+    environment:
+      bootstrap.memory_lock: "true"
+      cluster.name: clearml
+      cluster.routing.allocation.node_initial_primaries_recoveries: "500"
+      cluster.routing.allocation.disk.watermark.low: 500mb
+      cluster.routing.allocation.disk.watermark.high: 500mb
+      cluster.routing.allocation.disk.watermark.flood_stage: 500mb
+      discovery.type: "single-node"
+      http.compression_level: "7"
+      node.name: clearml
+      reindex.remote.whitelist: "'*.*'"
+      xpack.security.enabled: "false"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - ./data/clearml/elastic:/usr/share/elasticsearch/data
+    networks:
+      - backend
+
+  apiserver:
+    <<: *clearml_build
+    container_name: clearml-apiserver
+    command:
+      - apiserver
+    depends_on:
+      - redis
+      - mongo
+      - elasticsearch
+      - fileserver
+      - mlops-idp
+    environment:
+      CLEARML_SECRETS_DIR: /run/secrets-dir
+      CLEARML_ELASTIC_SERVICE_HOST: elasticsearch
+      CLEARML_ELASTIC_SERVICE_PORT: 9200
+      CLEARML_MONGODB_SERVICE_HOST: mongo
+      CLEARML_MONGODB_SERVICE_PORT: 27017
+      CLEARML_REDIS_SERVICE_HOST: redis
+      CLEARML_REDIS_SERVICE_PORT: 6379
+      CLEARML_SERVER_DEPLOYMENT_TYPE: linux
+      CLEARML__apiserver__idp__issuer: http://mlops-idp:8180/realms/mlops
+      CLEARML__apiserver__idp__public_url: http://mlops-clearml:8008
+      CLEARML__apiserver__idp__web_url: http://mlops-clearml:8080
+      CLEARML__apiserver__idp__web_client_id: clearml-web
+      CLEARML__apiserver__idp__sdk_client_id: clearml-sdk
+      CLEARML__apiserver__idp__directory_client_id: clearml-server
+      CLEARML__apiserver__idp__sync_enabled: "true"
+      # The realm's admin role is mlops-admin (bootstrap.sh gives the admin login that role).
+      CLEARML__apiserver__idp__admin_role: mlops-admin
+      # Set CLEARML_COOKIE_SECURE=true when the addresses above are https; the server refuses to start otherwise.
+      CLEARML__apiserver__auth__cookies__secure: ${CLEARML_COOKIE_SECURE:-false}
+      CLEARML__apiserver__idp__github_app_id: ${GITHUB_APP_ID:-}
+      CLEARML__apiserver__idp__github_api_url: ${GITHUB_API_URL:-https://api.github.com}
+      CLEARML__services__async_urls_delete__enabled: "true"
+      CLEARML__services__async_urls_delete__fileserver__url_prefixes: "[http://mlops-clearml:8081]"
+    volumes:
+      - ./data/clearml/logs:/var/log/clearml
+      - ./data/clearml/fileserver:/mnt/fileserver
+      # Read-only: token_secret, session_secret, idp_directory_secret, github_app_key.
+      - ./secrets/clearml:/run/secrets-dir:ro
+    ports:
+      - "8008:8008"
+    networks:
+      - backend
+      - frontend
+      - mlops
+
+  fileserver:
+    # Uses the image the API server builds; building it again here would race with it.
+    image: clearml-server-fork:local
+    pull_policy: never
+    restart: unless-stopped
+    container_name: clearml-fileserver
+    command:
+      - fileserver
+    environment:
+      CLEARML__fileserver__delete__allow_batch: "true"
+    volumes:
+      - ./data/clearml/logs:/var/log/clearml
+      - ./data/clearml/fileserver:/mnt/fileserver
+    ports:
+      - "8081:8081"
+    networks:
+      - backend
+      - frontend
+
+  webserver:
+    # Uses the image the API server builds; building it again here would race with it.
+    image: clearml-server-fork:local
+    pull_policy: never
+    restart: unless-stopped
+    container_name: clearml-webserver
+    command:
+      - webserver
+    depends_on:
+      - apiserver
+    ports:
+      - "8080:80"
+    networks:
+      - backend
+      - frontend
+
+networks:
+  backend:
+  frontend:
+  mlops:
+    name: mlops

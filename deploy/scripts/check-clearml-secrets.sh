@@ -3,21 +3,23 @@
 # repositories. It never prints a secret value: findings name the file and the secret's name only.
 #
 # Usage: check-clearml-secrets.sh [repo ...]
-# Defaults: the four forks under ~/Documents/mlops-clearml, and this repository's deploy/ folder.
+# Defaults: the four forks (submodules at the root of this repository), and the secrets in deploy/secrets/clearml.
 set -uo pipefail
 
-secrets_dir="${CLEARML_SECRETS_DIR:-$HOME/Documents/mlops-clearml/secrets}"
+root="$(cd "$(dirname "$0")/../.." && pwd)"
+secrets_dir="${CLEARML_SECRETS_DIR:-$root/deploy/secrets/clearml}"
 forks=(clearml-server clearml clearml-agent clearml-web)
 repos=("$@")
 if [ "${#repos[@]}" -eq 0 ]; then
-  for fork in "${forks[@]}"; do repos+=("$HOME/Documents/mlops-clearml/$fork"); done
+  for fork in "${forks[@]}"; do repos+=("$root/$fork"); done
+  repos+=("$root")
 fi
 
 status=0
 found() { echo "FOUND: $1"; status=1; }
 
 for repo in "${repos[@]}"; do
-  [ -d "$repo/.git" ] || { echo "skipped (not a git checkout): $repo"; continue; }
+  [ -e "$repo/.git" ] || { echo "skipped (not a git checkout): $repo"; continue; }
 
   # 1. The workspace's real secret values must not appear in any committed file.
   if [ -d "$secrets_dir" ]; then
