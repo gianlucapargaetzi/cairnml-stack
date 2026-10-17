@@ -4,7 +4,7 @@ Our experiment tracking, remote jobs and dataset setup, on a fork of [ClearML](h
 
 - **Track** a training script with a few lines of Python: metrics, parameters, logs and artifacts are recorded on our server.
 - **Explore** runs in the web app.
-- **Run** jobs on agents that we operate, from a queue.
+- **Run** jobs on agents that we operate. The scheduler places each job on a machine with the resources it asks for.
 - **Sign in** with our identity provider (Keycloak). Each machine has its own key; nobody copies access keys.
 
 This repository holds the setup: the sign-in service, the ClearML server, and the scripts to start them. The ClearML code itself is in four forks (below). The design, the security checks and the migration are in [docs/clearml](docs/clearml/).
@@ -87,7 +87,7 @@ Jobs that clone a GitHub repository need a GitHub App. Put its private key in `d
 docker compose -f clearml/compose.yaml up -d --force-recreate apiserver
 ```
 
-Without the App, jobs that clone a repository are refused when they are queued.
+Without the App, jobs that clone a repository are refused when they are enqueued.
 
 ### Addresses and https
 
@@ -168,21 +168,17 @@ Enrol it. An admin signs in when the browser opens; a non-admin is refused, and 
 clearml-agent init
 ```
 
-Create the queue the agent should serve in the web app, then start the agent:
-
-```bash
-clearml-agent daemon --queue default
-```
-
-Each job runs with its own token, issued to this agent when the job starts. The job never gets the agent's own token, and the repository is cloned with a short-lived GitHub token for that one repository.
-
-### Managed mode: resource-aware scheduling
-
-Instead of a queue, a machine can run in managed mode. The server then offers the machine the tasks that fit it, and the agent runs each one in its own container with the CPUs, memory and GPUs of its reservation:
+Then start the agent. It serves the whole machine as one worker:
 
 ```bash
 clearml-agent daemon --managed
 ```
+
+Each job runs with its own token, issued to this agent when the job starts. The job never gets the agent's own token, and the repository is cloned with a short-lived GitHub token for that one repository.
+
+### Resource-aware scheduling
+
+The server offers the machine the tasks that fit it, and the agent runs each one in its own container with the CPUs, memory and GPUs of its reservation.
 
 The machine is one worker. The agent keeps a share of it for the operating system and the host services (by default 1 CPU and 10 % of RAM and disk). Each job is held to its reservation by Docker: its CPUs, a memory limit, its GPUs, and a process limit.
 
@@ -194,7 +190,7 @@ from clearml import Task
 task = Task.init(project_name="demo", task_name="training")
 task.set_requirements(cpus=4, ram_gb=12, gpus=1, gpu_memory_gb=24, disk_gb=50, max_runtime_min=720)
 task.set_priority(80)          # 0 to 100, higher runs first; default 50
-Task.enqueue(task)             # no queue is needed
+Task.enqueue(task)
 ```
 
 All of `cpus`, `ram_gb`, `gpus` and `disk_gb` are given together, or none is. A task with none runs alone on a machine.
@@ -221,8 +217,8 @@ Open `http://mlops-clearml:8080`. To run the web app from its source for develop
 | Sign-in loops, or the web app shows a sign-in error | The addresses in `deploy/clearml/compose.yaml` must match the address you use in the browser |
 | `clearml-init` says the machine is enrolled | The key file `~/.clearml/device.key` exists. Remove it only to enrol again, and revoke the old device in the web app |
 | `clearml-agent init` is refused | Only an admin may enrol an agent. Ask an admin to run it |
-| A job is refused at the queue | The repository's commit is not on GitHub, or the GitHub App is not installed on it. The message says which |
+| A job is refused when it is enqueued | The repository's commit is not on GitHub, or the GitHub App is not installed on it. The message says which |
 
 ## 7. Status
 
-The setup is complete, and the checks in `docs/clearml/security-checklist.md` are written and mostly passing. Not yet verified end to end on a live stack: the browser sign-in for each kind of machine, and a job from a queue through to its artifacts. Those are the checks of the review in `docs/clearml/cutover.md`.
+The setup is complete, and the checks in `docs/clearml/security-checklist.md` are written and mostly passing. Not yet verified end to end on a live stack: the browser sign-in for each kind of machine, and a job from enqueue through to its artifacts. Those are the checks of the review in `docs/clearml/cutover.md`.

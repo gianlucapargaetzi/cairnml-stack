@@ -306,7 +306,7 @@ Build on one machine first; this is the largest risk.
 ### Phase 8 — remove queues
 
 - **P8.1** Remove `queues.*` endpoints, the queue models' use, the `execution_queue` handling in the SDK, `get_next_task` use in the agent, the old daemon modes (`--queue`, `--dynamic-gpus`, `--services-mode`), and the unused web code. Keep the hidden `scheduler` queue record only if the task state machine still needs a queue id; otherwise drop it with a migration.
-- **P8.2** Rename the feature to "WORKERS AND JOBS" in the header, route data and breadcrumbs.
+- **P8.2** Rename the feature to "WORKERS AND JOBS" in the header, route data and breadcrumbs. (Done for the labels and the breadcrumb; the route name `workers-and-queues` is kept.)
 - **P8.3** Run all suites, the scenarios again, and the vendored-file check.
 
 ## Effort and order
@@ -345,6 +345,7 @@ Done, with tests or a live check:
 | 4 | Agent managed mode: capacity, reserve, Docker limits, failure classes, usage sampling, orphan cleanup, registration retry | Agent tests, including real containers; live time-limit run |
 | 5 | SDK requirements and priority; pipeline steps take them | SDK tests |
 | 6 | Workers tree, Jobs list, live Dashboard, enqueue dialog with compute and priority | Browser checks (Workers, Jobs, Dashboard); build and lint |
+| 8 | Queues removed from the server, SDK, agent and web app in one change per repo; the agent's old daemon modes dropped; migration 2_5_0 drops the queue collection and the execution.queue field | Server automated (4 known failures, same as the baseline), identity and scheduler suites; SDK 61 tests; agent 77 tests; web build and tsc pass |
 
 Not done:
 - Phase 3: the Elasticsearch per-job load test and the sync p95 measurement.
@@ -352,4 +353,6 @@ Not done:
 - Phase 5: migration helper; the CLI help text for the managed path.
 - Phase 6: browser check of the enqueue dialog (the task used for the check did not open the enqueue action in time).
 - Phase 7: the full scenario list; the load test at 500 tasks through the API.
-- Phase 8: queue removal. Queues still back the task state machine and the older agent modes; removing them needs its own review, because it changes behaviour that existing users rely on.
+- Phase 8: the web unit tests do not run in this checkout (`ng test` fails before any spec: zone.js test entry points and a missing report-widgets test config; the same failure exists before this change). The specs touched by the removal were updated but not run.
+- Phase 8: the `/workers-and-queues/queues` URL redirects to the jobs page, so old bookmarks still open. The `workers-and-queues` route name is kept; only the labels say "workers and jobs".
+- Phase 8: the create-experiment dialog's RUN enqueues on the whole machine at the default priority; requirements and priority are set in the enqueue dialog on the task afterwards.
