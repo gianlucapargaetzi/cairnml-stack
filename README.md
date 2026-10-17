@@ -31,10 +31,12 @@ On the machines of users and agents: Python 3 and `git`; the SDK and agent insta
 The four forks are git submodules at the root of this repository, on the branch `feature/ressource-aware-scheduling`. Clone the repository with its submodules:
 
 ```bash
-git clone --recurse-submodules git@github.com:<your-user>/mlops.git
+git clone --recurse-submodules git@github.com:gianlucapargaetzi/mlops-framework.git
 # or, after a plain clone:
 git submodule update --init
 ```
+
+The four forks are private repositories, so the submodule step needs access to them (`gianlucapargaetzi/clearml-server`, `clearml-web`, `clearml` and `clearml-agent`). Without that access the clone still works, but the submodules stay empty.
 
 Each fork has `origin` (our private copy) and `upstream` (ClearML, fetch only). To take ClearML changes: `git -C <fork> fetch upstream --tags`.
 
