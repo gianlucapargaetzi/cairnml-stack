@@ -64,7 +64,7 @@ docker compose exec -T \
 echo "admin login set from deploy/.env: user $KC_ADMIN, same password for Keycloak and ClearML"
 
 # ClearML secrets, written once and kept. Nothing is printed.
-for name in token_secret session_secret; do
+for name in token_secret session_secret s3_secret_key; do
   if [ ! -s "secrets/clearml/$name" ]; then
     openssl rand -base64 48 | tr -d '\n' > "secrets/clearml/$name"
     chmod 600 "secrets/clearml/$name"
@@ -79,10 +79,12 @@ fi
 # ClearML keeps its data in host folders too (deploy/data/clearml/). Mongo and Redis run as uid 999,
 # Elasticsearch as 1000.
 mkdir -p data/clearml/mongo/db data/clearml/mongo/configdb data/clearml/redis data/clearml/elastic \
-  data/clearml/logs data/clearml/fileserver
+  data/clearml/logs data/rustfs
 docker run --rm -v "$PWD/data/clearml:/data" alpine:3.20 sh -c '
   chown -R 999:999 /data/mongo /data/redis &&
   chown -R 1000:1000 /data/elastic'
+# RustFS runs as uid 10001.
+docker run --rm -v "$PWD/data/rustfs:/data" alpine:3.20 sh -c 'chown -R 10001:10001 /data'
 
 # The realm is imported only on Keycloak's first start, so the ClearML clients are created here, and
 # updated to the realm file on every run. The directory client's secret is written once, to secrets/clearml.

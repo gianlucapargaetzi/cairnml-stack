@@ -39,6 +39,52 @@ services:
     networks:
       - mlops
 
+  rustfs:
+    # Object storage for artifacts, datasets, models and debug data. Pinned by digest: the
+    # version the presigned-URL behaviour was checked against.
+    image: rustfs/rustfs@sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c
+    container_name: mlops-rustfs
+    restart: unless-stopped
+    environment:
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ROOT_USER:-rustfsadmin}
+      RUSTFS_SECRET_KEY: ${RUSTFS_ROOT_PASSWORD:?set RUSTFS_ROOT_PASSWORD in deploy/.env}
+      RUSTFS_CONSOLE_ENABLE: "true"
+    volumes:
+      - ./data/rustfs:/data
+    ports:
+      # The S3 API is published so clients can PUT and GET through the presigned URLs.
+      # The console stays on loopback.
+      - "${MLOPS_STORAGE_PORT:-9000}:9000"
+      - "127.0.0.1:9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - mlops
+
+  rustfs-init:
+    # Creates the four buckets and the server's restricted service user. Re-running is safe.
+    image: python:3.12-slim
+    container_name: mlops-rustfs-init
+    depends_on:
+      rustfs:
+        condition: service_healthy
+    command: ["python", "/init.py"]
+    environment:
+      MLOPS_STORAGE_ENDPOINT: http://rustfs:9000
+      RUSTFS_ROOT_USER: ${RUSTFS_ROOT_USER:-rustfsadmin}
+      RUSTFS_ROOT_PASSWORD: ${RUSTFS_ROOT_PASSWORD:?set RUSTFS_ROOT_PASSWORD in deploy/.env}
+      MLOPS_S3_ACCESS_KEY: ${MLOPS_S3_ACCESS_KEY:-mlops-server}
+      MLOPS_S3_SECRET_KEY_FILE: /run/secrets-dir/s3_secret_key
+    volumes:
+      - ./storage/init.py:/init.py:ro
+      - ./secrets/clearml:/run/secrets-dir:ro
+    restart: "no"
+    networks:
+      - mlops
+
   mongo:
     image: mongo:8.0.15
     container_name: clearml-mongo
@@ -96,7 +142,7 @@ services:
       - redis
       - mongo
       - elasticsearch
-      - fileserver
+      - rustfs-init
       - mlops-idp
     environment:
       CLEARML_SECRETS_DIR: /run/secrets-dir
@@ -121,10 +167,13 @@ services:
       CLEARML__apiserver__idp__github_app_id: ${GITHUB_APP_ID:-}
       CLEARML__apiserver__idp__github_api_url: ${GITHUB_API_URL:-https://api.github.com}
       CLEARML__services__async_urls_delete__enabled: "true"
-      CLEARML__services__async_urls_delete__fileserver__url_prefixes: "[http://mlops-clearml:8081]"
+      # Object storage: internal address for the server's own calls, public address that presigned
+      # URLs name. Clients must be able to reach the public one.
+      CLEARML__apiserver__storage__endpoint: http://rustfs:9000
+      CLEARML__apiserver__storage__public_endpoint: ${MLOPS_STORAGE_PUBLIC_URL:-http://localhost:9000}
+      CLEARML__apiserver__storage__access_key: ${MLOPS_S3_ACCESS_KEY:-mlops-server}
     volumes:
       - ./data/clearml/logs:/var/log/clearml
-      - ./data/clearml/fileserver:/mnt/fileserver
       # Read-only: token_secret, session_secret, idp_directory_secret, github_app_key.
       - ./secrets/clearml:/run/secrets-dir:ro
     ports:
@@ -134,24 +183,6 @@ services:
       - frontend
       - mlops
 
-  fileserver:
-    # Uses the image the API server builds; building it again here would race with it.
-    image: clearml-server-fork:local
-    pull_policy: never
-    restart: unless-stopped
-    container_name: clearml-fileserver
-    command:
-      - fileserver
-    environment:
-      CLEARML__fileserver__delete__allow_batch: "true"
-    volumes:
-      - ./data/clearml/logs:/var/log/clearml
-      - ./data/clearml/fileserver:/mnt/fileserver
-    ports:
-      - "8081:8081"
-    networks:
-      - backend
-      - frontend
 
   webserver:
     # Uses the image the API server builds; building it again here would race with it.
