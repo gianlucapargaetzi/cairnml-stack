@@ -8,7 +8,7 @@ A test that names a defect fails because of that defect; no test is marked as ex
 
 Run one module with `pytest tests/e2e/<file>`, one test with `pytest tests/e2e -k <name>`.
 
-**Last full run:** see the status line at the end of this file.
+**Last full run:** see "Status of the last full run" in [E2E.md](E2E.md).
 
 ## test_00_isolation.py: the suite runs on its own stack
 
@@ -73,6 +73,7 @@ Section 2 of E2E.md. One task uploads every kind of artifact; each check reads i
 | Test | Checks |
 |---|---|
 | `test_artifact_content_matches_after_read_back[file, folder, dict, frame, array, image, pickled, with_metadata]` | Each kind comes back with the same content as uploaded (the folder as a zip, extracted and compared file by file). |
+| `test_artifact_content_matches_after_read_back[kind]` | For each kind (file, folder, dict, frame, array, image, pickled, with_metadata): the content read back on another process equals the content uploaded. |
 | `test_every_uploaded_artifact_is_listed_on_the_task` | All uploaded names are listed on the task. |
 | `test_file_artifact_records_its_sha256` | The recorded hash is the sha256 of the uploaded bytes. |
 | `test_metadata_is_stored_and_returned` | `metadata={...}` is returned with the artifact. |
@@ -93,7 +94,7 @@ Section 4 of E2E.md. The repositories are local (a bare remote and a checkout); 
 | `test_script_outside_git_is_recorded_without_a_repository` | A script outside git has no repository recorded, and its code is kept with the run. |
 | `test_checkout_without_a_remote_records_commit_but_no_url` | A checkout with no remote records its commit and no URL. |
 | `test_job_clones_the_recorded_commit_and_reports_it` | Fails on defect (D1): a job clones the recorded commit and reports it. |
-| `test_repository_on_github_is_refused_at_enqueue_without_the_app` | Fails on defect (D2): enqueueing a github.com repository is refused with a message that names GitHub (today: HTTP 500). |
+| `test_repository_on_github_is_refused_at_enqueue_without_the_app` | Fails on defect (D2): enqueueing a github.com repository is refused with a message that names GitHub. Today the enqueue is accepted (the last full run). |
 | `test_private_repository_is_refused_at_clone_time` | **Skip** unless `MLOPS_E2E_GITHUB_PRIVATE_REPO` is set. Fails on defect (D1) otherwise: a job whose repository the App cannot read fails at clone, with no token in its message. |
 | `test_a_client_device_cannot_get_a_repository_token` | **Skip** unless `MLOPS_E2E_GITHUB_REPO` is set. A person's machine gets no repository token. |
 
@@ -124,7 +125,7 @@ Section 5 of E2E.md. The agent is the managed daemon, in its own home, with its 
 | `test_agent_reports_its_usage` | Usage is reported at each sync: CPU percent, RAM in use, disk in use percent, all in range. |
 | `test_agent_without_its_key_does_not_register` | An agent whose key is removed never registers, and its log names the key. |
 | `test_agent_without_its_key_says_to_enrol_it` | Fails on defect (D7): the log says to run `clearml-agent init`, not a raw `Errno 2`. |
-| `test_stopped_agent_is_lost_once_a_scheduler_pass_runs_and_returns_without_enrolling` | After the heartbeat timeout, a scheduler pass (triggered by an unfit task) marks the stopped agent lost; it returns active on its own, with the same device and key. |
+| `test_stopped_agent_is_lost_by_the_sweep_and_comes_back_without_enrolling` | The scheduler's sweep (its own timer, not a placement pass) marks the stopped agent lost within about 30 s; it returns active on its own, with the same device and key. |
 
 ## test_08b_agent_heartbeat.py: the heartbeat on its own
 
@@ -167,7 +168,7 @@ UI checks of E2E.md, in headless Chromium. Each test signs in through the real s
 | `test_light_mode_renders_with_a_light_background` | In light mode the painted background is light. |
 | `test_dashboard_has_no_horizontal_scroll_at_phone_width` | At 390 px wide the dashboard does not scroll sideways. |
 | `test_manage_workers_and_jobs_page_opens` | "Manage workers and jobs" opens the workers and jobs page. |
-| `test_restarting_the_api_keeps_the_dashboard_rendering` | Restart regression: after the API container restarts, a reload renders the same dashboard. |
+| `test_restarting_the_api_keeps_the_dashboard_rendering` (`test_13_api_restart.py`) | Restart regression: after the API container restarts, a reload renders the same dashboard. Runs last, in its own module. |
 
 ## test_11_cleanup.py: deleting what the suite made
 
@@ -196,10 +197,5 @@ The scalars chart, console, debug samples, comparison, dashboards and live job s
 
 ## Status of the last full run
 
-Last full run, 99 tests on a fresh isolated stack: 83 passed, 3 skipped, and 13 tests that fail on their defect. Those
-13 were reported as expected failures in that run; they are plain failures now. Two more failed:
-
-- `test_run_without_a_project_name_goes_to_the_default_project` failed on a parsing bug in the test. Fixed; it passes
-  when run on its own.
-- `test_higher_priority_job_is_placed_before_a_lower_one` still fails: the lower-priority job was placed first. Not yet
-  explained (clearml-server #4).
+The status of the last full run, the open results and the known defects are in [E2E.md](E2E.md). The status is kept there
+so the catalogue does not repeat it.

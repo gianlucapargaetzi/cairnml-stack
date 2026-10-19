@@ -1,76 +1,108 @@
 # End-to-end tests
 
-The end-to-end suite checks the framework the way a person uses it: the stack runs, machines are enrolled through
-the real sign-in page, runs are recorded, artifacts and datasets move between machines, agents run jobs, and the
-web app shows all of it. Every test is listed, with what it checks, in [E2E_TESTS.md](E2E_TESTS.md).
+The end-to-end suite checks the framework the way a person uses it: the stack runs, machines are enrolled through the
+real sign-in page, runs are recorded, artifacts and datasets move between machines, agents run jobs, and the web app
+shows all of it. Every test is listed, with what it checks, in [E2E_TESTS.md](E2E_TESTS.md).
 
-The suite lives in `tests/e2e/`. It starts **its own stack** for each session and runs against that. It does not use
-the stack under `deploy/`, and it does not read `deploy/.env`.
+The suite lives in `tests/e2e/`. It starts **its own stack** and runs against that. It does not use the stack under
+`deploy/`, and it does not read `deploy/.env`.
 
-## What it needs
+## Running the suite
 
-On the machine that runs the suite:
-
-- Docker with Compose v2, and the images the stack uses (pulled on first use).
-- The two forks checked out as submodules (`clearml-server`, `clearml-web`). The suite builds the `clearml-server-fork:local`
-  image from them if it is not there yet.
-- `python:3.12-slim` and `alpine:3.20` on the host (the job containers and helper containers use them).
-- Python 3.12 with the suite's requirements and the two SDK forks:
-
-  ```bash
-  uv venv .venv --python 3.12
-  uv pip install -r tests/e2e/requirements.txt
-  uv pip install -e ./clearml -e ./clearml-agent
-  playwright install chromium   # or reuse a browser already in the Playwright cache
-  ```
-
-- Nine free ports in 18000 to 18999 on the loopback interface (`127.0.0.1`). The suite chooses them itself.
-
-Optional, for the GitHub tests: `MLOPS_E2E_GITHUB_REPO=owner/name` names a repository on github.com that the GitHub
-App can read; `MLOPS_E2E_GITHUB_PRIVATE_REPO=owner/name` names one it cannot. Without them, the `github`-marked tests
-are skipped with that reason.
-
-## How to run
+The suite runs in an isolated environment (see [The isolated environment](#the-isolated-environment)). The host starts one
+container, `dind`; the test runner, the stack and the job containers run inside it.
 
 ```bash
-.venv/bin/pytest tests/e2e                 # everything (about 70 minutes)
-.venv/bin/pytest tests/e2e -k artifacts    # one area (module or test name)
-.venv/bin/pytest tests/e2e -m "not slow"   # skip the long ones (large upload, 10-minute waits)
-.venv/bin/pytest tests/e2e -m agent        # everything that needs the managed agent
-MLOPS_E2E_KEEP_STACK=1 .venv/bin/pytest tests/e2e/test_00_isolation.py   # keep the stack for inspection
+tests/e2e/docker/run.sh                        # the whole suite
+tests/e2e/docker/run.sh -k artifacts           # one area (module or test name)
+tests/e2e/docker/run.sh test_09_jobs.py -v     # one module
+tests/e2e/docker/run.sh -n 4 -m "not restart"  # in parallel, then the restart test on its own:
+tests/e2e/docker/run.sh -m restart
+tests/e2e/docker/run.sh --stop-stack           # stop the ClearML stack, keep the environment
+tests/e2e/docker/run.sh --down                 # remove the environment: containers, images and volumes
 ```
 
-Markers (`tests/e2e/pytest.ini`): `agent`, `docker`, `ui`, `github`, `slow`.
+- **Reuse.** The stack keeps running between runs. The next run finds it healthy and starts at once; it is rebuilt only
+  when the server or web sources, or the compose file, changed. At the start of each run the suite resets what the
+  earlier runs left (`system.e2e_reset`, below). Parallel runs need reuse, and the environment turns it on.
+- **Report.** Every run writes `tests/e2e/reports/e2e-report.html` and `e2e-report.md`: one row per test, with its name,
+  what it checks, what it expects, its outcome, pass or fail, and how long it took. A test's expectation is the `Expect:`
+  paragraph of its docstring; a test without one is listed as not written. The runner writes the folder as root, so it
+  is root-owned on the host.
+- **Markers** (`tests/e2e/pytest.ini`): `agent`, `docker`, `ui`, `github`, `slow`, `restart`, `xdist_group`.
+- **GitHub tests.** `MLOPS_E2E_GITHUB_REPO=owner/name` names a repository on github.com that the GitHub App can read;
+  `MLOPS_E2E_GITHUB_PRIVATE_REPO=owner/name` names one it cannot. Without them, the `github` tests are skipped with that
+  reason.
 
-The first step of a session is the stack: about 3 to 5 minutes to start (Elasticsearch is the slow one). If it does not
-come up, the session stops there and prints the last log lines of the failing service. With `MLOPS_E2E_KEEP_STACK=1`
-the stack and its state folder are left in place, and the session prints where they are.
+`system.e2e_reset` removes the projects, tasks and scheduler workers whose name starts with the suite's prefix (`e2e`),
+with their contents. It is off unless the server's `apiserver.e2e.reset_enabled` is set, which only the suite's compose
+file does, and it requires an admin.
 
-## The isolated stack
+### Running on the host (not the isolated environment)
+
+`.venv/bin/pytest tests/e2e` still runs the suite on the host's Docker daemon, with the stack on the host's loopback
+interface. It needs Docker with Compose v2, the two forks as submodules, Python 3.12 with the suite's requirements and the
+two SDK forks (`uv pip install -r tests/e2e/requirements.txt`, then `uv pip install -e ./clearml -e ./clearml-agent`),
+Chromium for Playwright, and nine free ports in 18000 to 18999. It has not been run since the isolated environment was
+built, and the isolated environment is the one to use. Its job containers run on the host's daemon (see Limits).
+
+## The isolated environment
+
+The host runs one container, `dind`: a Docker daemon of its own. Everything the suite uses runs inside it: the test
+runner, the ClearML stack, the managed agent, and the agent's job containers. The host's Docker daemon starts `dind` and
+nothing else, and nothing inside it is published to the host.
+
+| Where | What |
+|---|---|
+| host | `docker compose -f tests/e2e/docker/compose.yaml up dind`, then `inside.sh` runs in it. Nothing else. |
+| `dind` (privileged) | Its daemon runs every container below. Its filesystem holds `/workspace` (the repository, mounted from the host), `/e2e-state` and `/e2e-cache` (volumes), and the images it pulls and builds. |
+| runner (in `dind`) | Built by `inside.sh` from `runner.Dockerfile`: the test venv (the suite, the SDK and the agent from the submodules, editable), Chromium, the Docker CLI and Compose, git. It runs `pytest`, the managed agent and the browser. |
+| stack (in `dind`) | The ClearML stack from `stack/compose.yaml`, started by the suite with the Compose plugin of the runner, against the daemon of `dind`. |
+| job containers (in `dind`) | Started by the agent, through the same daemon. |
+
+**Networking.** The runner starts with `--network host`: it shares the network namespace of `dind`, as the stack does. So
+the stack is reached at `127.0.0.1`, the browser and the SDK use the same addresses, and a job container reaches the
+server through the loopback rule of the agent (`clearml-agent/clearml_agent/commands/worker.py`, host networking for a
+loopback server).
+
+**Paths.** The runner mounts the daemon's socket, so its `docker` and `docker compose` commands go to the daemon of `dind`.
+The runner's paths and the daemon's paths are the same filesystem: `/e2e-state` (the suite's state, temp files and the
+agent's caches), `/e2e-cache` and `/workspace` are the same folders for both, so a folder the suite or the agent creates
+can be bind-mounted by a container of that daemon.
+
+**Why this shape.** The stack and its job containers share one daemon, which is the one `run.sh --down` throws away. The
+runner's image can change without touching the stack. The host runs one container, and the host's Docker daemon is not
+reachable from anything inside `dind`.
+
+**Costs and risks.**
+- `dind` is privileged. Its daemon is root for itself only; the host's daemon is not reachable from inside.
+- The first run pulls every image into `dind` (Elasticsearch, Keycloak, MongoDB, Redis, RustFS, `python:3.11-slim`,
+  `node:24`, `alpine`, `python:3.12-slim`, the Chromium build). That is several gigabytes, once, in `e2e-dind-data`.
+- The runner image is built in `dind` on each run; its layers are cached, so only changed sources rebuild.
+- A `dind` container that was restarted can keep a stale `containerd` from its last life, and its daemon then refuses to
+  start. Recreating the container (`docker compose up -d --force-recreate dind`) clears it; the data volume is kept.
+- GPU tests need the nvidia runtime inside `dind`. They are not covered by this setup.
+
+## The stack
 
 `tests/e2e/support/stack.py` starts the stack described in `tests/e2e/stack/compose.yaml`:
 
-| Part | Isolation |
+| Part | How it is set up |
 |---|---|
 | Compose project | Named `mlops-e2e-<random>` for each session, so two sessions never share containers or networks. |
-| Address | The loopback interface, `127.0.0.1`, only. Every service runs with host networking, so the containers and the host use the same addresses. The machine's own network address is never used, so a change of network does not affect the suite, and nothing is added to `/etc/hosts`. |
-| Ports | Nine random free ports in 18000 to 18999: the API, the web app, the sign-in service and its management port, object storage, MongoDB, Redis, and Elasticsearch's HTTP and transport ports. Nothing in the stack uses the ports 8008, 8080, 8180 or 9000 that `deploy/` uses. |
-| State | A temporary folder: data of Keycloak, RustFS, MongoDB, Redis and Elasticsearch, the secrets, and a copy of the realm with this stack's addresses. Removed at the end of the session. |
-| Secrets | Generated for each session (token, session, S3 key). The directory-sync secret is read from the stack's own Keycloak. |
-| Accounts | The admin (`e2e-admin`) gets a password generated for the session. It is a realm user with the `mlops-admin` role. The plain user of each session is created and removed by the suite. |
+| Address | Inside `dind`, the stack uses the loopback address and host networking. Services that talk to each other use `127.0.0.1`; the addresses that clients see (the issuer, the public URLs, the storage's public endpoint) come from `MLOPS_E2E_HOST`, and the listen address from `MLOPS_E2E_BIND`. |
+| Ports | Nine random free ports in 18000 to 18999 (the API, the web app, the sign-in service and its management port, object storage, MongoDB, Redis, and Elasticsearch's HTTP and transport ports). The suite chooses them. Nothing uses the ports 8008, 8080, 8180 or 9000 that `deploy/` uses. |
+| State | `/e2e-state/stack` in the isolated environment (the temporary folder on the host run): the data of Keycloak, RustFS, MongoDB, Redis and Elasticsearch, the secrets, and a copy of the realm with this stack's addresses. Removed at the end of a session, unless the stack is reused. |
+| Secrets | Generated for the stack (token, session, S3 key). The directory-sync secret is read from the stack's own Keycloak. |
+| Accounts | The admin (`e2e-admin`) gets a password generated for the stack. It is a realm user with the `mlops-admin` role. The plain user of each session is created and removed by the suite. |
 | Realm | The committed realm (`deploy/idp/realm-mlops.json`) read as a template, with its addresses replaced by this stack's. The suite's directory client gets `view-users`, as `bootstrap.sh` grants it. |
-| Web app | Its API address is set to the web server's own `/api` route with `configuration.json` (see "Addresses" below). |
-
-Only two things are shared with the rest of the machine: the Docker daemon, and the image cache. The job containers are
-started by the managed agent on the host's Docker daemon, under the same label names as other agents' jobs (see
-"Limits" below).
+| Web app | Its API address is the web server's own `/api` route, set with `configuration.json` (see Addresses). |
 
 Teardown: `docker compose down --volumes`, then the state folder is removed. The state folder's files were written by
-containers as other users, so they are first given back to this user, in a container, the same way `bootstrap.sh`
-handles its folders.
+containers as other users, so they are first given back to this user, in a container.
 
-`test_00_isolation.py` checks the claims above at run time: the addresses are not those of the deploy stack, and the
-API answering is a container of this session's compose project.
+`test_00_isolation.py` checks the claims above at run time: the addresses are not those of the deploy stack, and the API
+answering is a container of this session's compose project.
 
 ## Addresses
 
@@ -80,68 +112,72 @@ around them:
 
 - The web app takes its API address from its own page address with port `8008` (`clearml-web`, `guessAPIServerURL`).
   The suite writes `{"apiBaseUrl": "/api"}` to the web server's `configuration.json`, which the image reads from
-  `/mnt/external_files/configs/`. Without this, a stack on other ports sends its API calls to whatever answers on 8008 of
-  the same host. Filed as `clearml-web` issue #3.
+  `/mnt/external_files/configs/`. Filed as `clearml-web` issue #3.
 - `clearml-init --server <web address>` derives the API address from the web address for ports 8080 and 8008 only. The
   test for that is skipped on other ports (`test_02_enrolment.py::test_init_accepts_the_web_address_and_finds_the_api`).
 
 ## Limits
 
-- **Job containers share the host's Docker daemon.** The agent stops "orphan" job containers at start-up by label
-  (`clearml.job`), for any agent on the machine. A real agent and the suite's agent on one host would stop each other's
-  orphans. Run the suite on a machine without a live agent of the deploy stack.
-- **Agents run on the host.** The suite's agent is a process with its own `HOME`, device key and worker name; its jobs run
-  in containers on the host's Docker daemon.
-- **The GitHub tests need GitHub.** They are skipped unless the repository variables are set.
+- **Job containers.** In the isolated environment they run on the daemon of `dind`. On the host they run on the host's
+  Docker daemon, where the agent stops "orphan" job containers at start-up by label (`clearml.job`), for any agent on that
+  machine. A real agent and the suite's agent on one host would stop each other's orphans, so run the host suite on a
+  machine without a live agent of the deploy stack.
+- **Agents** are processes with their own `HOME`, device key and worker name; their jobs run in containers.
+- **GPU.** The isolated environment has no GPU runtime, so GPU checks are not covered.
+- **GitHub tests** need GitHub; they are skipped unless the repository variables are set.
 
 ## How it is built
 
 | Part | What it does |
 |---|---|
-| `conftest.py` | Starts the stack for the session (autouse), checks that its services answer, gives each session its own `HOME`, and enrols the test client through the real sign-in page. Creates the session project and deletes it, with its contents, at the end. |
-| `support/stack.py` | Ports, state folder, secrets, realm copy, nginx template, compose calls, the identity bootstrap, health waits, teardown, and removal of the session's unused networks. |
-| `stack/prune-networks.sh` | Removes every Docker network that no container uses, after showing them. Run it by hand after an interrupted run. |
+| `docker/run.sh`, `docker/inside.sh` | The host entry point (starts `dind`) and the script that runs inside it: it builds the runner image, then runs `pytest` in a runner container on `dind`'s network, with the suite's environment variables. |
+| `docker/compose.yaml`, `docker/runner.Dockerfile`, `docker/requirements.txt` | The `dind` service, the runner image (the test venv, Chromium, the Docker CLI and Compose, git), and the runner's packages. |
+| `conftest.py` | Starts the stack for the session (autouse), checks that its services answer, resets a reused stack, gives each session its own `HOME`, and enrols the test client through the real sign-in page. Creates the session project and deletes it at the end. Writes the report. |
+| `support/stack.py` | Ports, state folder, reuse record and fingerprint, secrets, realm copy, nginx template, compose calls, the identity bootstrap, health waits, teardown. `python -m support.stack --stop` and `--status`. |
+| `stack/compose.yaml` | The stack's services and their settings, including the test-only timers (2 s scheduler sync, 1 s sweep, 5 s directory sync) and the reset switched on. |
+| `stack/prune-networks.sh` | Removes Docker networks that no container uses, after showing them. For the host run, after an interrupted run. |
 | `support/settings.py` | Addresses and accounts of the running stack. Set at session start by `configure()`; nothing is read from `deploy/`. |
-| `support/cli.py` | Runs the venv's console scripts and the example scripts with the session's `HOME`. Sets `BROWSER` so the sign-in page is opened by the headless browser (`support/browser.py`). |
-| `support/browser.py` | Fills the identity provider's sign-in form in headless Chromium, as a person would. |
-| `support/web.py` | Signs in to the web app in a fresh browser context. |
+| `support/cli.py` | Runs the venv's console scripts and the example scripts with the session's `HOME`. Sets `BROWSER` so the sign-in page is opened by the headless browser. |
+| `support/browser.py`, `support/web.py` | Fill the sign-in form in headless Chromium, as a person would, and sign in to the web app in a fresh context. |
 | `support/keycloak.py` | Creates, disables and removes the test accounts through Keycloak's admin API. |
 | `support/api.py` | REST calls as a device: signs the assertion with the device key and exchanges it for a token. |
 | `support/client.py` | A person's machine: `client.init()` runs `clearml-init`, and `whoami`, `logout` and the key helpers. |
-| `support/agent.py` | A machine that runs jobs: `agent.init()` runs `clearml-agent init` (answered on stdin), and `AgentMachine` runs the managed daemon as a process. |
+| `support/agent.py` | A machine that runs jobs: `agent.init()` runs `clearml-agent init`, and `AgentMachine` runs the managed daemon as a process, with the timers and the shared cache folders of the isolated environment. |
 | `support/git.py` | Local git repositories: a bare remote and a checkout of it. |
-| `support/workspace.py`, `support/jobs.py` | Running the example scripts and reading their JSON result; enqueueing and following jobs. |
-| `scripts/` | The example scripts the tests run. Each prints one JSON line at the end. They are written as user code, so they also serve as examples. |
+| `support/workspace.py`, `support/jobs.py` | Running the example scripts and reading their JSON result (the last JSON line); enqueueing and following jobs. |
+| `support/report.py` | The report: one row per test, with its description, expectation, outcome and duration. |
+| `scripts/` | The example scripts the tests run. Each prints a JSON line at the end. They are written as user code, so they also serve as examples. |
 
 Rules the suite follows:
 
 - **Read back in another process.** A check that a run, artifact, dataset or model is stored reads it in a new process,
   so the result is what the server kept, not what the writer still had in memory.
-- **Clean up what it creates.** Everything lives in one project per session. Users and devices are removed by the
-  session that made them. The stack itself is removed with its state.
-- **Known defects are failures.** A test that fails because of a defect fails; nothing is marked as expected. Its
-  docstring names the defect, and the issue for it is listed below. Nothing is skipped to hide a defect.
+- **Clean up what it creates.** Everything lives in one project per session. Users and devices are removed by the session
+  that made them. The stack itself is removed with its state, unless it is reused.
+- **Known defects are failures.** A test that fails because of a defect fails; nothing is marked as expected. Its docstring
+  names the defect, and the issue for it is listed below. Nothing is skipped to hide a defect.
 - **Skips say why.** The GitHub tests and the one web-address test skip with the reason in the report.
+- **Writers may share a process; readers may not.** Several runs or job records can be written by one process, one after
+  another. Each check of stored data still reads it in its own process.
 
 ## Known defects
 
-Each defect has an issue in the repository where the fix belongs. The tests named here are the ones that fail
-because of it.
+Each defect has an issue in the repository where the fix belongs. The tests named here are the ones that fail, or passed
+after the fix, because of it.
 
 | # | Issue | What happens | Tests |
 |---|---|---|---|
-| D1 | [clearml-agent #1](https://github.com/gianlucapargaetzi/clearml-agent/issues/1) | No job runs. The job container installs the upstream `clearml-agent` from PyPI, which cannot sign in to the server (`auth.login` is gone). | `test_09_jobs.py` (completion, failure, abort, lost agent, release), `test_06_git.py` (clone), `test_12_web_runs.py` (live status), GitHub clone test |
-| D2 | [clearml-server #1](https://github.com/gianlucapargaetzi/clearml-server/issues/1) | Enqueue of a github.com repository returns 500: the GitHub App id is read as an integer. | `test_06_git.py::test_repository_on_github_is_refused_at_enqueue_without_the_app` |
-| D3 | [clearml-server #2](https://github.com/gianlucapargaetzi/clearml-server/issues/2) | A stopped agent stays `active` until a scheduler pass runs. | `test_08b_agent_heartbeat.py::test_stopped_agent_is_marked_lost_by_the_timeout_alone` |
+| D1 | [clearml-agent #1](https://github.com/gianlucapargaetzi/clearml-agent/issues/1) | Fixed in this environment: job containers install the agent and the SDK from local source, and jobs run to completion. | `test_09_jobs.py` (completion, failure, abort, lost agent, release), `test_06_git.py` (clone) |
+| D2 | [clearml-server #1](https://github.com/gianlucapargaetzi/clearml-server/issues/1) | Enqueue of a github.com repository should be refused with a message that names GitHub, because the GitHub App is not set up. In the last full run the enqueue was accepted. | `test_06_git.py::test_repository_on_github_is_refused_at_enqueue_without_the_app` |
+| D3 | [clearml-server #2](https://github.com/gianlucapargaetzi/clearml-server/issues/2) | Fixed: a scheduler sweep marks a stopped agent lost on its own timer. | `test_08b_agent_heartbeat.py::test_stopped_agent_is_marked_lost_by_the_timeout_alone` |
 | D4 | [clearml #1](https://github.com/gianlucapargaetzi/clearml/issues/1) | `Dataset.add_files` on a finalized dataset is accepted, though finalized datasets are documented as immutable. | `test_07_datasets_models.py::test_finalized_dataset_refuses_new_files` |
-| D6 | [clearml #2](https://github.com/gianlucapargaetzi/clearml/issues/2) | After any service call, `Task.enqueue` is refused ("upgrade clearml-server"). Enqueueing first works, which hides it. | `test_09_jobs.py::test_enqueue_works_after_the_task_was_read` |
+| D6 | [clearml #2](https://github.com/gianlucapargaetzi/clearml/issues/2) | Fixed in the SDK: `Task.enqueue` checked the API level the process was using, which the SDK lowers to its newest service version (2.23) after any service call. It now checks the server's level. | `test_09_jobs.py::test_enqueue_works_after_the_task_was_read` (passes) |
 | D7 | [clearml-agent #2](https://github.com/gianlucapargaetzi/clearml-agent/issues/2) | A machine with no device key logs a raw `Errno 2` instead of "run clearml-agent init". | `test_08_agents.py::test_agent_without_its_key_says_to_enrol_it` |
 | Policy | [clearml-server #3](https://github.com/gianlucapargaetzi/clearml-server/issues/3) | A plain user can delete another user's run. Expected 403 until user access management exists (decided). | `test_05_artifacts.py::test_a_member_who_is_not_the_owner_cannot_delete_the_run` |
-| Config | [clearml-web #3](https://github.com/gianlucapargaetzi/clearml-web/issues/3) | The web app assumes its API is on port 8008 of its own host. The suite works around it with `configuration.json`; no test fails without the workaround. | none (see "Not caught by a test") |
+| Config | [clearml-web #3](https://github.com/gianlucapargaetzi/clearml-web/issues/3) | The web app assumes its API is on port 8008 of its own host. The suite works around it with `configuration.json`; no test fails without the workaround. | none (see Not caught by a test) |
 
 D5 is not a defect: `Task.set_parameters` replaces the whole parameter set, as its docstring says. The example script writes
-the group first, and `test_set_parameters_replaces_the_whole_set_and_set_parameter_adds` documents the behaviour. It is not
-filed.
+the group first, and `test_set_parameters_replaces_the_whole_set_and_set_parameter_adds` documents the behaviour.
 
 ### Not caught by a test
 
@@ -149,40 +185,82 @@ filed.
   `configuration.json`, which is not what this suite does.
 - **Fixed-port derivation in `clearml-init`.** Skipped on other ports, so it is not run here.
 
+## Status of the last full run
+
+Latest full run, in the isolated environment, with no restarts: 101 tests, 16 minutes 57 seconds, **91 passed, 7 failed,
+3 skipped**.
+
+The 7 that failed, by cause:
+
+- **Known defects, failing as designed:**
+  - `test_a_member_who_is_not_the_owner_cannot_delete_the_run`: the owner policy is not built (clearml-server #3).
+  - `test_finalized_dataset_refuses_new_files`: a finalized dataset accepts files (D4).
+  - `test_agent_without_its_key_says_to_enrol_it`: the message is a raw error, not the instruction (D7).
+  - `test_repository_on_github_is_refused_at_enqueue_without_the_app`: the enqueue is accepted (D2).
+- **Open, not explained yet:** see Open results.
+
+The 3 skipped: `test_init_accepts_the_web_address_and_finds_the_api` (the suite runs on ports other than the defaults), and
+the two GitHub tests (no GitHub repository is configured).
+
+Fixed since the earlier runs: D6 (the enqueue test passes), the job completion (the agent's `_unregister` fix), and the
+tracking and artifact tests (the result parser, and the runner's data packages).
+
 ## Open results
 
-- `test_05_artifacts.py::test_a_member_who_is_not_the_owner_cannot_delete_the_run` fails until the 403 is implemented
-  (clearml-server #3).
-- `test_09_jobs.py::test_higher_priority_job_is_placed_before_a_lower_one` failed in the last full run: the lower
-  priority job was placed first. It is not explained yet. Either the first job did not hold the machine's capacity as
-  intended, or the scheduler does not order by priority here. It is a real failure, and it is not marked.
+- **Git job clone** (`test_06_git.py::test_job_clones_the_recorded_commit_and_reports_it`): the agent's clone fails with
+  "repository does not exist" for a path that exists and clones with plain `git`. The job ends as `failed`. Not explained
+  yet.
+- **Comparison view** (`test_12_web_runs.py::test_comparison_view_overlays_both_runs`): the run names do not appear on the
+  experiments page within 10 s. Not explained yet.
+- **Live jobs list** (`test_12_web_runs.py::test_jobs_list_shows_a_running_job_without_a_reload`): the job never shows as
+  running on the Jobs page within 300 s. Not explained yet.
 
 ## Coverage and gaps
 
 [E2E_TESTS.md](E2E_TESTS.md) lists every test. Still not written:
 
-- Job monitoring while a job runs (usage, console growing, status changes): needs D1 fixed.
-- Resource limits inside a job container, and the job's working folder being removed afterwards: needs D1 fixed.
+- Job monitoring while a job runs (usage, console growing, status changes).
+- Resource limits inside a job container, and the job's working folder being removed afterwards.
 - Dashboard "Unassigned" bucket and the "All experiments" flat list.
 - Contrast checks in light and dark mode (the suite checks the painted background only).
-- A test for the `configuration.json` requirement (see "Not caught by a test").
+- A test for the `configuration.json` requirement (see Not caught by a test).
+
+## Speed: what was changed, and why
+
+The suite was made faster in 18 steps. Each one is listed with what it saves. The savings are read from the code's own
+ceilings and intervals, not measured; the report now records each test's duration, so the time can be measured.
+
+| # | Change | Saves |
+|---|---|---|
+| 1 | The stack is reused between runs (`MLOPS_E2E_REUSE_STACK`). It is rebuilt only when the server or web sources, or the compose file, changed. Starts take a lock. | 3 to 5 min per run after the first |
+| 2 | The reused stack is reset at the start of each run (`system.e2e_reset`, off by default), so no test needs a restart for repeatable state. | the restarts repeatability needed |
+| 3 | A lost worker is found by the scheduler's own sweep (`sweep_interval_sec`), not by a placement pass (defect D3). The e2e stack syncs every 2 s and sweeps every 1 s. | about 55 s per lost-worker test |
+| 4 | The directory sync runs every 5 s on the e2e stack; the disabled-user test polls every 1 s. | up to about 90 s |
+| 5 | The two keyless checks share one daemon. Stopping waits 15 s (was 60 s), registration 60 s (was 240 s). | about 110 s per stopped agent |
+| 6 | Fixed sleeps that waited for nothing are gone: the keyless window is 10 s, the queued check polls, the holder's body is 15 s. | about 65 s per run |
+| 7 | Polls are 1 s. The deletion test waits on the delete service's own records (`system.e2e_deletions`), then checks the link. | 2 to 9 s per wait |
+| 8 | Job waits are 60 s, and a job that ends at once ends the wait. The first (cold) job of a run waits 300 s, the one exception. | about 240 s per job test that never started (D1) |
+| 9 | UI tests wait for the content they check, with 10 s ceilings, not for `networkidle`. | 30 to 60 s in the web-run module |
+| 10 | The API restart test is in its own module (`test_13_api_restart.py`), which runs last. | the modules after it no longer wait |
+| 11 | `pytest -n 4 -m "not restart"` runs modules in parallel, with the agent tests in one group. Needs reuse. | the sum of the parallel modules (not measured) |
+| 12 | Job records and tracked runs are written in one process per module (`job_script.py --batch`, `track_example.py --batch`). Each job's arguments go to its own task. | about 15 process starts |
+| 13 | The artifact upload is 10 MB, still above the SDK's 8 MB multipart threshold. It keeps the `slow` marker. | about half of its transfer |
+| 14 | The job script only records the job on the client; the body runs on the agent, with the arguments the task records. Found while implementing. | up to 600 s per abort test, 300 s for the lost-agent test |
+| 15 | The suite runs in an isolated environment: one `dind` container, with the runner, the stack and the job containers inside it. | no host daemon in use |
+| 16 | The agent's `_unregister` is a no-op. Its callers had outlived the method, so a finished job raised after its status was reported. | job completion is reported |
+| 17 | A script's result is its last JSON line (the SDK can print a GPU notice after it), and the runner has pandas, numpy and pillow. | the tracking and artifact tests run |
+| 18 | D6: `Task.enqueue` checks the server's API level, not the one in use (SDK fix). | enqueue after a service call works |
+
+## Open work
+
+- **A job that never starts should fail with that reason.** Today the job tests wait for a final status and give up on a
+  timeout. A job whose container cannot reach the server should fail at once, naming the step it reached. Not written yet.
+- **Long jobs and the job token.** Tracked in clearml-agent issue #3, including the tests the renewal needs.
+- **The three open results above.**
 
 ## Clean-up of a real stack
 
 The suite does not touch the stack under `deploy/`. Earlier runs, made before the isolated stack existed, left records
-there, and they have been removed: the probe project (through the API), 16 workers with their scheduler records
-(directly in the database), four `no-project` tasks (through the API), and seven `e2e-member-*` user records (directly in
-the database). The tracking test now deletes its own task.
-
-## Open work
-
-Items to pick up once the job tests run to completion. Each one says what is known and what is missing.
-
-- **A job that never starts should fail with that reason.** Today the job tests wait for a final status and give up on a
-  timeout. A job whose container cannot reach the server should fail at once, naming the step it reached. Not written yet.
-- **Job containers and loopback servers (fixed).** A job whose server address is the loopback address now runs its
-  container on the host's network (clearml-agent, "Job containers share the host network when the server is on the
-  loopback address"). The completion test passes with this.
-- **Long jobs and the job token.** Tracked in clearml-agent issue #3, including the tests the renewal needs.
-- **Priority order.** `test_higher_priority_job_is_placed_before_a_lower_one` fails and is not explained yet
-  (clearml-server issue #4).
+there, and they have been removed: the probe project (through the API), 16 workers with their scheduler records (directly
+in the database), four `no-project` tasks (through the API), and seven `e2e-member-*` user records (directly in the
+database). The tracking test now deletes its own task.
