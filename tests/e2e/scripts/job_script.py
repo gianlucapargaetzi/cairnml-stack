@@ -6,16 +6,19 @@ artifact, and prints a JSON line at the end.
 """
 
 import argparse
+import json
 import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
-from common import report  # noqa: E402
-
 from clearml import Task  # noqa: E402
+
+
+def report(result: dict) -> None:
+    """The last line of the job: what it did, as JSON, for the test that ran it."""
+    print(json.dumps(result, sort_keys=True))
 
 # A small image that is on the host already, so a job does not depend on a registry pull.
 BASE_IMAGE = "python:3.12-slim"

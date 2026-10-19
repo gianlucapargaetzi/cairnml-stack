@@ -5,13 +5,12 @@ so no test depends on another test's cookies. Pages are checked for their text a
 not compared pixel by pixel.
 """
 
-import os
 import re
 
 import pytest
 
 from support import settings
-from support.web import DASHBOARD, sign_in
+from support.web import sign_in
 from support.workspace import new_name, run_json
 
 pytestmark = pytest.mark.ui

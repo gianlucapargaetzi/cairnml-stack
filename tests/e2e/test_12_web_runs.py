@@ -13,6 +13,7 @@ import pytest
 from support import jobs, settings, workspace
 from support.web import sign_in
 from support.workspace import new_name, run_json
+from support.defects import DEFECT_FAILURES
 
 pytestmark = pytest.mark.ui
 
@@ -40,8 +41,12 @@ def signed_in_page(browser):
 
 
 def _open(page, path: str, settle_ms: int = 4000):
+    """Opens a page and waits for it to settle: the network goes quiet, bounded by settle_ms."""
     page.goto(settings.WEB_URL + path)
-    page.wait_for_timeout(settle_ms)
+    try:
+        page.wait_for_load_state("networkidle", timeout=settle_ms)
+    except Exception:  # the app keeps polling on some pages; the content checks below decide
+        pass
 
 
 def _task_path(runs, tab: str) -> str:
@@ -125,8 +130,7 @@ def test_single_click_selects_and_double_click_opens_a_project(runs, project, si
     signed_in_page.wait_for_url(re.compile(rf"/projects/{runs['project_id']}"), timeout=30_000)
 
 
-@pytest.mark.xfail(strict=True, reason="KNOWN DEFECT D1: no job runs, so its status never changes on the page "
-                   "(E2E.md, known defects)")
+@pytest.mark.xfail(strict=True, raises=DEFECT_FAILURES, reason="KNOWN DEFECT D1 (job launch): the job starts, but the server reports its task as not found, so the agent stops it (see E2E.md, known defects)")
 def test_jobs_list_shows_a_running_job_without_a_reload(client_home, project, runs, signed_in_page):
     new_name_prefix = new_name("live")
     task_id = run_json(client_home, "job_script.py", ["--project", project, "--name", new_name_prefix,
@@ -136,10 +140,13 @@ def test_jobs_list_shows_a_running_job_without_a_reload(client_home, project, ru
     _open(signed_in_page, "/dashboard", settle_ms=4000)
     signed_in_page.click("text=MANAGE WORKERS AND JOBS")
     signed_in_page.wait_for_timeout(4000)
+    api = workspace.device_api(client_home)
     deadline = time.monotonic() + 300
     while time.monotonic() < deadline:
         rows = signed_in_page.locator("tr, [role=row], mat-row").filter(has_text=new_name_prefix)
         if rows.count() and re.search(r"in progress|running", rows.first.inner_text(), re.IGNORECASE):
             return
-        signed_in_page.wait_for_timeout(5000)
+        if jobs.task_record(api, task_id).get("status") in jobs.FINAL:
+            break  # the job has ended without running: nothing more to see
+        signed_in_page.wait_for_timeout(3000)
     pytest.fail(f"the job {new_name_prefix} never showed as running on the Jobs page")

@@ -32,3 +32,17 @@ def wait_for(api, task_id: str, states, timeout: float = 900, poll: float = 5.0)
             return record
         time.sleep(poll)
     raise TimeoutError(f"task {task_id} is '{record.get('status')}' after {timeout}s, wanted one of {states}")
+
+
+def wait_until(api, task_id: str, condition, timeout: float = 300, poll: float = 5.0):
+    """Waits until condition(record) is true. Stops early, returning None, when the job reaches a final status:
+    a job that has ended will not reach the condition later, so waiting on is time lost."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        record = task_record(api, task_id)
+        if condition(record):
+            return record
+        if record.get("status") in FINAL:
+            return None
+        time.sleep(poll)
+    return None

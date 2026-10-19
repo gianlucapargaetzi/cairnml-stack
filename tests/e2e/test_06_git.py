@@ -14,9 +14,10 @@ import pytest
 from support import git, jobs, workspace
 from support.api import ApiError
 from support.workspace import new_name, run_json
+from support.defects import DEFECT_FAILURES
 
 SCRIPTS = Path(__file__).parent / "scripts"
-D1 = "KNOWN DEFECT D1: job containers install the upstream clearml-agent from PyPI; no job runs (E2E.md)"
+D1 = "KNOWN DEFECT D1 (job launch): the job starts, but the server reports its task as not found, so the agent stops it (see E2E.md, known defects)"
 
 
 @pytest.fixture(scope="module")
@@ -85,7 +86,7 @@ def test_checkout_without_a_remote_records_commit_but_no_url(client_home, projec
     assert script["version_num"] == commit
 
 
-@pytest.mark.xfail(strict=True, reason="KNOWN DEFECT D1: the job process fails at launch (see E2E.md, known defects)")
+@pytest.mark.xfail(strict=True, raises=DEFECT_FAILURES, reason="KNOWN DEFECT D1 (job launch): the job starts, but the server reports its task as not found, so the agent stops it (see E2E.md, known defects)")
 def test_job_clones_the_recorded_commit_and_reports_it(client_home, project, checkout):
     run = run_json(client_home, str(checkout["work"] / "job_script.py"),
                    ["--project", project, "--name", new_name("clone-job"), "--git", "--scalars", "2"])
@@ -96,7 +97,7 @@ def test_job_clones_the_recorded_commit_and_reports_it(client_home, project, che
     assert record["execution"]["commit"] == checkout["commit"]
 
 
-@pytest.mark.xfail(strict=True, reason="KNOWN DEFECT D2: a github.com repository makes enqueue answer HTTP 500 "
+@pytest.mark.xfail(strict=True, raises=DEFECT_FAILURES, reason="KNOWN DEFECT D2: a github.com repository makes enqueue answer HTTP 500 "
                    "('Issuer (iss) must be a string'): GITHUB_APP_ID is read as a number")
 def test_repository_on_github_is_refused_at_enqueue_without_the_app(client_home, project, checkout):
     """E2E.md and README: a job whose repository is on GitHub is refused when enqueued unless the GitHub App is set up."""
@@ -126,7 +127,7 @@ def _github_checkout(root: Path, repo: str) -> Path:
 
 
 @pytest.mark.github
-@pytest.mark.xfail(strict=True, reason=D1)
+@pytest.mark.xfail(strict=True, raises=DEFECT_FAILURES, reason=D1)
 def test_private_repository_is_refused_at_clone_time(client_home, project, tmp_path):
     """A repository the GitHub App cannot read: the job fails at its clone, with a message, and no token is logged."""
     repo = os.environ.get("MLOPS_E2E_GITHUB_PRIVATE_REPO")

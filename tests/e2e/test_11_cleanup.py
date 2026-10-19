@@ -5,7 +5,6 @@ for that service rather than asking once.
 """
 
 import time
-from pathlib import Path
 from urllib.parse import unquote
 
 import pytest
