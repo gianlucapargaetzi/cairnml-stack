@@ -1,12 +1,8 @@
 """Section 6 of E2E.md: queueing, placement, running, monitoring, ending and recovering jobs.
 
 A job is a recorded task put in the queue with what it needs. The scheduler places it on the agent that fits, the
-agent claims it and runs it in a container. Two groups of tests:
-
-- scheduling (no job has to run): what the queue does with a job that fits, does not fit, or is queued twice;
-- execution: the job's own run. These need the job containers to start (KNOWN DEFECT D1 in E2E.md), so they are
-  strict expected failures until it is fixed. When D1 is fixed, the marker turns them into a failing test
-  ("XPASS strict"), and the marker is removed.
+agent claims it and runs it in a container. Two groups of tests: scheduling (what the queue does with a job) and
+execution (the job's own run). A test that fails because of a known defect fails, and its docstring names the defect.
 """
 
 import shutil
@@ -20,7 +16,6 @@ from support import jobs, workspace
 from support import agent
 from support.agent import AgentMachine, worker_record
 from support.workspace import new_name, run_json
-from support.defects import DEFECT_FAILURES
 
 pytestmark = pytest.mark.agent
 
@@ -29,7 +24,6 @@ for _name in ("common.py", "job_script.py"):
     shutil.copy(Path(__file__).parent / "scripts" / _name, JOB_FOLDER / _name)
 JOB_SCRIPT = JOB_FOLDER / "job_script.py"
 
-D1 = "KNOWN DEFECT D1 (job launch): the job starts, but the server reports its task as not found, so the agent stops it (see E2E.md, known defects)"
 MISSING_IMAGE = "e2e-missing/does-not-exist:never"
 
 
@@ -105,8 +99,6 @@ def test_enqueueing_a_queued_task_again_leaves_it_queued_once(client_home, proje
     assert len(pending) == 1
 
 
-@pytest.mark.xfail(strict=True, raises=DEFECT_FAILURES, reason="KNOWN DEFECT D6: after any service call, enqueue is refused as 'upgrade "
-                   "clearml-server' (the SDK's API level is lowered by api_proxy); enqueue works only as the first call")
 def test_enqueue_works_after_the_task_was_read(client_home, project, machine):
     task_id = make_job(client_home, project, "after-get")
     result = workspace.run_raw(client_home, "enqueue_after_get.py", ["--task-id", task_id])
@@ -151,9 +143,8 @@ def test_higher_priority_job_is_placed_before_a_lower_one(client_home, project, 
     assert high_placed[0]["time"] <= low_placed[0]["time"], "the higher priority job must be placed first"
 
 
-# --- execution (blocked by D1) ----------------------------------------------------------------------------------
+# --- execution ----------------------------------------------------------------------------------
 
-@pytest.mark.xfail(strict=True, raises=DEFECT_FAILURES, reason=D1)
 def test_job_runs_to_completion_with_its_scalars_and_artifact(client_home, project, machine):
     task_id = make_job(client_home, project, "completes", scalars=5)
     jobs.enqueue(client_home, task_id)
@@ -163,7 +154,6 @@ def test_job_runs_to_completion_with_its_scalars_and_artifact(client_home, proje
     assert "result" in [a["key"] for a in record["execution"]["artifacts"]]
 
 
-@pytest.mark.xfail(strict=True, raises=DEFECT_FAILURES, reason=D1)
 def test_failing_job_is_failed_with_its_traceback_and_the_agent_is_free(client_home, project, machine):
     task_id = make_job(client_home, project, "fails", scalars=5, extra=("--fail-after", "2"))
     jobs.enqueue(client_home, task_id)
@@ -174,7 +164,6 @@ def test_failing_job_is_failed_with_its_traceback_and_the_agent_is_free(client_h
         "events.get_task_log", {"task": task_id, "order": "desc"})["events"][0]["msg"]
 
 
-@pytest.mark.xfail(strict=True, raises=DEFECT_FAILURES, reason=D1)
 def test_aborted_job_stops_within_thirty_seconds(client_home, project, machine):
     """The job must really be running before it is aborted: its first scalar is logged, and that happens only
     once the job body has started (a claimed job whose process never starts logs nothing)."""
@@ -190,7 +179,6 @@ def test_aborted_job_stops_within_thirty_seconds(client_home, project, machine):
     assert record["status"] in ("aborted", "stopped")
 
 
-@pytest.mark.xfail(strict=True, raises=DEFECT_FAILURES, reason=D1)
 def test_lost_agent_during_a_job_retries_the_job_once(client_home, project, tmp_path_factory, admin_account):
     machine = AgentMachine(tmp_path_factory.mktemp("lost-job-agent"), worker_name=new_name("lost-agent"))
     assert agent.init(machine.home, admin_account).returncode == 0
@@ -206,7 +194,6 @@ def test_lost_agent_during_a_job_retries_the_job_once(client_home, project, tmp_
     assert wait_for_event(api, task_id, "retried", timeout=180), "the lost attempt must be retried once"
 
 
-@pytest.mark.xfail(strict=True, raises=DEFECT_FAILURES, reason=D1)
 def test_agent_reports_no_running_job_once_a_job_completes(client_home, project, machine):
     """Only a job that completed proves the agent released it: an empty list after a failure proves nothing."""
     task_id = make_job(client_home, project, "release", scalars=1)

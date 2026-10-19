@@ -17,7 +17,6 @@ from support import agent
 from support.agent import AgentMachine, worker_record
 from support import jobs
 from support.workspace import new_name, run_json
-from support.defects import DEFECT_FAILURES
 
 pytestmark = pytest.mark.agent
 
@@ -104,8 +103,6 @@ def test_agent_without_its_key_does_not_register(tmp_path, admin_account, client
         machine.stop()
 
 
-@pytest.mark.xfail(strict=True, raises=DEFECT_FAILURES, reason="KNOWN DEFECT D7: the agent logs a raw 'No such file or directory' for the "
-                   "device key, not the instruction to run clearml-agent init")
 def test_agent_without_its_key_says_to_enrol_it(tmp_path, admin_account):
     machine = AgentMachine(tmp_path / "keyless-msg", worker_name=new_name("keyless-msg"))
     assert agent.init(machine.home, admin_account).returncode == 0

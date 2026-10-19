@@ -7,7 +7,6 @@ import pytest
 
 from support import workspace
 from support.workspace import new_name, run_json
-from support.defects import DEFECT_FAILURES
 
 
 @pytest.fixture(scope="module")
@@ -24,8 +23,6 @@ def test_dataset_is_created_and_finalized(dataset):
     assert dataset["made"]["files"], "the dataset must list the files it was built from"
 
 
-@pytest.mark.xfail(strict=True, raises=DEFECT_FAILURES, reason="KNOWN DEFECT D4: Dataset.add_files on a finalized dataset raises nothing, "
-                   "although the SDK documents a finalized dataset as immutable (datasets/dataset.py)")
 def test_finalized_dataset_refuses_new_files(dataset):
     assert dataset["made"]["refused_after_finalize"] is True
 

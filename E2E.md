@@ -119,15 +119,14 @@ Rules the suite follows:
   so the result is what the server kept, not what the writer still had in memory.
 - **Clean up what it creates.** Everything lives in one project per session. Users and devices are removed by the
   session that made them. The stack itself is removed with its state.
-- **Known defects are strict expected failures.** A test that fails because of a defect is marked `xfail(strict=True)`
-  with the defect's number. When the defect is fixed the test turns into a failure ("XPASS strict"), and the marker is
-  then removed. Nothing is silently skipped to hide a defect.
+- **Known defects are failures.** A test that fails because of a defect fails; nothing is marked as expected. Its
+  docstring names the defect, and the issue for it is listed below. Nothing is skipped to hide a defect.
 - **Skips say why.** The GitHub tests and the one web-address test skip with the reason in the report.
 
 ## Known defects
 
 Each defect has an issue in the repository where the fix belongs. The tests named here are the ones that fail
-because of it (strict expected failures) or that would.
+because of it.
 
 | # | Issue | What happens | Tests |
 |---|---|---|---|
@@ -152,8 +151,8 @@ filed.
 
 ## Open results
 
-- `test_05_artifacts.py::test_a_member_who_is_not_the_owner_cannot_delete_the_run` stays an expected failure until
-  the 403 is implemented (clearml-server #3).
+- `test_05_artifacts.py::test_a_member_who_is_not_the_owner_cannot_delete_the_run` fails until the 403 is implemented
+  (clearml-server #3).
 - `test_09_jobs.py::test_higher_priority_job_is_placed_before_a_lower_one` failed in the last full run: the lower
   priority job was placed first. It is not explained yet. Either the first job did not hold the machine's capacity as
   intended, or the scheduler does not order by priority here. It is a real failure, and it is not marked.

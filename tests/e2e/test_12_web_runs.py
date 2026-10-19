@@ -13,7 +13,6 @@ import pytest
 from support import jobs, settings, workspace
 from support.web import sign_in
 from support.workspace import new_name, run_json
-from support.defects import DEFECT_FAILURES
 
 pytestmark = pytest.mark.ui
 
@@ -130,7 +129,6 @@ def test_single_click_selects_and_double_click_opens_a_project(runs, project, si
     signed_in_page.wait_for_url(re.compile(rf"/projects/{runs['project_id']}"), timeout=30_000)
 
 
-@pytest.mark.xfail(strict=True, raises=DEFECT_FAILURES, reason="KNOWN DEFECT D1 (job launch): the job starts, but the server reports its task as not found, so the agent stops it (see E2E.md, known defects)")
 def test_jobs_list_shows_a_running_job_without_a_reload(client_home, project, runs, signed_in_page):
     new_name_prefix = new_name("live")
     task_id = run_json(client_home, "job_script.py", ["--project", project, "--name", new_name_prefix,
