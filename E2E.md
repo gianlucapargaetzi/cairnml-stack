@@ -180,13 +180,9 @@ Items to pick up once the job tests run to completion. Each one says what is kno
 
 - **A job that never starts should fail with that reason.** Today the job tests wait for a final status and give up on a
   timeout. A job whose container cannot reach the server should fail at once, naming the step it reached. Not written yet.
-- **Job containers cannot reach a server on the loopback address (cause found).** The stack the suite starts listens on
-  `127.0.0.1`, and a job container runs on Docker's bridge network, where `127.0.0.1` is the container itself. The job's
-  first call, `tasks.get_by_id` in `execute`, is refused and retried for hours without output, so the job never starts.
-  The "task not found" stop seen earlier came only after the session ended and deleted the job's project.
-  Options: (a) a job container whose server address is the loopback address shares the host's network (no setting: the
-  agent decides from the address); (b) the test stack also listens on the Docker bridge address (exposes its ports on
-  every interface, so not preferred). Decision needed; (a) is the preferred option.
+- **Job containers and loopback servers (fixed).** A job whose server address is the loopback address now runs its
+  container on the host's network (clearml-agent, "Job containers share the host network when the server is on the
+  loopback address"). The completion test passes with this.
 - **Long jobs and the job token.** Tracked in clearml-agent issue #3, including the tests the renewal needs.
 - **Priority order.** `test_higher_priority_job_is_placed_before_a_lower_one` fails and is not explained yet
   (clearml-server issue #4).
