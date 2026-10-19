@@ -7,9 +7,8 @@ import time
 
 import pytest
 
-from support import devices, settings, workspace
-from support.api import ApiError, Api, load_device_key, make_assertion
-from support.keycloak import Keycloak
+from support import client, settings, workspace
+from support.api import ApiError, make_assertion
 
 
 def _refused(exc_info):
@@ -19,7 +18,7 @@ def _refused(exc_info):
 def test_assertion_signed_with_another_key_is_refused(client_home):
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-    device = devices.device_id_of(client_home)
+    device = client.device_id_of(client_home)
     forged = make_assertion(Ed25519PrivateKey.generate(), device, settings.API_URL)
     with pytest.raises(ApiError) as refused:
         workspace.device_api(client_home).call("devices.exchange", {"assertion": forged})
@@ -55,7 +54,7 @@ def test_token_of_a_device_is_refused_once_the_user_is_disabled(tmp_path, member
     """A disabled account is refused when the directory sync has recorded it (the sync runs every 60 s)."""
     home = tmp_path / "disabled-member"
     home.mkdir()
-    assert devices.init(home, user=member_account[0], password=member_account[1], name="e2e-disabled").returncode == 0
+    assert client.init(home, member_account, name="e2e-disabled").returncode == 0
     api = workspace.device_api(home)
     assert api.token()
     keycloak.set_enabled(member_account[0], False)
@@ -72,4 +71,4 @@ def test_token_of_a_device_is_refused_once_the_user_is_disabled(tmp_path, member
         assert refused, "a disabled account's device must be refused within the directory sync interval"
     finally:
         keycloak.set_enabled(member_account[0], True)
-        devices.logout(home)
+        client.logout(home)

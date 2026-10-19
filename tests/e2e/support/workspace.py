@@ -28,7 +28,7 @@ def run_raw(home: Path, script_name: str, args=(), *, timeout=900, extra_env=Non
 
 def device_api(home: Path) -> Api:
     """The REST client as the device enrolled in this home."""
-    from .devices import device_id_of, key_path
+    from .client import device_id_of, key_path
 
     return Api(device_id_of(home), key_path(home))
 

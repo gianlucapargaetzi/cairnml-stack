@@ -14,6 +14,7 @@ import requests
 from support import workspace
 from support import settings
 from support.workspace import new_name, run_json
+from support.defects import DEFECT_FAILURES
 
 KINDS = ["file", "folder", "dict", "frame", "array", "image", "pickled", "with_metadata"]
 
@@ -84,26 +85,26 @@ def test_download_link_serves_the_stored_bytes_from_object_storage(client_home, 
     assert hashlib.sha256(body.content).hexdigest() == uploaded["expect"]["artifacts"]["file"][1]
 
 
-@pytest.mark.xfail(strict=True, reason="OPEN POLICY QUESTION: a plain user can delete another user's run today; "
+@pytest.mark.xfail(strict=True, raises=DEFECT_FAILURES, reason="OPEN POLICY QUESTION: a plain user can delete another user's run today; "
                    "E2E.md expects a refusal (403). Remove this marker once the policy is decided.")
 def test_a_member_who_is_not_the_owner_cannot_delete_the_run(client_home, member_account, project, tmp_path):
     """Object access follows the owner: another plain user may not change the admin's run."""
-    from support import devices
+    from support import client
     from support.api import Api, ApiError
 
     owner_run = run_json(client_home, "track_example.py", ["--project", project, "--name", new_name("owned"),
                                                            "--steps", "1"])
     home = tmp_path / "member-home"
     home.mkdir()
-    result = devices.init(home, user=member_account[0], password=member_account[1], name="e2e-member")
+    result = client.init(home, member_account, name="e2e-member")
     assert result.returncode == 0, result.output
-    member_api = Api(devices.device_id_of(home), devices.key_path(home))
+    member_api = Api(client.device_id_of(home), client.key_path(home))
     try:
         with pytest.raises(ApiError) as refused:
             member_api.authed("tasks.delete", {"task": owner_run["task_id"], "force": True})
         assert refused.value.status in (401, 403)
     finally:
-        devices.logout(home)
+        client.logout(home)
 
 
 def test_a_downloaded_artifact_is_identical_on_a_second_download(client_home, uploaded):

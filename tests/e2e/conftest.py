@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 import requests
 
-from support import devices, settings, workspace
+from support import agent, client, settings, workspace
 from support.keycloak import Keycloak
 from support.stack import IsolatedStack, StackError
 
@@ -122,11 +122,25 @@ def member_account(keycloak):
 @pytest.fixture(scope="session")
 def client_home(session_home, admin_account):
     """This session's client machine, enrolled as the admin through the sign-in page."""
-    user, password = admin_account
-    result = devices.init(session_home, user=user, password=password, name="e2e-client")
+    result = client.init(session_home, admin_account, name="e2e-client")
     assert result.returncode == 0, result.output
     yield session_home
-    devices.logout(session_home)
+    client.logout(session_home)
+
+
+@pytest.fixture(scope="session")
+def job_agent(tmp_path_factory, admin_account, client_home):
+    """One managed agent for the session's job tests: enrolled and started once, shared by the modules that run jobs.
+    Starting a second daemon on this machine would stop the first one's job containers, so the modules share this one."""
+    from support.agent import AgentMachine, worker_record
+
+    machine = AgentMachine(tmp_path_factory.mktemp("job-agent"), worker_name=workspace.new_name("jobs-agent"))
+    assert agent.init(machine.home, admin_account).returncode == 0
+    machine.start()
+    api = workspace.device_api(client_home)
+    assert machine.wait_until(lambda: worker_record(api, machine.worker_name), timeout=240), machine.log()[-2000:]
+    yield machine
+    machine.stop()
 
 
 @pytest.fixture(scope="session")

@@ -1,11 +1,9 @@
-"""Enrolling, checking and signing out machines (clearml-init, clearml-whoami, clearml-logout)."""
+"""A person's machine as the ClearML SDK enrols it: clearml-init, clearml-whoami and clearml-logout."""
 
 import re
 from pathlib import Path
 
 from . import cli, settings
-
-DEVICE_ID = re.compile(r"device (dev_[0-9a-f]{32})")
 
 
 def key_path(home: Path) -> Path:
@@ -21,8 +19,9 @@ def device_id_of(home: Path) -> str:
     return match.group(1) if match else ""
 
 
-def init(home: Path, *, user: str, password: str, server: str = None, name: str = "e2e-machine",
-         force: bool = False):
+def init(home: Path, account, *, server: str = None, name: str = "e2e-machine", force: bool = False):
+    """clearml-init, signed in as account (user, password) through the sign-in page."""
+    user, password = account
     args = ["--server", server or settings.API_URL, "--name", name]
     if force:
         args.append("--force")

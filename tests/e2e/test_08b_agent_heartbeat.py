@@ -7,19 +7,21 @@ not the activity of other machines. The rule is driven by scheduler activity (se
 import pytest
 
 from support import workspace
+from support import agent
 from support.agent import AgentMachine, worker_record
 from support.workspace import new_name
+from support.defects import DEFECT_FAILURES
 
 pytestmark = pytest.mark.agent
 
 LOST_AFTER_SEC = 3 * 10 + 30
 
 
-@pytest.mark.xfail(strict=True, reason="KNOWN DEFECT D3: a stopped agent is marked lost only during a scheduler "
+@pytest.mark.xfail(strict=True, raises=DEFECT_FAILURES, reason="KNOWN DEFECT D3: a stopped agent is marked lost only during a scheduler "
                    "pass; with nothing queued, it stays 'active' (E2E.md, known defects)")
 def test_stopped_agent_is_marked_lost_by_the_timeout_alone(tmp_path, admin_account, client_home):
     machine = AgentMachine(tmp_path / "timeout-only", worker_name=new_name("timeout"))
-    assert machine.enrol(*admin_account).returncode == 0
+    assert agent.init(machine.home, admin_account).returncode == 0
     machine.start()
     api = workspace.device_api(client_home)
     try:

@@ -5,11 +5,10 @@ Every enrolment here goes through clearml-init and the real sign-in page (headle
 
 import os
 import stat
-from pathlib import Path
 
 import pytest
 
-from support import cli, devices, settings
+from support import cli, client, settings
 from support.api import Api, ApiError
 
 
@@ -20,25 +19,20 @@ def fresh_home(tmp_path):
     return home
 
 
-def _enrol(home, account, name="e2e-laptop", force=False):
-    user, password = account
-    return devices.init(home, user=user, password=password, name=name, force=force)
-
-
 def test_init_enrols_the_machine_and_writes_its_key(client_home):
-    key = devices.key_path(client_home)
+    key = client.key_path(client_home)
     assert key.is_file(), "the device key was not written"
     assert stat.S_IMODE(os.stat(key).st_mode) == 0o600, "the device key must be readable by its owner only"
-    assert devices.device_id_of(client_home).startswith("dev_"), "the configuration does not name the device"
+    assert client.device_id_of(client_home).startswith("dev_"), "the configuration does not name the device"
     conf = (client_home / "clearml.conf").read_text()
     assert settings.API_URL in conf, "the configuration does not name the server"
 
 
 def test_whoami_names_the_admin_and_the_device(client_home, admin_account):
-    result = devices.whoami(client_home)
+    result = client.whoami(client_home)
     assert result.returncode == 0, result.output
     assert admin_account[0] in result.stdout
-    assert devices.device_id_of(client_home) in result.stdout
+    assert client.device_id_of(client_home) in result.stdout
 
 
 def test_whoami_uses_the_device_key_without_a_browser(client_home):
@@ -49,41 +43,41 @@ def test_whoami_uses_the_device_key_without_a_browser(client_home):
 
 
 def test_init_again_without_force_is_refused(client_home, admin_account):
-    before = devices.key_path(client_home).read_bytes()
-    result = _enrol(client_home, admin_account)
+    before = client.key_path(client_home).read_bytes()
+    result = client.init(client_home, admin_account)
     assert result.returncode != 0
     assert "already enrolled" in result.output
-    assert devices.key_path(client_home).read_bytes() == before, "a refused enrolment must keep the key"
+    assert client.key_path(client_home).read_bytes() == before, "a refused enrolment must keep the key"
 
 
 def test_init_with_force_revokes_the_old_device(fresh_home, admin_account, session_home):
-    first = _enrol(fresh_home, admin_account, name="e2e-first")
+    first = client.init(fresh_home, admin_account, name="e2e-first")
     assert first.returncode == 0, first.output
-    old_device = devices.device_id_of(fresh_home)
-    old_key = devices.key_path(fresh_home)
+    old_device = client.device_id_of(fresh_home)
+    old_key = client.key_path(fresh_home)
     saved_key = fresh_home / "old-device.key"
     saved_key.write_bytes(old_key.read_bytes())
 
-    second = _enrol(fresh_home, admin_account, name="e2e-second", force=True)
+    second = client.init(fresh_home, admin_account, name="e2e-second", force=True)
     assert second.returncode == 0, second.output
     assert "revoked the previous device" in second.output
-    new_device = devices.device_id_of(fresh_home)
+    new_device = client.device_id_of(fresh_home)
     assert new_device and new_device != old_device
 
     # The old key must no longer get a token; the new one must.
     with pytest.raises(ApiError):
         Api(old_device, saved_key).token()
-    assert Api(new_device, devices.key_path(fresh_home)).token()
+    assert Api(new_device, client.key_path(fresh_home)).token()
 
 
 def test_logout_revokes_the_device_and_removes_its_key(fresh_home, admin_account):
-    assert _enrol(fresh_home, admin_account).returncode == 0
-    device = devices.device_id_of(fresh_home)
-    key_path = devices.key_path(fresh_home)
+    assert client.init(fresh_home, admin_account).returncode == 0
+    device = client.device_id_of(fresh_home)
+    key_path = client.key_path(fresh_home)
     saved_key = fresh_home / "saved.key"
     saved_key.write_bytes(key_path.read_bytes())
 
-    result = devices.logout(fresh_home)
+    result = client.logout(fresh_home)
     assert result.returncode == 0, result.output
     assert not key_path.exists(), "the device key must be removed"
     with pytest.raises(ApiError):
@@ -91,25 +85,24 @@ def test_logout_revokes_the_device_and_removes_its_key(fresh_home, admin_account
 
 
 def test_whoami_after_logout_says_not_enrolled(fresh_home, admin_account):
-    assert _enrol(fresh_home, admin_account).returncode == 0
-    assert devices.logout(fresh_home).returncode == 0
-    result = devices.whoami(fresh_home)
+    assert client.init(fresh_home, admin_account).returncode == 0
+    assert client.logout(fresh_home).returncode == 0
+    result = client.whoami(fresh_home)
     assert result.returncode == 1
     assert "not enrolled" in result.output
 
 
 def test_logout_on_a_machine_that_is_not_enrolled_does_nothing(fresh_home):
-    result = devices.logout(fresh_home)
+    result = client.logout(fresh_home)
     assert result.returncode == 0
     assert "nothing to sign out" in result.output
 
 
 def test_init_with_an_unreachable_server_writes_nothing(fresh_home, admin_account):
-    result = devices.init(fresh_home, user=admin_account[0], password=admin_account[1],
-                          server="http://127.0.0.1:9", name="e2e-nowhere")
+    result = client.init(fresh_home, admin_account, server="http://127.0.0.1:9", name="e2e-nowhere")
     assert result.returncode != 0
     assert "cannot reach" in result.output
-    assert not devices.key_path(fresh_home).exists()
+    assert not client.key_path(fresh_home).exists()
 
 
 def test_init_accepts_the_web_address_and_finds_the_api(fresh_home, admin_account):
@@ -120,18 +113,17 @@ def test_init_accepts_the_web_address_and_finds_the_api(fresh_home, admin_accoun
     """
     if not settings.WEB_URL.endswith(":8080"):
         pytest.skip("the API address is derived from the web address for ports 8080/8008 only; this stack uses others")
-    result = devices.init(fresh_home, user=admin_account[0], password=admin_account[1],
-                          server=settings.WEB_URL, name="e2e-web-address")
+    result = client.init(fresh_home, admin_account, server=settings.WEB_URL, name="e2e-web-address")
     assert result.returncode == 0, result.output
     assert settings.API_URL in (fresh_home / "clearml.conf").read_text()
-    assert devices.logout(fresh_home).returncode == 0
+    assert client.logout(fresh_home).returncode == 0
 
 
 def test_member_enrols_as_a_plain_user(fresh_home, member_account):
-    result = _enrol(fresh_home, member_account, name="e2e-member-laptop")
+    result = client.init(fresh_home, member_account, name="e2e-member-laptop")
     assert result.returncode == 0, result.output
-    who = devices.whoami(fresh_home)
+    who = client.whoami(fresh_home)
     assert who.returncode == 0, who.output
     assert member_account[0] in who.stdout
     assert "admin" not in who.stdout.split("(")[1].split(")")[0].lower()
-    assert devices.logout(fresh_home).returncode == 0
+    assert client.logout(fresh_home).returncode == 0

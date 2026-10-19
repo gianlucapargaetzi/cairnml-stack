@@ -7,7 +7,19 @@ import time
 from pathlib import Path
 
 from . import cli, settings
-from .devices import device_id_of, key_path
+from .client import device_id_of, key_path
+
+
+def init(home: Path, account):
+    """clearml-agent init, signed in as account (user, password). Only an admin may enrol an agent.
+
+    The command asks its questions on stdin: the web address, the web-app address, the API address, then the defaults
+    (no output storage, no git login, no extra package index).
+    """
+    user, password = account
+    answers = f"{settings.WEB_URL}\n{settings.WEB_URL}\n{settings.API_URL}\n" + "\n" * 8
+    return cli.run("clearml-agent", home, login_user=user, login_password=password, args=["init"],
+                   stdin_text=answers, timeout=300)
 
 
 class AgentMachine:
@@ -16,13 +28,6 @@ class AgentMachine:
         self.worker_name = worker_name
         self.log_path = home / "daemon.log"
         self._proc = None
-
-    def enrol(self, admin_user: str, admin_password: str):
-        """clearml-agent init, answered on stdin: the web address, the web-app address, the API address, then the
-        defaults (no output URI, no git login, no extra index)."""
-        answers = f"{settings.WEB_URL}\n{settings.WEB_URL}\n{settings.API_URL}\n" + "\n" * 8
-        return cli.run("clearml-agent", self.home, login_user=admin_user, login_password=admin_password,
-                       args=["init"], stdin_text=answers, timeout=300)
 
     @property
     def device_id(self) -> str:
