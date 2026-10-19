@@ -14,14 +14,28 @@ def script(name: str) -> Path:
     return SCRIPTS / name
 
 
-def run_json(home: Path, script_name: str, args=(), *, timeout=900, extra_env=None) -> dict:
-    """Runs an example script in the given home. The script's last line is JSON; it is returned parsed."""
+def _last_json_line(stdout: str) -> dict:
+    """The script's result: its last JSON line. The SDK may print other lines after it (at exit, a GPU monitor notice
+    on a machine without a GPU), so the last line itself is not always the result."""
+    lines = [line for line in stdout.splitlines() if line.startswith("{")]
+    return json.loads(lines[-1])
+
+
+def run_json(home: Path, script_name: str, args=(), *, timeout=300, extra_env=None) -> dict:
+    """Runs an example script in the given home. The script's last JSON line is returned parsed."""
     result = cli.python(script(script_name), home, args=args, timeout=timeout, extra_env=extra_env)
     assert result.returncode == 0, f"{script_name} failed:\n{result.output[-4000:]}"
-    return json.loads(result.stdout.strip().splitlines()[-1])
+    return _last_json_line(result.stdout)
 
 
-def run_raw(home: Path, script_name: str, args=(), *, timeout=900, extra_env=None):
+def run_json_lines(home: Path, script_name: str, args=(), *, timeout=300) -> list:
+    """Runs an example script that records several results in one process: each JSON line is one result."""
+    result = cli.python(script(script_name), home, args=args, timeout=timeout)
+    assert result.returncode == 0, f"{script_name} failed:\n{result.output[-4000:]}"
+    return [json.loads(line) for line in result.stdout.splitlines() if line.startswith("{")]
+
+
+def run_raw(home: Path, script_name: str, args=(), *, timeout=300, extra_env=None):
     """Like run_json, but returns the process result (for the tests that expect a failure)."""
     return cli.python(script(script_name), home, args=args, timeout=timeout, extra_env=extra_env)
 

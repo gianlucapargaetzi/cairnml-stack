@@ -17,6 +17,9 @@ from support.workspace import new_name, run_json
 
 SCRIPTS = Path(__file__).parent / "scripts"
 
+# the job tests below need an agent: they share one with the other agent modules (xdist group)
+pytestmark = pytest.mark.xdist_group("agent")
+
 
 @pytest.fixture(scope="module")
 def checkout(tmp_path_factory):
@@ -35,6 +38,10 @@ def record_of(client_home, task_id):
 
 
 def test_run_from_a_checkout_records_repository_branch_and_commit(client_home, project, checkout):
+    """A run from a checkout records its repository, branch and commit.
+
+    Expect: The repository is the remote, the branch is main, and the commit is the checkout's HEAD; the script sees that commit too.
+    """
     run = run_json(client_home, str(checkout["work"] / "job_script.py"),
                    ["--project", project, "--name", new_name("git"), "--git", "--scalars", "2"])
     script = record_of(client_home, run["task_id"])
@@ -45,6 +52,10 @@ def test_run_from_a_checkout_records_repository_branch_and_commit(client_home, p
 
 
 def test_uncommitted_changes_are_recorded_as_a_diff(client_home, project, checkout):
+    """Uncommitted changes are recorded as a diff.
+
+    Expect: The diff contains the change, and the recorded commit is still the last one.
+    """
     work = checkout["work"]
     marker = "# e2e uncommitted change\n"
     (work / "common.py").write_text((work / "common.py").read_text() + marker)
@@ -59,6 +70,10 @@ def test_uncommitted_changes_are_recorded_as_a_diff(client_home, project, checko
 
 
 def test_script_outside_git_is_recorded_without_a_repository(client_home, project, tmp_path):
+    """A script outside git is recorded without a repository.
+
+    Expect: No repository is recorded, and the script's own code is kept with the run.
+    """
     folder = tmp_path / "plain"
     folder.mkdir()
     for name in ("common.py", "job_script.py"):
@@ -71,6 +86,10 @@ def test_script_outside_git_is_recorded_without_a_repository(client_home, projec
 
 
 def test_checkout_without_a_remote_records_commit_but_no_url(client_home, project, tmp_path):
+    """A checkout without a remote records its commit, but no URL.
+
+    Expect: No repository URL is recorded, and the commit is recorded.
+    """
     local = tmp_path / "local-only"
     local.mkdir()
     git.git(local, "init", "-b", "main")
@@ -84,18 +103,25 @@ def test_checkout_without_a_remote_records_commit_but_no_url(client_home, projec
     assert script["version_num"] == commit
 
 
-def test_job_clones_the_recorded_commit_and_reports_it(client_home, project, checkout):
+def test_job_clones_the_recorded_commit_and_reports_it(client_home, project, checkout, job_agent):
+    """A job clones the recorded commit and reports it. It needs an agent: the job runs on the session's agent.
+
+    Expect: The job completes, and reports the commit it was recorded with.
+    """
     run = run_json(client_home, str(checkout["work"] / "job_script.py"),
                    ["--project", project, "--name", new_name("clone-job"), "--git", "--scalars", "2"])
     jobs.enqueue(client_home, run["task_id"])
     api = workspace.device_api(client_home)
-    record = jobs.wait_for(api, run["task_id"], jobs.FINAL, timeout=900)
+    record = jobs.wait_for(api, run["task_id"], jobs.FINAL)
     assert record["status"] == "completed", record.get("status_message")
     assert record["execution"]["commit"] == checkout["commit"]
 
 
 def test_repository_on_github_is_refused_at_enqueue_without_the_app(client_home, project, checkout):
-    """E2E.md and README: a job whose repository is on GitHub is refused when enqueued unless the GitHub App is set up."""
+    """E2E.md and README: a job whose repository is on GitHub is refused when enqueued unless the GitHub App is set up.
+
+    Expect: The enqueue is refused, and its message names GitHub.
+    """
     work = checkout["work"]
     git.git(work, "remote", "set-url", "origin", "https://github.com/e2e-owner/e2e-repo.git")
     try:
@@ -123,7 +149,10 @@ def _github_checkout(root: Path, repo: str) -> Path:
 
 @pytest.mark.github
 def test_private_repository_is_refused_at_clone_time(client_home, project, tmp_path):
-    """A repository the GitHub App cannot read: the job fails at its clone, with a message, and no token is logged."""
+    """A repository the GitHub App cannot read: the job fails at its clone, with a message, and no token is logged.
+
+    Expect: The job fails at its clone with a message, and no token appears in the message.
+    """
     repo = os.environ.get("MLOPS_E2E_GITHUB_PRIVATE_REPO")
     if not repo:
         pytest.skip("set MLOPS_E2E_GITHUB_PRIVATE_REPO to a repository this App cannot read")
@@ -132,14 +161,17 @@ def test_private_repository_is_refused_at_clone_time(client_home, project, tmp_p
                    ["--project", project, "--name", new_name("private-repo"), "--git", "--scalars", "1"])
     jobs.enqueue(client_home, run["task_id"])
     api = workspace.device_api(client_home)
-    record = jobs.wait_for(api, run["task_id"], jobs.FINAL, timeout=300)
+    record = jobs.wait_for(api, run["task_id"], jobs.FINAL)
     assert record["status"] == "failed"
     assert "x-access-token" not in str(record.get("status_message", ""))
 
 
 @pytest.mark.github
 def test_a_client_device_cannot_get_a_repository_token(client_home, project, tmp_path):
-    """Repository tokens go to a job or to its agent, never to a person's machine."""
+    """Repository tokens go to a job or to its agent, never to a person's machine.
+
+    Expect: The request for a repository token is refused with 401 or 403.
+    """
     repo = os.environ.get("MLOPS_E2E_GITHUB_REPO")
     if not repo:
         pytest.skip("set MLOPS_E2E_GITHUB_REPO to a repository the App can read")

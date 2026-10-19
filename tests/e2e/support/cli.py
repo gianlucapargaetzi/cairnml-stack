@@ -54,7 +54,7 @@ def run(command: str, home: Path, *, login_user="", login_password="", timeout=2
     return Result(proc.returncode, proc.stdout, proc.stderr)
 
 
-def python(script: Path, home: Path, *, args=(), timeout=600, extra_env=None) -> Result:
+def python(script: Path, home: Path, *, args=(), timeout=300, extra_env=None) -> Result:
     """Runs a script with the venv's Python, in the isolated HOME, so it sees the enrolled configuration."""
     env = environment(home)
     env.update(extra_env or {})

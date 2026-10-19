@@ -20,6 +20,10 @@ def fresh_home(tmp_path):
 
 
 def test_init_enrols_the_machine_and_writes_its_key(client_home):
+    """Enrolment through the sign-in page writes the device key and the configuration.
+
+    Expect: The key file exists and is readable by its owner only (0600); the configuration names a device and the server.
+    """
     key = client.key_path(client_home)
     assert key.is_file(), "the device key was not written"
     assert stat.S_IMODE(os.stat(key).st_mode) == 0o600, "the device key must be readable by its owner only"
@@ -29,6 +33,10 @@ def test_init_enrols_the_machine_and_writes_its_key(client_home):
 
 
 def test_whoami_names_the_admin_and_the_device(client_home, admin_account):
+    """whoami shows the signed-in admin and the device.
+
+    Expect: The command exits 0, and its output names the admin account and the device id.
+    """
     result = client.whoami(client_home)
     assert result.returncode == 0, result.output
     assert admin_account[0] in result.stdout
@@ -36,13 +44,20 @@ def test_whoami_names_the_admin_and_the_device(client_home, admin_account):
 
 
 def test_whoami_uses_the_device_key_without_a_browser(client_home):
-    """whoami must not open a sign-in page: a browser command that fails the test if it is run."""
+    """whoami must not open a sign-in page: a browser command that fails the test if it is run.
+
+    Expect: The command exits 0 and prints no sign-in prompt, with no browser available to it.
+    """
     result = cli.run("clearml-whoami", client_home, extra_env={"BROWSER": "/bin/false"})
     assert result.returncode == 0, result.output
     assert "sign" not in result.stdout.lower()
 
 
 def test_init_again_without_force_is_refused(client_home, admin_account):
+    """A second enrolment without --force is refused.
+
+    Expect: The command fails with 'already enrolled', and the device key is unchanged.
+    """
     before = client.key_path(client_home).read_bytes()
     result = client.init(client_home, admin_account)
     assert result.returncode != 0
@@ -51,6 +66,10 @@ def test_init_again_without_force_is_refused(client_home, admin_account):
 
 
 def test_init_with_force_revokes_the_old_device(fresh_home, admin_account, session_home):
+    """--force replaces the device and revokes the previous one.
+
+    Expect: The new device gets a token; the old key is refused.
+    """
     first = client.init(fresh_home, admin_account, name="e2e-first")
     assert first.returncode == 0, first.output
     old_device = client.device_id_of(fresh_home)
@@ -71,6 +90,10 @@ def test_init_with_force_revokes_the_old_device(fresh_home, admin_account, sessi
 
 
 def test_logout_revokes_the_device_and_removes_its_key(fresh_home, admin_account):
+    """logout revokes the device and removes its key.
+
+    Expect: The key file is gone, and the old key is refused.
+    """
     assert client.init(fresh_home, admin_account).returncode == 0
     device = client.device_id_of(fresh_home)
     key_path = client.key_path(fresh_home)
@@ -85,6 +108,10 @@ def test_logout_revokes_the_device_and_removes_its_key(fresh_home, admin_account
 
 
 def test_whoami_after_logout_says_not_enrolled(fresh_home, admin_account):
+    """whoami after logout says the machine is not enrolled.
+
+    Expect: The command exits 1 and says 'not enrolled'.
+    """
     assert client.init(fresh_home, admin_account).returncode == 0
     assert client.logout(fresh_home).returncode == 0
     result = client.whoami(fresh_home)
@@ -93,12 +120,20 @@ def test_whoami_after_logout_says_not_enrolled(fresh_home, admin_account):
 
 
 def test_logout_on_a_machine_that_is_not_enrolled_does_nothing(fresh_home):
+    """logout on a machine that is not enrolled does nothing.
+
+    Expect: The command exits 0 and says 'nothing to sign out'.
+    """
     result = client.logout(fresh_home)
     assert result.returncode == 0
     assert "nothing to sign out" in result.output
 
 
 def test_init_with_an_unreachable_server_writes_nothing(fresh_home, admin_account):
+    """An enrolment against an unreachable server writes nothing.
+
+    Expect: The command fails with 'cannot reach' and no key file is written.
+    """
     result = client.init(fresh_home, admin_account, server="http://127.0.0.1:9", name="e2e-nowhere")
     assert result.returncode != 0
     assert "cannot reach" in result.output
@@ -110,6 +145,8 @@ def test_init_accepts_the_web_address_and_finds_the_api(fresh_home, admin_accoun
 
     The derivation is for the default ports. The suite's stack runs on other ports (it cannot hold 8008 and 8080 while
     a stack under deploy/ does), so the test is run only where the ports are the defaults.
+
+    Expect: The configuration names the API address. The suite skips this test on ports other than the defaults.
     """
     if not settings.WEB_URL.endswith(":8080"):
         pytest.skip("the API address is derived from the web address for ports 8080/8008 only; this stack uses others")
@@ -120,6 +157,10 @@ def test_init_accepts_the_web_address_and_finds_the_api(fresh_home, admin_accoun
 
 
 def test_member_enrols_as_a_plain_user(fresh_home, member_account):
+    """A plain user can enrol a machine.
+
+    Expect: Enrolment succeeds; whoami names the user, who is not an admin.
+    """
     result = client.init(fresh_home, member_account, name="e2e-member-laptop")
     assert result.returncode == 0, result.output
     who = client.whoami(fresh_home)

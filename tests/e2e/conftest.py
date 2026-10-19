@@ -1,13 +1,17 @@
 """Shared fixtures for the end-to-end suite.
 
-The suite starts its own stack for the session (support/stack.py): a separate compose project, with its own
-state, accounts and ports. Nothing here touches deploy/ or the stack it runs. Every session gets its own HOME,
-so the machine's real ~/.clearml is never touched, and the test devices are enrolled through the real sign-in
-page.
+The suite runs against its own stack (support/stack.py): a separate compose project, with its own state, accounts and
+ports. Nothing here touches deploy/ or the stack it runs. Every session gets its own HOME, so the machine's real
+~/.clearml is never touched, and the test devices are enrolled through the real sign-in page.
 
 Set MLOPS_E2E_KEEP_STACK=1 to leave the stack running after the session, for debugging.
+Set MLOPS_E2E_REUSE_STACK=1 to keep the stack running for the next session (see E2E.md, speed section, item 1). A reused
+stack is reset at the start of each run, through the suite's own reset (system.e2e_reset, off unless the stack is the
+suite's).
+Each session writes the report to tests/e2e/reports/ (support/report.py).
 """
 
+import fcntl
 import os
 import shutil
 import tempfile
@@ -17,16 +21,21 @@ import pytest
 import requests
 
 from support import agent, client, settings, workspace
+from support import report as e2e_report
 from support.keycloak import Keycloak
-from support.stack import IsolatedStack, StackError
+from support.stack import REUSE_DIR, IsolatedStack, StackError, reuse_requested
 
 # The browsers are installed in the real home; the SDK and the CLI run with a throwaway one.
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", settings.BROWSERS_PATH)
+
+# How long an agent may take to show up as a worker: its first sync is at most a couple of seconds away.
+REGISTRATION_TIMEOUT = 60
 
 
 def pytest_collection_modifyitems(config, items):
     """Tests marked github need a GitHub repository this machine can reach. They are skipped unless
     MLOPS_E2E_GITHUB_REPO names one (see E2E.md)."""
+    e2e_report.collect(items)
     if settings.github_tests_enabled():
         return
     skip = pytest.mark.skip(reason="needs a reachable GitHub repository: set MLOPS_E2E_GITHUB_REPO (E2E.md)")
@@ -35,9 +44,21 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip)
 
 
+def pytest_runtest_logreport(report):
+    """Every phase of every test goes into the report (support/report.py)."""
+    e2e_report.record(report)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    e2e_report.write()
+
+
 @pytest.fixture(scope="session", autouse=True)
-def isolated_stack():
-    """Starts the suite's own stack, and removes it (containers, volumes, state folder) when the session ends."""
+def isolated_stack(request):
+    """Starts the suite's own stack, and removes it (containers, volumes, state folder) when the session ends, unless
+    it is reused. With pytest-xdist every worker needs the same stack, so the workers require a reused one."""
+    if hasattr(request.config, "workerinput") and not reuse_requested():
+        pytest.exit("Parallel runs (-n) need MLOPS_E2E_REUSE_STACK=1: every worker must find the same stack.", returncode=2)
     stack = IsolatedStack(keep=bool(os.environ.get("MLOPS_E2E_KEEP_STACK")))
     try:
         stack.start()
@@ -128,6 +149,36 @@ def client_home(session_home, admin_account):
     client.logout(session_home)
 
 
+@pytest.fixture(scope="session", autouse=True)
+def fresh_records(stack, client_home):
+    """On a reused stack, removes what the earlier sessions left, with the suite's own reset (system.e2e_reset).
+
+    It runs before any module, so no agent or project of this run exists yet. With pytest-xdist every worker runs this
+    fixture, but the workers share one run id: the first to take the lock resets, and the others wait and then skip.
+    """
+    if not reuse_requested():
+        yield
+        return
+    run_id = os.environ.get("PYTEST_XDIST_TESTRUNUID") or f"single-{os.getpid()}"
+    REUSE_DIR.mkdir(parents=True, exist_ok=True)
+    marker = REUSE_DIR / f"reset-{run_id}"
+    with open(marker, "a+") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        handle.seek(0)
+        if handle.read().strip() != "done":
+            try:
+                workspace.device_api(client_home).authed("system.e2e_reset", {"prefix": settings.PREFIX})
+            except Exception as exc:
+                pytest.exit(f"The reused test stack could not be reset: {exc}", returncode=2)
+            handle.seek(0)
+            handle.truncate()
+            handle.write("done")
+            handle.flush()
+    yield
+    if not os.environ.get("PYTEST_XDIST_TESTRUNUID"):
+        marker.unlink(missing_ok=True)
+
+
 @pytest.fixture(scope="session")
 def job_agent(tmp_path_factory, admin_account, client_home):
     """One managed agent for the session's job tests: enrolled and started once, shared by the modules that run jobs.
@@ -138,7 +189,8 @@ def job_agent(tmp_path_factory, admin_account, client_home):
     assert agent.init(machine.home, admin_account).returncode == 0
     machine.start()
     api = workspace.device_api(client_home)
-    assert machine.wait_until(lambda: worker_record(api, machine.worker_name), timeout=240), machine.log()[-2000:]
+    assert machine.wait_until(lambda: worker_record(api, machine.worker_name), timeout=REGISTRATION_TIMEOUT), \
+        machine.log()[-2000:]
     yield machine
     machine.stop()
 

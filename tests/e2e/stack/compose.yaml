@@ -25,8 +25,8 @@ services:
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${E2E_KC_ADMIN}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${E2E_KC_ADMIN_PASSWORD}
-      KC_HOSTNAME: http://127.0.0.1:${E2E_IDP_PORT}
-      KC_HTTP_HOST: 127.0.0.1
+      KC_HOSTNAME: http://${E2E_HOST}:${E2E_IDP_PORT}
+      KC_HTTP_HOST: ${E2E_BIND}
       KC_HTTP_PORT: ${E2E_IDP_PORT}
       KC_HTTP_MANAGEMENT_PORT: ${E2E_IDP_MANAGEMENT_PORT}
       KC_HOSTNAME_STRICT: "false"
@@ -42,7 +42,7 @@ services:
     environment:
       RUSTFS_ACCESS_KEY: ${E2E_RUSTFS_USER}
       RUSTFS_SECRET_KEY: ${E2E_RUSTFS_PASSWORD}
-      RUSTFS_ADDRESS: 127.0.0.1:${E2E_STORAGE_PORT}
+      RUSTFS_ADDRESS: ${E2E_BIND}:${E2E_STORAGE_PORT}
       RUSTFS_CONSOLE_ENABLE: "false"
     volumes:
       - ${E2E_STATE}/data/rustfs:/data
@@ -128,7 +128,7 @@ services:
       - idp
     environment:
       CLEARML_SECRETS_DIR: /run/secrets-dir
-      CLEARML__apiserver__listen__ip: 127.0.0.1
+      CLEARML__apiserver__listen__ip: ${E2E_BIND}
       CLEARML__apiserver__listen__port: ${E2E_API_PORT}
       CLEARML_ELASTIC_SERVICE_HOST: 127.0.0.1
       CLEARML_ELASTIC_SERVICE_PORT: ${E2E_ES_PORT}
@@ -137,9 +137,9 @@ services:
       CLEARML_REDIS_SERVICE_HOST: 127.0.0.1
       CLEARML_REDIS_SERVICE_PORT: ${E2E_REDIS_PORT}
       CLEARML_SERVER_DEPLOYMENT_TYPE: linux
-      CLEARML__apiserver__idp__issuer: http://127.0.0.1:${E2E_IDP_PORT}/realms/mlops
-      CLEARML__apiserver__idp__public_url: http://127.0.0.1:${E2E_API_PORT}
-      CLEARML__apiserver__idp__web_url: http://127.0.0.1:${E2E_WEB_PORT}
+      CLEARML__apiserver__idp__issuer: http://${E2E_HOST}:${E2E_IDP_PORT}/realms/mlops
+      CLEARML__apiserver__idp__public_url: http://${E2E_HOST}:${E2E_API_PORT}
+      CLEARML__apiserver__idp__web_url: http://${E2E_HOST}:${E2E_WEB_PORT}
       CLEARML__apiserver__idp__web_client_id: clearml-web
       CLEARML__apiserver__idp__sdk_client_id: clearml-sdk
       CLEARML__apiserver__idp__directory_client_id: clearml-server
@@ -150,8 +150,16 @@ services:
       CLEARML__apiserver__idp__github_api_url: https://api.github.com
       CLEARML__services__async_urls_delete__enabled: "true"
       CLEARML__apiserver__storage__endpoint: http://127.0.0.1:${E2E_STORAGE_PORT}
-      CLEARML__apiserver__storage__public_endpoint: http://127.0.0.1:${E2E_STORAGE_PORT}
+      CLEARML__apiserver__storage__public_endpoint: http://${E2E_HOST}:${E2E_STORAGE_PORT}
       CLEARML__apiserver__storage__access_key: ${E2E_S3_ACCESS_KEY}
+      # Timers of the test stack only (see E2E.md, speed section, items 3 and 4): a stopped agent is lost after about 6 s,
+      # and the directory is read every 5 s. The production defaults are in clearml-server's config.
+      CLEARML__services__scheduler__sync_interval_sec: "2"
+      CLEARML__services__scheduler__sweep_interval_sec: "1"
+      CLEARML__apiserver__idp__sync_interval_sec: "5"
+      # The suite's reset (system.e2e_reset) is off by default in the server; the suite's own stack turns it on.
+      CLEARML__apiserver__e2e__reset_enabled: "true"
+      CLEARML__apiserver__e2e__name_prefix: "e2e"
     volumes:
       - ${E2E_STATE}/data/logs:/var/log/clearml
       - ${E2E_STATE}/secrets:/run/secrets-dir:ro
@@ -174,7 +182,7 @@ services:
       CLEARML_REDIS_SERVICE_PORT: ${E2E_REDIS_PORT}
       CLEARML_SERVER_DEPLOYMENT_TYPE: linux
       CLEARML__apiserver__storage__endpoint: http://127.0.0.1:${E2E_STORAGE_PORT}
-      CLEARML__apiserver__storage__public_endpoint: http://127.0.0.1:${E2E_STORAGE_PORT}
+      CLEARML__apiserver__storage__public_endpoint: http://${E2E_HOST}:${E2E_STORAGE_PORT}
       CLEARML__apiserver__storage__access_key: ${E2E_S3_ACCESS_KEY}
       CLEARML__services__async_urls_delete__enabled: "true"
     volumes:

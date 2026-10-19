@@ -1,15 +1,22 @@
-"""The suite's own stack: started for each test session, and removed at its end.
+"""The suite's own stack: started for a test session, and removed at its end, or kept for the next one.
 
 The stack is a separate compose project (tests/e2e/stack/compose.yaml) with:
 - its own state folder (data, secrets, the realm copy), created in a temporary directory;
-- its own accounts: the admin's password is generated for the session;
-- its own ports, on this machine's network address (found from the default route), so nothing needs /etc/hosts
-  and nothing is shared with the stack under deploy/.
+- its own accounts: the admin's password is generated for the stack;
+- its own ports, on the loopback address, so nothing needs /etc/hosts and nothing is shared with the stack under
+  deploy/.
 
 Only the Docker daemon and the image cache are shared with the rest of the machine. The clearml-server image is
 the one the deploy/ stack builds; the suite does not change it.
+
+Reuse (MLOPS_E2E_REUSE_STACK=1, see E2E.md, speed section item 1): the stack keeps its state, ports and accounts in
+REUSE_DIR and is left running at the end of the session. The next session finds it healthy and starts at once. It is
+rebuilt and restarted only when the server or web sources, or the compose file, have changed since it was started.
+Stop it with `python -m support.stack --stop` (run in tests/e2e).
 """
 
+import fcntl
+import hashlib
 import json
 import os
 import random
@@ -17,8 +24,10 @@ import secrets
 import shutil
 import socket
 import subprocess
+import sys
 import tempfile
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 import requests
@@ -26,11 +35,18 @@ import requests
 from . import settings
 
 PROJECT_PREFIX = "mlops-e2e"
+REPO = Path(__file__).resolve().parents[3]
 COMPOSE_FILE = Path(__file__).resolve().parents[1] / "stack" / "compose.yaml"
-REALM_TEMPLATE = Path(__file__).resolve().parents[3] / "deploy" / "idp" / "realm-mlops.json"
-STORAGE_SCRIPT = Path(__file__).resolve().parents[3] / "deploy" / "storage" / "init.py"
-NGINX_TEMPLATE = Path(__file__).resolve().parents[3] / "clearml-server" / "docker" / "build" / "internal_files" / "clearml.conf.template"
+REALM_TEMPLATE = REPO / "deploy" / "idp" / "realm-mlops.json"
+STORAGE_SCRIPT = REPO / "deploy" / "storage" / "init.py"
+NGINX_TEMPLATE = REPO / "clearml-server" / "docker" / "build" / "internal_files" / "clearml.conf.template"
+SOURCE_REPOS = (REPO / "clearml-server", REPO / "clearml-web")
 ADMIN_NAME = "e2e-admin"
+
+# A reused stack lives here: its state folder, its ports and accounts (stack.json), and the lock for starting it.
+REUSE_DIR = Path(os.environ.get("MLOPS_E2E_STATE_DIR") or settings.REAL_HOME / ".cache" / "mlops-e2e-stack")
+REUSE_FILE = REUSE_DIR / "stack.json"
+START_LOCK = REUSE_DIR / "start.lock"
 
 # Owners of the data folders inside the containers (the same as deploy/scripts/bootstrap.sh).
 DATA_OWNERS = {"idp": "1000:1000", "rustfs": "10001:10001", "mongo": "999:999", "redis": "999:999",
@@ -44,6 +60,15 @@ class StackError(Exception):
 # The stack runs on the loopback interface only, so the same addresses work for the containers (host networking),
 # the suite, the browser and the agent. Nothing depends on this machine's network address.
 LOOPBACK = "127.0.0.1"
+# Where the stack is reached from the suite, the browser and the agent (HOST), and where its services listen (BIND).
+# On the host both are the loopback address. In the isolated environment (tests/e2e/docker) the stack runs in the nested
+# daemon, so HOST is that container's name and BIND is every address of it.
+HOST = os.environ.get("MLOPS_E2E_HOST") or LOOPBACK
+BIND = os.environ.get("MLOPS_E2E_BIND") or LOOPBACK
+
+
+def reuse_requested() -> bool:
+    return os.environ.get("MLOPS_E2E_REUSE_STACK", "").lower() in ("1", "true", "yes")
 
 
 def _port_free(host: str, port: int) -> bool:
@@ -68,19 +93,79 @@ def pick_ports(host: str, count: int = 9) -> list:
     raise StackError("no free ports for the test stack")
 
 
+def source_fingerprint() -> str:
+    """What the stack was built from: the commits and the uncommitted changes of the server and web sources, and the
+    compose file. A stack started from other sources is rebuilt; the data is kept."""
+    digest = hashlib.sha256()
+    for repo in SOURCE_REPOS:
+        for args in (["rev-parse", "HEAD"], ["diff", "HEAD"], ["status", "--porcelain"]):
+            digest.update(subprocess.run(["git", "-C", str(repo), *args], capture_output=True, timeout=120).stdout)
+    digest.update(COMPOSE_FILE.read_bytes())
+    return digest.hexdigest()
+
+
 class IsolatedStack:
-    def __init__(self, keep: bool = False):
+    def __init__(self, keep: bool = False, reuse: bool = None):
         self.keep = keep
-        self.host = LOOPBACK
-        self.state = Path(tempfile.mkdtemp(prefix="mlops-e2e-stack-"))
-        api, web, idp, idp_mgmt, storage, mongo, redis, es, es_transport = pick_ports(self.host)
-        self.ports = {"api": api, "web": web, "idp": idp, "idp_mgmt": idp_mgmt, "storage": storage,
-                      "mongo": mongo, "redis": redis, "es": es, "es_transport": es_transport}
-        self.admin_password = secrets.token_urlsafe(18)
-        self.rustfs_password = secrets.token_urlsafe(18)
-        self.s3_access = "e2e-server"
-        # One compose project per session, so two sessions never share containers or networks.
-        self.project = f"{PROJECT_PREFIX}-{secrets.token_hex(3)}"
+        self.reuse = reuse_requested() if reuse is None else reuse
+        self.host = HOST
+        saved = self._read_saved() if self.reuse else None
+        if saved:
+            self.state = Path(saved["state"])
+            self.ports = saved["ports"]
+            self.admin_password = saved["admin_password"]
+            self.rustfs_password = saved["rustfs_password"]
+            self.s3_access = saved["s3_access"]
+            self.project = saved["project"]
+            self.started_from = saved.get("fingerprint")
+        else:
+            if self.reuse:
+                # A state folder without its record is from a start that did not finish: its accounts are unknown.
+                self._remove_state_folder(REUSE_DIR / "state")
+                REUSE_DIR.mkdir(parents=True, exist_ok=True)
+                self.state = REUSE_DIR / "state"
+            else:
+                self.state = Path(tempfile.mkdtemp(prefix="mlops-e2e-stack-"))
+            api, web, idp, idp_mgmt, storage, mongo, redis, es, es_transport = pick_ports(BIND)
+            self.ports = {"api": api, "web": web, "idp": idp, "idp_mgmt": idp_mgmt, "storage": storage,
+                          "mongo": mongo, "redis": redis, "es": es, "es_transport": es_transport}
+            self.admin_password = secrets.token_urlsafe(18)
+            self.rustfs_password = secrets.token_urlsafe(18)
+            self.s3_access = "e2e-server"
+            # One compose project per stack: two stacks never share containers or networks.
+            self.project = f"{PROJECT_PREFIX}-{secrets.token_hex(3)}"
+            self.started_from = None
+        self.fingerprint = None
+
+    # --- the reused stack's record -----------------------------------------------------------------------------------
+
+    @staticmethod
+    def _read_saved():
+        if not REUSE_FILE.exists():
+            return None
+        return json.loads(REUSE_FILE.read_text())
+
+    def _save(self, fingerprint: str) -> None:
+        REUSE_DIR.mkdir(parents=True, exist_ok=True)
+        record = {"state": str(self.state), "ports": self.ports, "admin_password": self.admin_password,
+                  "rustfs_password": self.rustfs_password, "s3_access": self.s3_access, "project": self.project,
+                  "fingerprint": fingerprint}
+        REUSE_FILE.write_text(json.dumps(record))
+        REUSE_FILE.chmod(0o600)
+
+    @contextmanager
+    def _start_lock(self):
+        """Two workers (or two sessions) that find the reused stack down must not start it twice."""
+        if not self.reuse:
+            yield
+            return
+        REUSE_DIR.mkdir(parents=True, exist_ok=True)
+        with open(START_LOCK, "w") as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle, fcntl.LOCK_UN)
 
     # --- URLs as the suite (and the containers) see them -----------------------------------------------------------
 
@@ -112,6 +197,8 @@ class IsolatedStack:
             (self.state / folder).mkdir(parents=True, exist_ok=True)
         for name in ("token_secret", "session_secret", "s3_secret_key"):
             path = self.state / "secrets" / name
+            if self.reuse and path.exists():
+                continue  # a reused stack keeps its secrets: the server's tokens stay valid across sessions
             path.write_text(secrets.token_urlsafe(48))
             path.chmod(0o600)
         shutil.copy(STORAGE_SCRIPT, self.state / "init.py")
@@ -124,7 +211,7 @@ class IsolatedStack:
     def _write_nginx_template(self) -> None:
         """The web server's nginx template, as the server image has it, listening on this stack's port."""
         text = NGINX_TEMPLATE.read_text()
-        text = text.replace("listen       80 default_server;", f"listen       {LOOPBACK}:{self.ports['web']} default_server;")
+        text = text.replace("listen       80 default_server;", f"listen       {BIND}:{self.ports['web']} default_server;")
         text = text.replace("listen       [::]:80 default_server;", "")
         folder = self.state / "nginx"
         folder.mkdir(exist_ok=True)
@@ -148,6 +235,8 @@ class IsolatedStack:
             "E2E_ES_PORT": str(self.ports["es"]),
             "E2E_ES_TRANSPORT_PORT": str(self.ports["es_transport"]),
             "E2E_STATE": str(self.state),
+            "E2E_HOST": self.host,
+            "E2E_BIND": BIND,
             "E2E_API_PORT": str(self.ports["api"]),
             "E2E_WEB_PORT": str(self.ports["web"]),
             "E2E_IDP_PORT": str(self.ports["idp"]),
@@ -173,21 +262,51 @@ class IsolatedStack:
             subprocess.run(["docker", "run", "--rm", "-v", f"{self.state}/data:/data", "alpine:3.20", "sh", "-c",
                             f"chown -R {owner} /data/{folder}"], capture_output=True, timeout=300)
 
+    def healthy(self) -> bool:
+        """Whether the stack answers now. Checked with short timeouts: a stack that is down fails at once."""
+        checks = (
+            lambda: requests.post(f"{self.api_url}/v2.8/login.supported_modes", json={}, timeout=3).status_code == 200,
+            lambda: requests.get(self.web_url + "/", timeout=3).status_code == 200,
+            lambda: requests.get(f"{self.idp_url}/realms/mlops/.well-known/openid-configuration",
+                                 timeout=3).status_code == 200,
+            lambda: requests.get(self.storage_url + "/health", timeout=3).status_code == 200,
+        )
+        for check in checks:
+            try:
+                if not check():
+                    return False
+            except requests.RequestException:
+                return False
+        return True
+
     def start(self) -> None:
         self.configure_settings()
-        self.prepare()
-        self._chown_data()
-        result = self.compose("up", "-d", "idp")
-        if result.returncode != 0:
-            raise StackError(f"cannot start the sign-in service:\n{result.stderr[-3000:]}")
-        self._wait(lambda: requests.get(f"{self.idp_url}/realms/mlops/.well-known/openid-configuration",
-                                        timeout=10).status_code == 200, 240, "the sign-in service")
-        self._identity()
-        result = self.compose("up", "-d", "--build")
-        if result.returncode != 0:
-            raise StackError(f"cannot start the ClearML server:\n{result.stderr[-3000:]}")
-        self._wait(self._api_answers, 600, "the ClearML API")
-        self._wait(lambda: requests.get(self.web_url + "/", timeout=10).status_code == 200, 300, "the web app")
+        self.fingerprint = source_fingerprint() if self.reuse else None
+        if self.reuse and self.healthy() and self.started_from == self.fingerprint:
+            return  # kept running from an earlier session, built from the same sources
+        with self._start_lock():
+            if self.reuse and self.healthy() and (self._read_saved() or {}).get("fingerprint") == self.fingerprint:
+                return  # another worker or session started it while this one waited for the lock
+            self.prepare()
+            if not self.reuse or not self._initialised():
+                self._chown_data()
+            result = self.compose("up", "-d", "idp")
+            if result.returncode != 0:
+                raise StackError(f"cannot start the sign-in service:\n{result.stderr[-3000:]}")
+            self._wait(lambda: requests.get(f"{self.idp_url}/realms/mlops/.well-known/openid-configuration",
+                                            timeout=10).status_code == 200, 240, "the sign-in service")
+            self._identity()
+            result = self.compose("up", "-d", "--build")
+            if result.returncode != 0:
+                raise StackError(f"cannot start the ClearML server:\n{result.stderr[-3000:]}")
+            self._wait(self._api_answers, 600, "the ClearML API")
+            self._wait(lambda: requests.get(self.web_url + "/", timeout=10).status_code == 200, 300, "the web app")
+            if self.reuse:
+                self._save(self.fingerprint)
+
+    def _initialised(self) -> bool:
+        saved = self._read_saved()
+        return bool(saved) and saved.get("state") == str(self.state)
 
     def _identity(self) -> None:
         """The admin account (a realm user with the mlops-admin role) and the secret the server reads users with."""
@@ -222,11 +341,15 @@ class IsolatedStack:
                     return
             except requests.RequestException:
                 pass
-            time.sleep(3)
+            time.sleep(1)
         logs = self.compose("logs", "--tail", "40").stdout[-3000:]
         raise StackError(f"{what} did not become ready in {timeout:.0f} s. Recent logs:\n{logs}")
 
     def stop(self) -> None:
+        if self.reuse:
+            print(f"\nthe test stack is kept running for the next session: {self.api_url} "
+                  f"(stop it with: python -m support.stack --stop)")
+            return
         if self.keep:
             print(f"\nthe test stack is kept: {self.api_url} (state folder {self.state})")
             return
@@ -234,13 +357,46 @@ class IsolatedStack:
         self._remove_networks()
         self._remove_state()
 
+    @classmethod
+    def stop_reused(cls) -> None:
+        """Stops and removes the reused stack, with its state and record."""
+        if not REUSE_FILE.exists():
+            print("no reused test stack")
+            return
+        stack = cls(reuse=True)
+        stack.compose("down", "--volumes", "--remove-orphans", timeout=600)
+        stack._remove_networks()
+        stack._remove_state()
+        REUSE_FILE.unlink(missing_ok=True)
+        print("the reused test stack is removed")
+
     def _remove_networks(self) -> None:
-        """Removes this session's networks that no container uses. A run that failed early can leave them behind."""
+        """Removes this stack's networks that no container uses. A run that failed early can leave them behind."""
         subprocess.run(["docker", "network", "prune", "-f", "--filter",
                         f"label=com.docker.compose.project={self.project}"], capture_output=True, timeout=120)
 
     def _remove_state(self) -> None:
+        self._remove_state_folder(self.state)
+
+    @staticmethod
+    def _remove_state_folder(folder: Path) -> None:
         """The containers wrote files as their own users; give them back to this user before removing them."""
-        subprocess.run(["docker", "run", "--rm", "-v", f"{self.state}:/state", "alpine:3.20", "sh", "-c",
+        if not folder.exists():
+            return
+        subprocess.run(["docker", "run", "--rm", "-v", f"{folder}:/state", "alpine:3.20", "sh", "-c",
                         f"chown -R {os.getuid()}:{os.getgid()} /state"], capture_output=True, timeout=300)
-        shutil.rmtree(self.state, ignore_errors=True)
+        shutil.rmtree(folder, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    if "--stop" in sys.argv:
+        IsolatedStack.stop_reused()
+    elif "--status" in sys.argv:
+        saved = IsolatedStack._read_saved()
+        if not saved:
+            print("no reused test stack")
+        else:
+            stack = IsolatedStack(reuse=True)
+            print(f"reused test stack at {stack.api_url}: {'answering' if stack.healthy() else 'not answering'}")
+    else:
+        print("usage: python -m support.stack --status | --stop")
