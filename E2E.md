@@ -24,7 +24,7 @@ On the machine that runs the suite:
   playwright install chromium   # or reuse a browser already in the Playwright cache
   ```
 
-- Port range 18000 to 18999 free on this machine's network address (the suite picks four ports there).
+- Nine free ports in 18000 to 18999 on the loopback interface (`127.0.0.1`). The suite chooses them itself.
 
 Optional, for the GitHub tests: `MLOPS_E2E_GITHUB_REPO=owner/name` names a repository on github.com that the GitHub
 App can read; `MLOPS_E2E_GITHUB_PRIVATE_REPO=owner/name` names one it cannot. Without them, the `github`-marked tests
@@ -53,8 +53,8 @@ the stack and its state folder are left in place, and the session prints where t
 | Part | Isolation |
 |---|---|
 | Compose project | Named `mlops-e2e-<random>` for each session, so two sessions never share containers or networks. |
-| Address | This machine's address on its default route (for example `192.0.2.10`), not `127.0.0.1` and not host names. Containers and the host both reach it, so nothing is added to `/etc/hosts`. |
-| Ports | Four random free ports in 18000 to 18999. Nothing in the stack binds the ports 8008, 8080, 8180 or 9000 that `deploy/` uses. |
+| Address | The loopback interface, `127.0.0.1`, only. Every service runs with host networking, so the containers and the host use the same addresses. The machine's own network address is never used, so a change of network does not affect the suite, and nothing is added to `/etc/hosts`. |
+| Ports | Nine random free ports in 18000 to 18999: the API, the web app, the sign-in service and its management port, object storage, MongoDB, Redis, and Elasticsearch's HTTP and transport ports. Nothing in the stack uses the ports 8008, 8080, 8180 or 9000 that `deploy/` uses. |
 | State | A temporary folder: data of Keycloak, RustFS, MongoDB, Redis and Elasticsearch, the secrets, and a copy of the realm with this stack's addresses. Removed at the end of the session. |
 | Secrets | Generated for each session (token, session, S3 key). The directory-sync secret is read from the stack's own Keycloak. |
 | Accounts | The admin (`e2e-admin`) gets a password generated for the session. It is a realm user with the `mlops-admin` role. The plain user of each session is created and removed by the suite. |
@@ -99,14 +99,16 @@ around them:
 | Part | What it does |
 |---|---|
 | `conftest.py` | Starts the stack for the session (autouse), checks that its services answer, gives each session its own `HOME`, and enrols the test client through the real sign-in page. Creates the session project and deletes it, with its contents, at the end. |
-| `support/stack.py` | Address, ports, state folder, secrets, realm copy, compose calls, the identity bootstrap, health waits and teardown. |
+| `support/stack.py` | Ports, state folder, secrets, realm copy, nginx template, compose calls, the identity bootstrap, health waits, teardown, and removal of the session's unused networks. |
+| `stack/prune-networks.sh` | Removes every Docker network that no container uses, after showing them. Run it by hand after an interrupted run. |
 | `support/settings.py` | Addresses and accounts of the running stack. Set at session start by `configure()`; nothing is read from `deploy/`. |
 | `support/cli.py` | Runs the venv's console scripts and the example scripts with the session's `HOME`. Sets `BROWSER` so the sign-in page is opened by the headless browser (`support/browser.py`). |
 | `support/browser.py` | Fills the identity provider's sign-in form in headless Chromium, as a person would. |
 | `support/web.py` | Signs in to the web app in a fresh browser context. |
 | `support/keycloak.py` | Creates, disables and removes the test accounts through Keycloak's admin API. |
 | `support/api.py` | REST calls as a device: signs the assertion with the device key and exchanges it for a token. |
-| `support/agent.py` | A machine that runs jobs: its own `HOME`, `clearml-agent init` answered on stdin, and the managed daemon as a process. |
+| `support/client.py` | A person's machine: `client.init()` runs `clearml-init`, and `whoami`, `logout` and the key helpers. |
+| `support/agent.py` | A machine that runs jobs: `agent.init()` runs `clearml-agent init` (answered on stdin), and `AgentMachine` runs the managed daemon as a process. |
 | `support/git.py` | Local git repositories: a bare remote and a checkout of it. |
 | `support/workspace.py`, `support/jobs.py` | Running the example scripts and reading their JSON result; enqueueing and following jobs. |
 | `scripts/` | The example scripts the tests run. Each prints one JSON line at the end. They are written as user code, so they also serve as examples. |

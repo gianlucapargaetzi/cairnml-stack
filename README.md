@@ -265,5 +265,5 @@ playwright install chromium
 .venv/bin/pytest tests/e2e -k artifacts    # one area
 ```
 
-The suite does not use `deploy/`. It needs Docker, a free port range of 18000 to 18999 on this machine, and the forks
+The suite does not use `deploy/`. It needs Docker, nine free ports in 18000 to 18999 on the loopback interface, and the forks
 checked out as submodules. Known failures are listed in [E2E_TESTS.md](E2E_TESTS.md) and as issues in each fork.
