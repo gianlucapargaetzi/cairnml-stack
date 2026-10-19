@@ -179,14 +179,14 @@ the database). The tracking test now deletes its own task.
 Items to pick up once the job tests run to completion. Each one says what is known and what is missing.
 
 - **A job that never starts should fail with that reason.** Today the job tests wait for a final status and give up on a
-  timeout. A job that is claimed but whose container never runs its script (its log stops after the agent is installed)
-  should fail at once with "the job did not start", naming the last step seen in the job's log. Not written yet.
-- **Why a job goes silent after the agent is installed.** In the last investigated run, the job container installed the
-  local agent, installed nothing else, and printed nothing more. The next step is to rerun one job test and inspect the
-  container while it is silent (the stack of its processes). Not done yet. The "task not found" stop that follows is a
-  consequence of the test ending and deleting its project, not the cause.
-- **Diagnostic lines in the agent.** `get_task` in `clearml-agent/clearml_agent/commands/worker.py` prints `DIAG` lines
-  while this investigation runs. They must be removed before the agent change is committed.
+  timeout. A job whose container cannot reach the server should fail at once, naming the step it reached. Not written yet.
+- **Job containers cannot reach a server on the loopback address (cause found).** The stack the suite starts listens on
+  `127.0.0.1`, and a job container runs on Docker's bridge network, where `127.0.0.1` is the container itself. The job's
+  first call, `tasks.get_by_id` in `execute`, is refused and retried for hours without output, so the job never starts.
+  The "task not found" stop seen earlier came only after the session ended and deleted the job's project.
+  Options: (a) a job container whose server address is the loopback address shares the host's network (no setting: the
+  agent decides from the address); (b) the test stack also listens on the Docker bridge address (exposes its ports on
+  every interface, so not preferred). Decision needed; (a) is the preferred option.
 - **Long jobs and the job token.** Tracked in clearml-agent issue #3, including the tests the renewal needs.
 - **Priority order.** `test_higher_priority_job_is_placed_before_a_lower_one` fails and is not explained yet
   (clearml-server issue #4).
