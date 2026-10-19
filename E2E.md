@@ -173,3 +173,20 @@ The suite does not touch the stack under `deploy/`. Earlier runs, made before th
 there, and they have been removed: the probe project (through the API), 16 workers with their scheduler records
 (directly in the database), four `no-project` tasks (through the API), and seven `e2e-member-*` user records (directly in
 the database). The tracking test now deletes its own task.
+
+## Open work
+
+Items to pick up once the job tests run to completion. Each one says what is known and what is missing.
+
+- **A job that never starts should fail with that reason.** Today the job tests wait for a final status and give up on a
+  timeout. A job that is claimed but whose container never runs its script (its log stops after the agent is installed)
+  should fail at once with "the job did not start", naming the last step seen in the job's log. Not written yet.
+- **Why a job goes silent after the agent is installed.** In the last investigated run, the job container installed the
+  local agent, installed nothing else, and printed nothing more. The next step is to rerun one job test and inspect the
+  container while it is silent (the stack of its processes). Not done yet. The "task not found" stop that follows is a
+  consequence of the test ending and deleting its project, not the cause.
+- **Diagnostic lines in the agent.** `get_task` in `clearml-agent/clearml_agent/commands/worker.py` prints `DIAG` lines
+  while this investigation runs. They must be removed before the agent change is committed.
+- **Long jobs and the job token.** Tracked in clearml-agent issue #3, including the tests the renewal needs.
+- **Priority order.** `test_higher_priority_job_is_placed_before_a_lower_one` fails and is not explained yet
+  (clearml-server issue #4).
