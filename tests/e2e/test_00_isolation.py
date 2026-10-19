@@ -21,11 +21,14 @@ def test_the_addresses_are_not_the_ones_of_the_deploy_stack():
 
 
 def test_the_api_is_served_by_this_suites_compose_project():
+    """The API container is this session's, and it listens on the loopback port the suite uses."""
     names = subprocess.run(
         ["docker", "ps", "--filter", f"label=com.docker.compose.project={settings.STACK_PROJECT}", "--format", "{{.Names}}"],
         capture_output=True, text=True, timeout=60).stdout.split()
     apiservers = [n for n in names if "apiserver" in n]
     assert len(apiservers) == 1, names
-    published = subprocess.run(["docker", "port", apiservers[0], "8008"], capture_output=True, text=True,
-                               timeout=60).stdout
-    assert _port(settings.API_URL) == int(published.strip().rsplit(":", 1)[1])
+    env = subprocess.run(["docker", "inspect", apiservers[0], "--format", "{{range .Config.Env}}{{println .}}{{end}}"],
+                         capture_output=True, text=True, timeout=60).stdout.splitlines()
+    assert f"CLEARML__apiserver__listen__port={_port(settings.API_URL)}" in env
+    assert "CLEARML__apiserver__listen__ip=127.0.0.1" in env
+    assert settings.API_URL.startswith("http://127.0.0.1:")

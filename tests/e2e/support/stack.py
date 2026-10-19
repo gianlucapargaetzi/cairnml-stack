@@ -29,6 +29,7 @@ PROJECT_PREFIX = "mlops-e2e"
 COMPOSE_FILE = Path(__file__).resolve().parents[1] / "stack" / "compose.yaml"
 REALM_TEMPLATE = Path(__file__).resolve().parents[3] / "deploy" / "idp" / "realm-mlops.json"
 STORAGE_SCRIPT = Path(__file__).resolve().parents[3] / "deploy" / "storage" / "init.py"
+NGINX_TEMPLATE = Path(__file__).resolve().parents[3] / "clearml-server" / "docker" / "build" / "internal_files" / "clearml.conf.template"
 ADMIN_NAME = "e2e-admin"
 
 # Owners of the data folders inside the containers (the same as deploy/scripts/bootstrap.sh).
@@ -40,13 +41,9 @@ class StackError(Exception):
     pass
 
 
-def host_address() -> str:
-    """This machine's address on the default route: reachable from the host and from the containers."""
-    if os.environ.get("MLOPS_E2E_HOST"):
-        return os.environ["MLOPS_E2E_HOST"]
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
-        probe.connect(("192.0.2.1", 9))  # no packet is sent; this only selects the route
-        return probe.getsockname()[0]
+# The stack runs on the loopback interface only, so the same addresses work for the containers (host networking),
+# the suite, the browser and the agent. Nothing depends on this machine's network address.
+LOOPBACK = "127.0.0.1"
 
 
 def _port_free(host: str, port: int) -> bool:
@@ -58,7 +55,7 @@ def _port_free(host: str, port: int) -> bool:
             return False
 
 
-def pick_ports(host: str, count: int = 4) -> list:
+def pick_ports(host: str, count: int = 9) -> list:
     chosen = []
     candidates = list(range(18000, 19000))
     random.shuffle(candidates)
@@ -74,10 +71,11 @@ def pick_ports(host: str, count: int = 4) -> list:
 class IsolatedStack:
     def __init__(self, keep: bool = False):
         self.keep = keep
-        self.host = host_address()
+        self.host = LOOPBACK
         self.state = Path(tempfile.mkdtemp(prefix="mlops-e2e-stack-"))
-        api, web, idp, storage = pick_ports(self.host)
-        self.ports = {"api": api, "web": web, "idp": idp, "storage": storage}
+        api, web, idp, idp_mgmt, storage, mongo, redis, es, es_transport = pick_ports(self.host)
+        self.ports = {"api": api, "web": web, "idp": idp, "idp_mgmt": idp_mgmt, "storage": storage,
+                      "mongo": mongo, "redis": redis, "es": es, "es_transport": es_transport}
         self.admin_password = secrets.token_urlsafe(18)
         self.rustfs_password = secrets.token_urlsafe(18)
         self.s3_access = "e2e-server"
@@ -117,10 +115,20 @@ class IsolatedStack:
             path.write_text(secrets.token_urlsafe(48))
             path.chmod(0o600)
         shutil.copy(STORAGE_SCRIPT, self.state / "init.py")
+        self._write_nginx_template()
         self._write_realm()
         # The web app's API address: the web server's /api route, so the app never reaches a port of its own guess.
         (self.state / "configs").mkdir(exist_ok=True)
         (self.state / "configs" / "configuration.json").write_text(json.dumps({"apiBaseUrl": "/api"}))
+
+    def _write_nginx_template(self) -> None:
+        """The web server's nginx template, as the server image has it, listening on this stack's port."""
+        text = NGINX_TEMPLATE.read_text()
+        text = text.replace("listen       80 default_server;", f"listen       {LOOPBACK}:{self.ports['web']} default_server;")
+        text = text.replace("listen       [::]:80 default_server;", "")
+        folder = self.state / "nginx"
+        folder.mkdir(exist_ok=True)
+        (folder / "clearml.conf.template").write_text(text)
 
     def _write_realm(self) -> None:
         """The committed realm, with this stack's addresses in place of the deploy/ names."""
@@ -134,7 +142,11 @@ class IsolatedStack:
         return {
             **os.environ,
             "COMPOSE_PROJECT_NAME": self.project,
-            "E2E_HOST": self.host,
+            "E2E_IDP_MANAGEMENT_PORT": str(self.ports["idp_mgmt"]),
+            "E2E_MONGO_PORT": str(self.ports["mongo"]),
+            "E2E_REDIS_PORT": str(self.ports["redis"]),
+            "E2E_ES_PORT": str(self.ports["es"]),
+            "E2E_ES_TRANSPORT_PORT": str(self.ports["es_transport"]),
             "E2E_STATE": str(self.state),
             "E2E_API_PORT": str(self.ports["api"]),
             "E2E_WEB_PORT": str(self.ports["web"]),
@@ -219,7 +231,13 @@ class IsolatedStack:
             print(f"\nthe test stack is kept: {self.api_url} (state folder {self.state})")
             return
         self.compose("down", "--volumes", "--remove-orphans", timeout=600)
+        self._remove_networks()
         self._remove_state()
+
+    def _remove_networks(self) -> None:
+        """Removes this session's networks that no container uses. A run that failed early can leave them behind."""
+        subprocess.run(["docker", "network", "prune", "-f", "--filter",
+                        f"label=com.docker.compose.project={self.project}"], capture_output=True, timeout=120)
 
     def _remove_state(self) -> None:
         """The containers wrote files as their own users; give them back to this user before removing them."""

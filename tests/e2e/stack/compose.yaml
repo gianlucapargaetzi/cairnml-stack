@@ -1,15 +1,10 @@
-# The stack the end-to-end suite runs against. It is a second, separate stack: its own compose project, its own
-# state folder, its own secrets, realm and accounts, and its own ports on this machine's network address. It does
-# not use deploy/ at all. support/stack.py starts it with the variables below set in the environment.
+# The stack the end-to-end suite runs against: a second, separate stack with its own state, secrets, realm and admin.
+# It runs on 127.0.0.1 only. Every service uses the host's network (network_mode: host), so the same address
+# (127.0.0.1 and the ports chosen by support/stack.py) is the one the suite, the browser, the containers and the
+# agent all use. Nothing here depends on this machine's own network address, and nothing is shared with deploy/.
 #
-# Variables (set by the suite, not by hand):
-#   E2E_HOST           this machine's network address, reachable from the host and from the containers
-#   E2E_STATE          the state folder (data, secrets, the realm file)
-#   E2E_API_PORT, E2E_WEB_PORT, E2E_IDP_PORT, E2E_STORAGE_PORT   the published ports
-#   E2E_RUSTFS_USER, E2E_RUSTFS_PASSWORD, E2E_KC_ADMIN, E2E_KC_ADMIN_PASSWORD, E2E_S3_ACCESS_KEY
-#
-# The service names are the ones the server's web app expects (it finds the API server by the name "apiserver").
-# The storage init script is copied into the state folder by support/stack.py.
+# support/stack.py starts it with the variables below set in the environment. Ports are chosen free on 127.0.0.1.
+name: mlops-e2e
 
 x-clearml-build: &clearml_build
   build:
@@ -19,40 +14,40 @@ x-clearml-build: &clearml_build
       clearml_web: ../../../clearml-web
   image: clearml-server-fork:local
   restart: "no"
+  network_mode: host
 
 services:
   idp:
     image: quay.io/keycloak/keycloak:26.0
     restart: "no"
+    network_mode: host
     command: ["start-dev", "--import-realm"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${E2E_KC_ADMIN}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${E2E_KC_ADMIN_PASSWORD}
-      KC_HOSTNAME: http://${E2E_HOST}:${E2E_IDP_PORT}
-      KC_HTTP_PORT: "8180"
+      KC_HOSTNAME: http://127.0.0.1:${E2E_IDP_PORT}
+      KC_HTTP_HOST: 127.0.0.1
+      KC_HTTP_PORT: ${E2E_IDP_PORT}
+      KC_HTTP_MANAGEMENT_PORT: ${E2E_IDP_MANAGEMENT_PORT}
       KC_HOSTNAME_STRICT: "false"
       KC_HTTP_ENABLED: "true"
     volumes:
       - ${E2E_STATE}/realm-mlops.json:/opt/keycloak/data/import/realm-mlops.json:ro
       - ${E2E_STATE}/data/idp:/opt/keycloak/data/h2
-    ports:
-      - "${E2E_HOST}:${E2E_IDP_PORT}:8180"
-    networks: [e2e]
 
   rustfs:
     image: rustfs/rustfs@sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c
     restart: "no"
+    network_mode: host
     environment:
       RUSTFS_ACCESS_KEY: ${E2E_RUSTFS_USER}
       RUSTFS_SECRET_KEY: ${E2E_RUSTFS_PASSWORD}
-      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_ADDRESS: 127.0.0.1:${E2E_STORAGE_PORT}
+      RUSTFS_CONSOLE_ENABLE: "false"
     volumes:
       - ${E2E_STATE}/data/rustfs:/data
-    ports:
-      - "${E2E_HOST}:${E2E_STORAGE_PORT}:9000"
-    networks: [e2e]
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:9000/health"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:${E2E_STORAGE_PORT}/health"]
       interval: 5s
       timeout: 5s
       retries: 30
@@ -62,9 +57,10 @@ services:
     depends_on:
       rustfs:
         condition: service_healthy
+    network_mode: host
     command: ["python", "/init.py"]
     environment:
-      MLOPS_STORAGE_ENDPOINT: http://rustfs:9000
+      MLOPS_STORAGE_ENDPOINT: http://127.0.0.1:${E2E_STORAGE_PORT}
       RUSTFS_ROOT_USER: ${E2E_RUSTFS_USER}
       RUSTFS_ROOT_PASSWORD: ${E2E_RUSTFS_PASSWORD}
       MLOPS_S3_ACCESS_KEY: ${E2E_S3_ACCESS_KEY}
@@ -73,27 +69,28 @@ services:
       - ${E2E_STATE}/init.py:/init.py:ro
       - ${E2E_STATE}/secrets:/run/secrets-dir:ro
     restart: "no"
-    networks: [e2e]
 
   mongo:
     image: mongo:8.0.15
     restart: "no"
-    command: --setParameter internalQueryMaxBlockingSortMemoryUsageBytes=196100200
+    network_mode: host
+    command: --port ${E2E_MONGO_PORT} --bind_ip 127.0.0.1 --setParameter internalQueryMaxBlockingSortMemoryUsageBytes=196100200
     volumes:
       - ${E2E_STATE}/data/mongo/db:/data/db
       - ${E2E_STATE}/data/mongo/configdb:/data/configdb
-    networks: [backend]
 
   redis:
     image: redis:8.2.3
     restart: "no"
+    network_mode: host
+    command: ["redis-server", "--port", "${E2E_REDIS_PORT}", "--bind", "127.0.0.1"]
     volumes:
       - ${E2E_STATE}/data/redis:/data
-    networks: [backend]
 
   elasticsearch:
     image: elasticsearch:8.19.9
     restart: "no"
+    network_mode: host
     environment:
       bootstrap.memory_lock: "true"
       cluster.name: clearml
@@ -103,6 +100,9 @@ services:
       cluster.routing.allocation.disk.watermark.flood_stage: 500mb
       discovery.type: "single-node"
       http.compression_level: "7"
+      http.port: ${E2E_ES_PORT}
+      transport.port: ${E2E_ES_TRANSPORT_PORT}
+      network.host: 127.0.0.1
       node.name: clearml
       reindex.remote.whitelist: "'*.*'"
       xpack.security.enabled: "false"
@@ -116,7 +116,6 @@ services:
         hard: 65536
     volumes:
       - ${E2E_STATE}/data/elastic:/usr/share/elasticsearch/data
-    networks: [backend]
 
   apiserver:
     <<: *clearml_build
@@ -129,16 +128,18 @@ services:
       - idp
     environment:
       CLEARML_SECRETS_DIR: /run/secrets-dir
-      CLEARML_ELASTIC_SERVICE_HOST: elasticsearch
-      CLEARML_ELASTIC_SERVICE_PORT: 9200
-      CLEARML_MONGODB_SERVICE_HOST: mongo
-      CLEARML_MONGODB_SERVICE_PORT: 27017
-      CLEARML_REDIS_SERVICE_HOST: redis
-      CLEARML_REDIS_SERVICE_PORT: 6379
+      CLEARML__apiserver__listen__ip: 127.0.0.1
+      CLEARML__apiserver__listen__port: ${E2E_API_PORT}
+      CLEARML_ELASTIC_SERVICE_HOST: 127.0.0.1
+      CLEARML_ELASTIC_SERVICE_PORT: ${E2E_ES_PORT}
+      CLEARML_MONGODB_SERVICE_HOST: 127.0.0.1
+      CLEARML_MONGODB_SERVICE_PORT: ${E2E_MONGO_PORT}
+      CLEARML_REDIS_SERVICE_HOST: 127.0.0.1
+      CLEARML_REDIS_SERVICE_PORT: ${E2E_REDIS_PORT}
       CLEARML_SERVER_DEPLOYMENT_TYPE: linux
-      CLEARML__apiserver__idp__issuer: http://${E2E_HOST}:${E2E_IDP_PORT}/realms/mlops
-      CLEARML__apiserver__idp__public_url: http://${E2E_HOST}:${E2E_API_PORT}
-      CLEARML__apiserver__idp__web_url: http://${E2E_HOST}:${E2E_WEB_PORT}
+      CLEARML__apiserver__idp__issuer: http://127.0.0.1:${E2E_IDP_PORT}/realms/mlops
+      CLEARML__apiserver__idp__public_url: http://127.0.0.1:${E2E_API_PORT}
+      CLEARML__apiserver__idp__web_url: http://127.0.0.1:${E2E_WEB_PORT}
       CLEARML__apiserver__idp__web_client_id: clearml-web
       CLEARML__apiserver__idp__sdk_client_id: clearml-sdk
       CLEARML__apiserver__idp__directory_client_id: clearml-server
@@ -148,20 +149,18 @@ services:
       CLEARML__apiserver__idp__github_app_id: ""
       CLEARML__apiserver__idp__github_api_url: https://api.github.com
       CLEARML__services__async_urls_delete__enabled: "true"
-      CLEARML__apiserver__storage__endpoint: http://rustfs:9000
-      CLEARML__apiserver__storage__public_endpoint: http://${E2E_HOST}:${E2E_STORAGE_PORT}
+      CLEARML__apiserver__storage__endpoint: http://127.0.0.1:${E2E_STORAGE_PORT}
+      CLEARML__apiserver__storage__public_endpoint: http://127.0.0.1:${E2E_STORAGE_PORT}
       CLEARML__apiserver__storage__access_key: ${E2E_S3_ACCESS_KEY}
     volumes:
       - ${E2E_STATE}/data/logs:/var/log/clearml
       - ${E2E_STATE}/secrets:/run/secrets-dir:ro
-    ports:
-      - "${E2E_HOST}:${E2E_API_PORT}:8008"
-    networks: [backend, frontend, e2e]
 
   async-delete:
     image: clearml-server-fork:local
     pull_policy: never
     restart: "no"
+    network_mode: host
     command: [async_delete]
     depends_on:
       - redis
@@ -169,36 +168,32 @@ services:
       - rustfs-init
     environment:
       CLEARML_SECRETS_DIR: /run/secrets-dir
-      CLEARML_MONGODB_SERVICE_HOST: mongo
-      CLEARML_MONGODB_SERVICE_PORT: 27017
-      CLEARML_REDIS_SERVICE_HOST: redis
-      CLEARML_REDIS_SERVICE_PORT: 6379
+      CLEARML_MONGODB_SERVICE_HOST: 127.0.0.1
+      CLEARML_MONGODB_SERVICE_PORT: ${E2E_MONGO_PORT}
+      CLEARML_REDIS_SERVICE_HOST: 127.0.0.1
+      CLEARML_REDIS_SERVICE_PORT: ${E2E_REDIS_PORT}
       CLEARML_SERVER_DEPLOYMENT_TYPE: linux
-      CLEARML__apiserver__storage__endpoint: http://rustfs:9000
-      CLEARML__apiserver__storage__public_endpoint: http://${E2E_HOST}:${E2E_STORAGE_PORT}
+      CLEARML__apiserver__storage__endpoint: http://127.0.0.1:${E2E_STORAGE_PORT}
+      CLEARML__apiserver__storage__public_endpoint: http://127.0.0.1:${E2E_STORAGE_PORT}
       CLEARML__apiserver__storage__access_key: ${E2E_S3_ACCESS_KEY}
       CLEARML__services__async_urls_delete__enabled: "true"
     volumes:
       - ${E2E_STATE}/data/logs:/var/log/clearml
       - ${E2E_STATE}/secrets:/run/secrets-dir:ro
-    networks: [backend, e2e]
 
   webserver:
     image: clearml-server-fork:local
     pull_policy: never
     restart: "no"
+    network_mode: host
     command: [webserver]
     depends_on:
       - apiserver
+    environment:
+      NGINX_APISERVER_ADDRESS: http://127.0.0.1:${E2E_API_PORT}
     volumes:
       # The web app finds its API on port 8008 of the same host unless this file says otherwise; here it says
       # to use the web server's own /api route (see E2E.md, "Addresses").
       - ${E2E_STATE}/configs:/mnt/external_files/configs:ro
-    ports:
-      - "${E2E_HOST}:${E2E_WEB_PORT}:80"
-    networks: [backend, frontend]
-
-networks:
-  backend:
-  frontend:
-  e2e:
+      # The image's nginx template listens on port 80; this copy listens on the port the suite chose.
+      - ${E2E_STATE}/nginx/clearml.conf.template:/etc/nginx/clearml.conf.template:ro
