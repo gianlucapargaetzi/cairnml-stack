@@ -10,7 +10,10 @@ go quiet: the app keeps polling, so 'networkidle' would always run to its ceilin
 
 import json
 import re
+import shutil
+import tempfile
 import time
+from pathlib import Path
 
 import pytest
 
@@ -22,6 +25,13 @@ pytestmark = [pytest.mark.ui, pytest.mark.xdist_group("agent")]
 
 CONSOLE_LINE = "console line from the example run"
 CHECK_TIMEOUT_MS = 10_000
+
+# the live job's script runs from outside the repository: a script inside the checkout would record the checkout's
+# origin as the job's repository, and the job's container cannot clone that (test_09 does the same)
+LIVE_JOB_FOLDER = Path(tempfile.mkdtemp(prefix="e2e-live-job-"))
+for _name in ("common.py", "job_script.py"):
+    shutil.copy(workspace.script(_name), LIVE_JOB_FOLDER / _name)
+LIVE_JOB_SCRIPT = LIVE_JOB_FOLDER / "job_script.py"
 
 
 @pytest.fixture(scope="module")
@@ -180,12 +190,12 @@ def test_jobs_list_shows_a_running_job_without_a_reload(client_home, project, ru
 
     Expect: a job that is running shows as running on the Jobs page, without a reload of the page."""
     new_name_prefix = new_name("live")
-    task_id = run_json(client_home, "job_script.py", ["--project", project, "--name", new_name_prefix,
-                                                      "--scalars", "1", "--sleep", "300"])["task_id"]
+    task_id = run_json(client_home, str(LIVE_JOB_SCRIPT), ["--project", project, "--name", new_name_prefix,
+                                                           "--scalars", "1", "--sleep", "300"])["task_id"]
     api = workspace.device_api(client_home)
     jobs.enqueue(client_home, task_id)
-    _open(signed_in_page, "/dashboard")
-    signed_in_page.click("text=MANAGE WORKERS AND JOBS")
+    # the JOBS tab of the workers and jobs section: the job list is there, not on the dashboard tab
+    _open(signed_in_page, "/workers-and-queues/jobs")
     # a job's first run starts its container cold (test_09, the completion test): the same longer wait applies
     deadline = time.monotonic() + 300
     while time.monotonic() < deadline:
@@ -195,4 +205,8 @@ def test_jobs_list_shows_a_running_job_without_a_reload(client_home, project, ru
         if jobs.task_record(api, task_id).get("status") in jobs.FINAL:
             break  # the job has ended without running: nothing more to see
         signed_in_page.wait_for_timeout(1000)
-    pytest.fail(f"the job {new_name_prefix} never showed as running on the Jobs page")
+    # what the page shows when the job should have been running: a screenshot in the report folder, and the page text
+    signed_in_page.screenshot(path=str(Path(__file__).parent / "reports" / "live-jobs-page.png"), full_page=True)
+    body = signed_in_page.inner_text("body")
+    pytest.fail(f"the job {new_name_prefix} never showed as running on the Jobs page: {jobs.explain(api, task_id)}; "
+                f"the page says: {body[:1500]!r}")

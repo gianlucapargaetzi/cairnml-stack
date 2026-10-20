@@ -187,33 +187,36 @@ the group first, and `test_set_parameters_replaces_the_whole_set_and_set_paramet
 
 ## Status of the last full run
 
-Latest full run, in the isolated environment, with no restarts: 101 tests, 16 minutes 57 seconds, **91 passed, 7 failed,
-3 skipped**.
+Latest full run, in the isolated environment, from a stack that was stopped first, with no restarts: 101 tests,
+16 minutes 21 seconds, **92 passed, 6 failed, 3 skipped**.
 
-The 7 that failed, by cause:
+The 6 that failed, by cause:
 
 - **Known defects, failing as designed:**
   - `test_a_member_who_is_not_the_owner_cannot_delete_the_run`: the owner policy is not built (clearml-server #3).
   - `test_finalized_dataset_refuses_new_files`: a finalized dataset accepts files (D4).
   - `test_agent_without_its_key_says_to_enrol_it`: the message is a raw error, not the instruction (D7).
   - `test_repository_on_github_is_refused_at_enqueue_without_the_app`: the enqueue is accepted (D2).
-- **Open, not explained yet:** see Open results.
+- **Open, explained (see Open results):** the git job clone, and the live jobs list.
 
 The 3 skipped: `test_init_accepts_the_web_address_and_finds_the_api` (the suite runs on ports other than the defaults), and
 the two GitHub tests (no GitHub repository is configured).
 
-Fixed since the earlier runs: D6 (the enqueue test passes), the job completion (the agent's `_unregister` fix), and the
-tracking and artifact tests (the result parser, and the runner's data packages).
+Fixed since the earlier runs: D6 (the enqueue test passes), the job completion (the agent's `_unregister` fix), the
+tracking and artifact tests (the result parser, and the runner's data packages), and the comparison view (it passes in
+this run; it failed in an earlier one, and it passes alone too, so its failure was timing or order, not the view).
 
 ## Open results
 
-- **Git job clone** (`test_06_git.py::test_job_clones_the_recorded_commit_and_reports_it`): the agent's clone fails with
-  "repository does not exist" for a path that exists and clones with plain `git`. The job ends as `failed`. Not explained
-  yet.
-- **Comparison view** (`test_12_web_runs.py::test_comparison_view_overlays_both_runs`): the run names do not appear on the
-  experiments page within 10 s. Not explained yet.
-- **Live jobs list** (`test_12_web_runs.py::test_jobs_list_shows_a_running_job_without_a_reload`): the job never shows as
-  running on the Jobs page within 300 s. Not explained yet.
+- **Git job clone** (`test_06_git.py::test_job_clones_the_recorded_commit_and_reports_it`): fixed in the suite. The clone
+  runs inside the job container (docker mode maps the cache to `/root/.clearml` there), which cannot see a local path
+  under `/e2e-state`. The test now serves its remote with `git daemon` on the loopback address (`support/git.py`,
+  `served`), which the job container reaches with host networking. Passes in a targeted run.
+- **Live jobs list** (`test_12_web_runs.py::test_jobs_list_shows_a_running_job_without_a_reload`): fixed in the suite, in
+  two parts. The job script now runs from outside the checkout, so the SDK records no SSH repository. And the test opens
+  the JOBS tab (`/workers-and-queues/jobs`): it had been left on the dashboard tab, which has no job list. Passes in a
+  targeted run.
+- **Comparison view**: passed in this run; see Status above.
 
 ## Coverage and gaps
 
@@ -253,10 +256,12 @@ ceilings and intervals, not measured; the report now records each test's duratio
 
 ## Open work
 
-- **A job that never starts should fail with that reason.** Today the job tests wait for a final status and give up on a
-  timeout. A job whose container cannot reach the server should fail at once, naming the step it reached. Not written yet.
+- **A job that never starts fails with its reason.** Done in `support/jobs.py`: a wait fails at once when the job ends in
+  another status, or when its console shows the container cannot reach the server before the body starts. Every failure
+  names the status, the agent's reason and the last console line. The unreachable path is checked with a fake API only;
+  no test yet produces an unreachable server.
 - **Long jobs and the job token.** Tracked in clearml-agent issue #3, including the tests the renewal needs.
-- **The three open results above.**
+- **The two open results above**, both suite fixes (see Open results).
 
 ## Clean-up of a real stack
 

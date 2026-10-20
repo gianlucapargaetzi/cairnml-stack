@@ -218,7 +218,7 @@ def test_job_runs_to_completion_with_its_scalars_and_artifact(client_home, proje
     # takes minutes, so it is the one job wait with a longer ceiling. Localhost does not make a package download faster
     # (E2E.md, speed section, item 8).
     record = jobs.wait_for(api, task_id, jobs.FINAL, timeout=300)
-    assert record["status"] == "completed", record.get("status_message")
+    assert record["status"] == "completed", jobs.explain(api, task_id, record)
     assert "result" in [a["key"] for a in record["execution"]["artifacts"]]
 
 
@@ -292,6 +292,6 @@ def test_agent_reports_no_running_job_once_a_job_completes(client_home, project,
     jobs.enqueue(client_home, task_id)
     api = workspace.device_api(client_home)
     record = jobs.wait_for(api, task_id, jobs.FINAL)
-    assert record["status"] == "completed", record.get("status_message")
+    assert record["status"] == "completed", jobs.explain(api, task_id, record)
     assert machine.wait_until(lambda: worker_record(api, machine.worker_name)["jobs"] == [], timeout=30), \
         "the agent must report no running job once the job has completed"

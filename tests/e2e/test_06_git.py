@@ -108,13 +108,20 @@ def test_job_clones_the_recorded_commit_and_reports_it(client_home, project, che
 
     Expect: The job completes, and reports the commit it was recorded with.
     """
-    run = run_json(client_home, str(checkout["work"] / "job_script.py"),
-                   ["--project", project, "--name", new_name("clone-job"), "--git", "--scalars", "2"])
-    jobs.enqueue(client_home, run["task_id"])
-    api = workspace.device_api(client_home)
-    record = jobs.wait_for(api, run["task_id"], jobs.FINAL)
-    assert record["status"] == "completed", record.get("status_message")
-    assert record["execution"]["commit"] == checkout["commit"]
+    work = checkout["work"]
+    # the job's container clones the remote, so the remote is served on an address the container can reach
+    with git.served(checkout["remote"].parent) as base:
+        git.git(work, "remote", "set-url", "origin", f"{base}/{checkout['remote'].name}")
+        try:
+            run = run_json(client_home, str(work / "job_script.py"),
+                           ["--project", project, "--name", new_name("clone-job"), "--git", "--scalars", "2"])
+            jobs.enqueue(client_home, run["task_id"])
+            api = workspace.device_api(client_home)
+            record = jobs.wait_for(api, run["task_id"], jobs.FINAL)
+        finally:
+            git.git(work, "remote", "set-url", "origin", checkout["remote"].as_posix())
+    assert record["status"] == "completed", jobs.explain(api, run["task_id"], record)
+    assert record["script"]["version_num"] == checkout["commit"], "the job must report the commit it cloned"
 
 
 def test_repository_on_github_is_refused_at_enqueue_without_the_app(client_home, project, checkout):

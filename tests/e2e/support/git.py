@@ -2,7 +2,10 @@
 checkout a person works in. No network and no GitHub are involved."""
 
 import os
+import socket
 import subprocess
+import time
+from contextlib import contextmanager
 from pathlib import Path
 
 IDENTITY = {
@@ -40,3 +43,29 @@ def commit_all(checkout: Path, message: str) -> str:
     git(checkout, "add", "-A")
     git(checkout, "commit", "-m", message)
     return git(checkout, "rev-parse", "HEAD")
+
+
+@contextmanager
+def served(root: Path):
+    """The repositories under root, over git:// on the loopback address, while the block runs. A job's container clones
+    them as it would clone a remote: a local path is not visible inside the container, but this address is, because a
+    job container on a loopback server runs with the host's network (clearml-agent, worker.py). Yields the base URL."""
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    daemon = subprocess.Popen(
+        ["git", "daemon", "--export-all", f"--base-path={root.as_posix()}", "--listen=127.0.0.1", f"--port={port}"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    try:
+        deadline = time.monotonic() + 10
+        while True:
+            with socket.socket() as attempt:
+                if attempt.connect_ex(("127.0.0.1", port)) == 0:
+                    break
+            if daemon.poll() is not None or time.monotonic() > deadline:
+                raise RuntimeError(f"git daemon did not start: {daemon.stderr.read()}")
+            time.sleep(0.1)
+        yield f"git://127.0.0.1:{port}"
+    finally:
+        daemon.terminate()
+        daemon.wait(timeout=10)
