@@ -96,6 +96,10 @@ The addresses are set in `deploy/compose.yaml` (`CLEARML__apiserver__idp__*`): t
 
 The server's data is in `deploy/data/` and its keys in `deploy/secrets/`. Both are git-ignored. Back up both folders; losing `deploy/secrets/clearml/token_secret` signs everyone out, and losing the database loses the runs.
 
+### Object storage and the NAS
+
+Object storage (RustFS, with the buckets `dataset`, `model`, `artifact` and `debug`) runs in this stack, on the server host, and keeps its data in `deploy/data/rustfs`. The architecture diagram (`docs/architecture/`) shows it on a separate NAS, which is not set up yet. To move it, change the `rustfs` volume in `deploy/compose.yaml` to the NAS path, and set `MLOPS_STORAGE_PUBLIC_URL` in `deploy/.env` to an address that clients can reach.
+
 ## 2. Client (a person's machine)
 
 Install the SDK from the fork, in a virtual environment:
