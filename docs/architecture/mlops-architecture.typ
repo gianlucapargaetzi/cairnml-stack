@@ -76,7 +76,7 @@
 
 #canvas(length: 0.9cm, {
   // ============ Row 1: external services ============
-  frame(0, 19.4, 41.2, 25.2, ext, "5 · External services")
+  frame(0, 19.0, 41.2, 23.6, ext, "5 · External services")
 
   // ============ Row 2: Client | Server | Agents ============
   frame(0, 10.4, 5.8, 18.0, cli, "1 · Client")
@@ -88,7 +88,7 @@
   )
 
   // ============ Row 3: NAS ============
-  frame(0, 2.6, 41.2, 8.0, nas, "3 · NAS")
+  frame(0, 4.7, 41.2, 8.0, nas, "3 · NAS")
 
   // ============ Client (one node) ============
   draw.rect(
@@ -153,8 +153,8 @@
   tag(21.8, 14.6, [OIDC: login, user sync])
 
   // Server -> GitHub: read-only GitHub App (fetch remote status)
-  wire(((7.6, 18.0), (7.6, 21.9), (5.1, 21.9)), dash: true)
-  tag(10.2, 19.8, [server: GitHub App, read])
+  wire(((7.6, 18.0), (7.6, 19.6), (3.8, 19.6), (3.8, 21.3)), dash: true)
+  tag(5.7, 19.6, [GitHub App, read])
 
   // ============ Wires: scheduler -> agents ============
   wire(((12.1, 13.9), (24.0, 13.9), (24.0, 16.1), (30.7, 16.1)), both: true)
@@ -165,10 +165,10 @@
   tag(29.0, 9.2, [dataset pull, S3 URLs])
   wire(((32.9, 13.3), (32.9, 6.9)))
   tag(33.6, 9.2, [upload artifacts])
-  wire(((38.1, 14.5), (38.1, 21.9), (22.5, 21.9)))
-  tag(30.5, 21.9, [pull images])
-  wire(((26.4, 18.0), (26.4, 23.4), (4.2, 23.4), (4.2, 22.5)))
-  tag(14.0, 23.4, [git clone with job token])
+  wire(((38.1, 14.5), (38.1, 21.0), (19.0, 21.0), (19.0, 21.3)))
+  tag(30.5, 21.0, [pull images])
+  wire(((26.4, 18.0), (26.4, 20.4), (4.6, 20.4), (4.6, 21.3)))
+  tag(14.0, 20.4, [git clone with job token])
 })
 
 #v(5mm)
