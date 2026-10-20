@@ -1,4 +1,4 @@
-# The isolated environment for the end-to-end suite (E2E.md, The isolated environment). The host runs one container, dind: a Docker daemon of
+# The isolated environment for the end-to-end suite (docs/e2e_testing/E2E.md, The isolated environment). The host runs one container, dind: a Docker daemon of
 # its own. Inside it run everything the suite uses: the test runner (built and started by inside.sh), the ClearML stack,
 # the agent's job containers. Nothing of it runs on the host's Docker daemon, and nothing is published to the host.
 #

@@ -1,4 +1,4 @@
-"""Section 6 of E2E.md: queueing, placement, running, monitoring, ending and recovering jobs.
+"""Section 6 of docs/e2e_testing/E2E.md: queueing, placement, running, monitoring, ending and recovering jobs.
 
 A job is a recorded task put in the queue with what it needs. The scheduler places it on the agent that fits, the
 agent claims it and runs it in a container. Two groups of tests: scheduling (what the queue does with a job) and
@@ -50,7 +50,7 @@ DEFAULT_ARGS = ["--scalars", "2"]
 
 @pytest.fixture(scope="module")
 def recorded(client_home, project, tmp_path_factory):
-    """The records of this module's jobs, made in one process (E2E.md, speed section, item 12). Each record has its own
+    """The records of this module's jobs, made in one process (docs/e2e_testing/E2E.md, speed section, item 12). Each record has its own
     arguments; the body runs on the agent with them.
 
     Expect: every job of the module is recorded in the project, with the arguments its test needs.
@@ -216,7 +216,7 @@ def test_job_runs_to_completion_with_its_scalars_and_artifact(client_home, proje
     api = workspace.device_api(client_home)
     # the first job of a run starts its container cold: the container installs the agent and the SDK from source, which
     # takes minutes, so it is the one job wait with a longer ceiling. Localhost does not make a package download faster
-    # (E2E.md, speed section, item 8).
+    # (docs/e2e_testing/E2E.md, speed section, item 8).
     record = jobs.wait_for(api, task_id, jobs.FINAL, timeout=300)
     assert record["status"] == "completed", jobs.explain(api, task_id, record)
     assert "result" in [a["key"] for a in record["execution"]["artifacts"]]
@@ -260,7 +260,7 @@ def test_lost_agent_during_a_job_retries_the_job_once(client_home, project, mach
 
     The job runs on the session's agent (the only one this module starts), so the test knows which agent to lose. The
     agent is started again afterwards, for the tests that follow. The lost worker is found by the scheduler's own
-    sweep (E2E.md, speed section, item 3): no other job is needed to make a placement pass run.
+    sweep (docs/e2e_testing/E2E.md, speed section, item 3): no other job is needed to make a placement pass run.
 
     Expect: once the agent stops syncing, its worker is marked lost and the job is queued again (one retry), and the
     job runs again when the agent is back.

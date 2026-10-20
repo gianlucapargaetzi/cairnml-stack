@@ -152,7 +152,7 @@ services:
       CLEARML__apiserver__storage__endpoint: http://127.0.0.1:${E2E_STORAGE_PORT}
       CLEARML__apiserver__storage__public_endpoint: http://${E2E_HOST}:${E2E_STORAGE_PORT}
       CLEARML__apiserver__storage__access_key: ${E2E_S3_ACCESS_KEY}
-      # Timers of the test stack only (see E2E.md, speed section, items 3 and 4): a stopped agent is lost after about 6 s,
+      # Timers of the test stack only (see docs/e2e_testing/E2E.md, speed section, items 3 and 4): a stopped agent is lost after about 6 s,
       # and the directory is read every 5 s. The production defaults are in clearml-server's config.
       CLEARML__services__scheduler__sync_interval_sec: "2"
       CLEARML__services__scheduler__sweep_interval_sec: "1"
@@ -201,7 +201,7 @@ services:
       NGINX_APISERVER_ADDRESS: http://127.0.0.1:${E2E_API_PORT}
     volumes:
       # The web app finds its API on port 8008 of the same host unless this file says otherwise; here it says
-      # to use the web server's own /api route (see E2E.md, "Addresses").
+      # to use the web server's own /api route (see docs/e2e_testing/E2E.md, "Addresses").
       - ${E2E_STATE}/configs:/mnt/external_files/configs:ro
       # The image's nginx template listens on port 80; this copy listens on the port the suite chose.
       - ${E2E_STATE}/nginx/clearml.conf.template:/etc/nginx/clearml.conf.template:ro

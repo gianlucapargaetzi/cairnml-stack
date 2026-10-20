@@ -1,4 +1,4 @@
-"""Uploads one artifact of every kind in one task, the way a training script does (README section 2 of E2E.md).
+"""Uploads one artifact of every kind in one task, the way a training script does (README section 2 of docs/e2e_testing/E2E.md).
 
 Kinds: a file, a folder (zipped by the SDK), a dict (JSON), a DataFrame, a numpy array, a PIL image, a pickled
 object, a file with metadata, and optionally a large file (--big-mb) that goes up in parts. The digests of the

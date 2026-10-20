@@ -1,4 +1,4 @@
-"""Section 5 of E2E.md: enrolling an agent machine, its registration and resources, heartbeat and recovery.
+"""Section 5 of docs/e2e_testing/E2E.md: enrolling an agent machine, its registration and resources, heartbeat and recovery.
 
 The agent is a real managed daemon on this machine, running in its own HOME with its own device key. Its
 resources are checked against the host's own counts. Jobs are section 6 (test_09_jobs.py).
@@ -112,7 +112,7 @@ def test_agent_reports_its_usage(client_home, machine):
 @pytest.fixture(scope="module")
 def keyless(tmp_path_factory, admin_account):
     """One agent machine whose device key was removed: started once, shared by the two keyless checks (one daemon,
-    not two: E2E.md, speed section, item 5). It is up when its log names the missing key."""
+    not two: docs/e2e_testing/E2E.md, speed section, item 5). It is up when its log names the missing key."""
     machine = AgentMachine(tmp_path_factory.mktemp("keyless"), worker_name=new_name("keyless"))
     assert agent.init(machine.home, admin_account).returncode == 0
     machine.key_path.unlink()

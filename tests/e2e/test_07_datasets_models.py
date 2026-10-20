@@ -1,4 +1,4 @@
-"""Section 7 of E2E.md: datasets and models, created on one machine and used on another.
+"""Section 7 of docs/e2e_testing/E2E.md: datasets and models, created on one machine and used on another.
 
 Each step runs in its own process, so a dataset or model is only as good as what the server stored.
 """

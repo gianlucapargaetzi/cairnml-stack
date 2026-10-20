@@ -96,6 +96,10 @@ The addresses are set in `deploy/compose.yaml` (`CLEARML__apiserver__idp__*`): t
 
 The server's data is in `deploy/data/` and its keys in `deploy/secrets/`. Both are git-ignored. Back up both folders; losing `deploy/secrets/clearml/token_secret` signs everyone out, and losing the database loses the runs.
 
+### Object storage and the NAS
+
+Object storage (RustFS, with the buckets `dataset`, `model`, `artifact` and `debug`) runs in this stack, on the server host, and keeps its data in `deploy/data/rustfs`. The architecture diagram (`docs/architecture/`) shows it on a separate NAS, which is not set up yet. To move it, change the `rustfs` volume in `deploy/compose.yaml` to the NAS path, and set `MLOPS_STORAGE_PUBLIC_URL` in `deploy/.env` to an address that clients can reach.
+
 ## 2. Client (a person's machine)
 
 Install the SDK from the fork, in a virtual environment:
@@ -175,6 +179,18 @@ clearml-agent daemon --managed
 
 Each job runs with its own token, issued to this agent when the job starts. The job never gets the agent's own token, and the repository is cloned with a short-lived GitHub token for that one repository.
 
+### In a container
+
+The agent can also run as a container, in `deploy/agent/`. The agent container runs on the host's Docker daemon; it starts each job's container on a second daemon, in a privileged `dind` container. The host's daemon never runs a job and is not reachable from the jobs. Start it from `deploy/agent/`:
+
+```bash
+docker compose up -d --build
+docker compose run --rm agent clearml-agent init
+docker compose up -d agent
+```
+
+The server address in the agent's configuration must be reachable from inside `dind`: a LAN name or IP, not `localhost`. Only one agent may run per daemon. See `deploy/agent/README.md` for the layout, the volumes and the limits.
+
 ### Resource-aware scheduling
 
 The server offers the machine the tasks that fit it, and the agent runs each one in its own container with the CPUs, memory and GPUs of its reservation.
@@ -234,7 +250,7 @@ The setup is complete. Not yet verified end to end on a live stack: the browser 
 ## 8. Tests
 
 Two kinds: unit tests in each fork, and the end-to-end suite in `tests/e2e/`, which starts its own stack and checks the
-whole workflow against it (see [E2E.md](E2E.md) and [E2E_TESTS.md](E2E_TESTS.md)).
+whole workflow against it (see [docs/e2e_testing/E2E.md](docs/e2e_testing/E2E.md) and [docs/e2e_testing/E2E_TESTS.md](docs/e2e_testing/E2E_TESTS.md)).
 
 ### Unit tests
 
@@ -252,7 +268,7 @@ after creating `/var/log/clearml` (the logging configuration writes there).
 
 ### End-to-end tests
 
-Prerequisites, and the full list of what the suite checks, are in [E2E.md](E2E.md). In short:
+Prerequisites, and the full list of what the suite checks, are in [docs/e2e_testing/E2E.md](docs/e2e_testing/E2E.md). In short:
 
 ```bash
 uv venv .venv --python 3.12
@@ -266,4 +282,4 @@ playwright install chromium
 ```
 
 The suite does not use `deploy/`. It needs Docker, nine free ports in 18000 to 18999 on the loopback interface, and the forks
-checked out as submodules. Known failures are listed in [E2E_TESTS.md](E2E_TESTS.md) and as issues in each fork.
+checked out as submodules. Known failures are listed in [docs/e2e_testing/E2E_TESTS.md](docs/e2e_testing/E2E_TESTS.md) and as issues in each fork.

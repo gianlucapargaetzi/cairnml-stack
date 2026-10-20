@@ -1,4 +1,4 @@
-"""Section 1 of E2E.md, the trust side of enrolment: what the server refuses, whatever the caller claims.
+"""Section 1 of docs/e2e_testing/E2E.md, the trust side of enrolment: what the server refuses, whatever the caller claims.
 
 Each request here is made with the REST client, so the assertion can be built to be wrong in one way at a time.
 """

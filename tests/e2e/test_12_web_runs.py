@@ -1,11 +1,11 @@
-"""E2E.md, UI checks on runs: the scalars chart and its hover values, the console, debug samples, the comparison of
+"""docs/e2e_testing/E2E.md, UI checks on runs: the scalars chart and its hover values, the console, debug samples, the comparison of
 runs, the dashboards, and live job status. Each test signs in through the sign-in form in its own browser context.
 
 The selectors are the ones of this build: the run's tabs are links ending in /output/<tab>, the project's tabs are
 OVERVIEW, WORKLOADS, TASKS, EXPERIMENTS and MODELS.
 
 Waits are for the thing the test checks (a selector, a changed picture), with a ceiling of 10 s, not for the network to
-go quiet: the app keeps polling, so 'networkidle' would always run to its ceiling (E2E.md, speed section, item 9).
+go quiet: the app keeps polling, so 'networkidle' would always run to its ceiling (docs/e2e_testing/E2E.md, speed section, item 9).
 """
 
 import json
@@ -37,7 +37,7 @@ LIVE_JOB_SCRIPT = LIVE_JOB_FOLDER / "job_script.py"
 @pytest.fixture(scope="module")
 def runs(client_home, project, tmp_path_factory):
     """Two runs of the same metrics in one project: the run to look at, and a second one to compare with. One process
-    records both (E2E.md, speed section, item 12)."""
+    records both (docs/e2e_testing/E2E.md, speed section, item 12)."""
     folder = tmp_path_factory.mktemp("web-runs")
     (folder / "runs.json").write_text(json.dumps([{"name": new_name("web-run"), "steps": 100},
                                                   {"name": new_name("web-run-2"), "steps": 50}]))
@@ -171,7 +171,7 @@ def test_task_folder_lists_its_experiments(runs, signed_in_page):
 
 
 def test_single_click_selects_and_double_click_opens_a_project(runs, project, signed_in_page):
-    """E2E.md: a single click on a project does not navigate; a double click opens its project dashboard.
+    """docs/e2e_testing/E2E.md: a single click on a project does not navigate; a double click opens its project dashboard.
 
     Expect: a single click keeps the dashboard, and a double click opens the project.
     """
