@@ -96,8 +96,7 @@
   node(9.9, 16.1, "API server", "clients + agents, REST", srv)
   node(15.1, 16.1, "Experiment Tracking", "runs, metrics, artifacts", srv)
   node(9.9, 13.9, "Job Scheduler", "resource matching", srv)
-  node(9.9, 11.7, "Job queue", "queued tasks, in MongoDB", srv)
-  node(15.1, 11.7, "Metadata DB", "MongoDB · Redis · Elasticsearch", srv)
+  node(15.1, 11.7, "Database", "MongoDB · Redis · Elasticsearch", srv)
   node(20.3, 11.7, "Auth middleware", "token check, admin role", srv)
   node(20.3, 16.1, "Web app", "projects, runs, jobs, workers", srv)
 
@@ -113,8 +112,17 @@
   node(20.3, 3.9, "Dockerhub", "container images", ext)
 
   // ============ NAS ============
-  node(27.7, 6.1, "Dataset store", "S3 buckets: dataset, model", nas)
-  node(32.9, 6.1, "Artifact store", "S3 buckets: artifact, debug", nas)
+  draw.rect(
+    (25.6, 5.2), (35.0, 6.9),
+    fill: nas.fill, stroke: 0.8pt + nas.stroke, radius: 3pt,
+  )
+  draw.content(
+    (30.3, 6.05), width: 9.0,
+    align(center)[
+      #text(weight: "bold", size: 8.5pt)[Object storage (RustFS)] \
+      #text(size: 7pt, fill: ink)[S3 API · buckets: dataset, model, artifact, debug]
+    ],
+  )
 
   // ============ Wires: client ============
   wire(((5.1, 16.1), (7.7, 16.1)))
@@ -122,14 +130,16 @@
   wire(((5.1, 13.9), (6.4, 13.9), (6.4, 15.6), (7.7, 15.6)))
   wire(((2.9, 11.1), (2.9, 6.7)))
   tag(2.9, 9.2, [git clone / push])
-  wire(((5.1, 11.7), (6.4, 11.7), (6.4, 9.2), (26.0, 9.2), (26.0, 6.7)))
+  wire(((5.1, 11.7), (6.4, 11.7), (6.4, 9.2), (26.0, 9.2), (26.0, 6.9)))
   tag(14.0, 9.2, [dataset and artifact transfer, presigned S3 URLs])
 
   // ============ Wires: server ============
   wire(((12.1, 16.1), (12.9, 16.1)))
   wire(((9.9, 15.5), (9.9, 14.5)))
   wire(((15.1, 15.5), (15.1, 12.3)))
-  wire(((9.9, 13.3), (9.9, 12.3)))
+  tag(16.7, 13.0, [runs, metrics, artifacts])
+  wire(((9.9, 13.3), (9.9, 11.7), (12.9, 11.7)))
+  tag(11.2, 12.9, [queued tasks])
   wire(((20.3, 11.1), (20.3, 6.7)), dash: true)
   tag(21.7, 10.7, [OIDC: login, user sync])
 
@@ -142,9 +152,9 @@
   tag(18.0, 14.3, [REST: register, poll, logs, job tokens])
 
   // ============ Wires: agents -> NAS / Dockerhub ============
-  wire(((27.7, 13.3), (27.7, 6.7)))
+  wire(((27.7, 13.3), (27.7, 6.9)))
   tag(29.0, 9.2, [dataset pull, S3 URLs])
-  wire(((32.9, 13.3), (32.9, 6.7)))
+  wire(((32.9, 13.3), (32.9, 6.9)))
   tag(33.6, 9.2, [upload artifacts])
   wire(((38.1, 13.3), (38.1, 3.9), (22.5, 3.9)))
   tag(30.5, 4.3, [pull images])
@@ -160,7 +170,7 @@
     #text(weight: "bold")[Machine rules]
     - *Client* talks to the Server (REST), to GitHub Enterprise (git) and to the object store on the NAS (datasets and artifacts, through presigned S3 URLs).
     - *Server* runs the API, the web app, the scheduler and the stores: MongoDB for tasks and metadata, Redis and Elasticsearch for caches and events. It also runs the sign-in service (Keycloak) and the object store (RustFS) in the same deploy stack.
-    - *NAS* holds the four buckets of the object store: dataset, model, artifact and debug.
+    - *NAS* runs the object store: one S3-compatible service (RustFS) with four buckets (dataset, model, artifact, debug), and one service user that may only use those buckets.
     - *Agents* are enrolled by an admin with a device key. They get a token per job, a short-lived GitHub token for the job's one repository, and presigned S3 URLs for transfers. Jobs run in containers (Docker on the host, or a Docker daemon in a `dind` container). They pull images from Dockerhub.
   ],
   [
