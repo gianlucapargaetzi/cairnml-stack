@@ -83,14 +83,22 @@
     (25.1, 17.1), anchor: "west",
     text(size: 6.8pt, fill: ink)[auth: device key → agent token · per-job token · GitHub token · presigned S3 URLs],
   )
-  // Row 2: External | NAS
-  frame(0, 2.6, 23.2, 8.0, ext, "5 · External services")
-  frame(24.8, 4.8, 35.8, 8.0, nas, "3 · NAS")
+  // Row 2: External | NAS, the same width
+  frame(0, 2.6, 19.8, 8.0, ext, "5 · External services")
+  frame(21.4, 2.6, 41.2, 8.0, nas, "3 · NAS")
 
-  // ============ Client (column x = 2.9) ============
-  node(2.9, 16.1, "CLI / Python SDK", "REST + device key (clearml-init)", cli)
-  node(2.9, 13.9, "Dispatch jobs", "enqueue tasks with requirements", cli)
-  node(2.9, 11.7, "Local runner", "auto-logged, git", cli)
+  // ============ Client (one node) ============
+  draw.rect(
+    (0.4, 13.3), (5.4, 15.1),
+    fill: cli.fill, stroke: 0.8pt + cli.stroke, radius: 3pt,
+  )
+  draw.content(
+    (2.9, 14.2), width: 4.8,
+    align(center)[
+      #text(weight: "bold", size: 8.5pt)[Python SDK] \
+      #text(size: 7pt, fill: ink)[auto-logged local runs, \ job dispatching, dataset management]
+    ],
+  )
 
   // ============ Server ============
   node(9.9, 16.1, "API server", "clients + agents, REST", srv)
@@ -98,7 +106,7 @@
   node(9.9, 13.9, "Job Scheduler", "resource matching", srv)
   node(15.1, 11.7, "Database", "MongoDB · Redis · Elasticsearch", srv)
   node(20.3, 11.7, "Auth middleware", "token check, admin role", srv)
-  node(20.3, 16.1, "Web app", "projects, runs, jobs, workers", srv)
+  node(20.3, 16.1, "Identity Provider", "Keycloak: OIDC, mlops realm", srv)
 
   // ============ Agents ============
   node(32.9, 16.1, "Resource inventory", "CPU, RAM, GPU, labels", agt)
@@ -108,16 +116,15 @@
 
   // ============ External ============
   node(2.9, 6.1, "GitHub Enterprise", "source repos, read by GitHub App", ext)
-  node(20.3, 6.1, "Identity Provider", "Keycloak: OIDC, mlops realm", ext)
-  node(20.3, 3.9, "Dockerhub", "container images", ext)
+  node(12.0, 6.1, "Dockerhub", "container images", ext)
 
   // ============ NAS ============
   draw.rect(
-    (25.6, 5.2), (35.0, 6.9),
+    (22.0, 5.2), (36.5, 6.9),
     fill: nas.fill, stroke: 0.8pt + nas.stroke, radius: 3pt,
   )
   draw.content(
-    (30.3, 6.05), width: 9.0,
+    (29.25, 6.05), width: 12.0,
     align(center)[
       #text(weight: "bold", size: 8.5pt)[Object storage (RustFS)] \
       #text(size: 7pt, fill: ink)[S3 API · buckets: dataset, model, artifact, debug]
@@ -125,12 +132,11 @@
   )
 
   // ============ Wires: client ============
-  wire(((5.1, 16.1), (7.7, 16.1)))
-  tag(6.4, 16.6, [REST])
-  wire(((5.1, 13.9), (6.4, 13.9), (6.4, 15.6), (7.7, 15.6)))
-  wire(((2.9, 11.1), (2.9, 6.7)))
+  wire(((5.4, 14.6), (6.4, 14.6), (6.4, 16.1), (7.7, 16.1)))
+  tag(6.4, 15.3, [REST])
+  wire(((2.9, 13.3), (2.9, 6.7)))
   tag(2.9, 9.2, [git clone / push])
-  wire(((5.1, 11.7), (6.4, 11.7), (6.4, 9.2), (26.0, 9.2), (26.0, 6.9)))
+  wire(((5.4, 13.6), (6.4, 13.6), (6.4, 9.2), (26.0, 9.2), (26.0, 6.9)))
   tag(14.0, 9.2, [dataset and artifact transfer, presigned S3 URLs])
 
   // ============ Wires: server ============
@@ -140,24 +146,26 @@
   tag(16.7, 13.0, [runs, metrics, artifacts])
   wire(((9.9, 13.3), (9.9, 11.7), (12.9, 11.7)))
   tag(11.2, 12.9, [queued tasks])
-  wire(((20.3, 11.1), (20.3, 6.7)), dash: true)
-  tag(21.7, 10.7, [OIDC: login, user sync])
-
-  // Server -> GitHub: read-only GitHub App (fetch remote status)
-  wire(((7.6, 10.4), (7.6, 8.6), (5.0, 8.6), (5.0, 6.7)), dash: true)
-  tag(6.4, 8.2, [server: GitHub App, read])
+  wire(((20.3, 12.3), (20.3, 15.5)), dash: true, both: true)
+  tag(21.8, 14.6, [OIDC: login, user sync])
 
   // ============ Wires: scheduler -> agents ============
   wire(((12.1, 13.9), (24.0, 13.9), (24.0, 16.1), (30.7, 16.1)), both: true)
   tag(18.0, 14.3, [REST: register, poll, logs, job tokens])
 
-  // ============ Wires: agents -> NAS / Dockerhub ============
+  // ============ Wires: agents -> NAS / Dockerhub / GitHub ============
   wire(((27.7, 13.3), (27.7, 6.9)))
   tag(29.0, 9.2, [dataset pull, S3 URLs])
   wire(((32.9, 13.3), (32.9, 6.9)))
   tag(33.6, 9.2, [upload artifacts])
-  wire(((38.1, 13.3), (38.1, 3.9), (22.5, 3.9)))
+  wire(((38.1, 13.3), (38.1, 3.9), (12.0, 3.9), (12.0, 5.5)))
   tag(30.5, 4.3, [pull images])
+  wire(((26.4, 13.3), (26.4, 10.0), (20.6, 10.0), (20.6, 3.0), (4.2, 3.0), (4.2, 5.5)))
+  tag(13.0, 3.0, [git clone with job token])
+
+  // Server -> GitHub: read-only GitHub App (fetch remote status)
+  wire(((7.6, 10.4), (7.6, 8.6), (5.0, 8.6), (5.0, 6.7)), dash: true)
+  tag(6.4, 8.2, [server: GitHub App, read])
 })
 
 #v(5mm)
@@ -168,18 +176,18 @@
   gutter: 10mm,
   [
     #text(weight: "bold")[Machine rules]
-    - *Client* talks to the Server (REST), to GitHub Enterprise (git) and to the object store on the NAS (datasets and artifacts, through presigned S3 URLs).
-    - *Server* runs the API, the web app, the scheduler and the stores: MongoDB for tasks and metadata, Redis and Elasticsearch for caches and events. It also runs the sign-in service (Keycloak) and the object store (RustFS) in the same deploy stack.
+    - *Client* is the Python SDK. It talks to the Server (REST), to GitHub Enterprise (git) and to the object store on the NAS (datasets and artifacts, through presigned S3 URLs).
+    - *Server* runs the API, the scheduler, the database (MongoDB for tasks and metadata, Redis and Elasticsearch for caches and events) and the sign-in service (Keycloak), in the same deploy stack.
     - *NAS* runs the object store: one S3-compatible service (RustFS) with four buckets (dataset, model, artifact, debug), and one service user that may only use those buckets.
-    - *Agents* are enrolled by an admin with a device key. They get a token per job, a short-lived GitHub token for the job's one repository, and presigned S3 URLs for transfers. Jobs run in containers (Docker on the host, or a Docker daemon in a `dind` container). They pull images from Dockerhub.
+    - *Agents* are enrolled by an admin with a device key. Each job gets a token, and a short-lived GitHub token that clones its repository from GitHub Enterprise. Jobs run in containers (Docker on the host, or a Docker daemon in a `dind` container). They pull images from Dockerhub, and move datasets and artifacts with presigned S3 URLs.
   ],
   [
     #text(weight: "bold")[Data and identity]
     - Datasets and artifacts are ClearML datasets and artifacts. A run stores their ids and hashes, not the files.
-    - Source repositories are on GitHub Enterprise. The server reads them with a read-only GitHub App and gives each job a token for its one repository.
+    - Source repositories are on GitHub Enterprise. The server reads them with a read-only GitHub App; a job clones its repository with its own token.
     - Clients enroll once through a Keycloak login, then use their device key only. Agents are enrolled by an admin only.
     - Presigned S3 URLs name the object store's public address, so clients must be able to reach it.
     - Dashed arrows: identity and authentication checks.
-    - Browsers use the web app after the same Keycloak login. Users are synced from Keycloak.
+    - Users sign in through Keycloak, and the server syncs users from it.
   ],
 )
