@@ -108,7 +108,7 @@
   node(38.1, 13.9, "Container runner", "Docker: host or dind", agt)
 
   // ============ External ============
-  node(2.9, 6.1, "GitHub", "source repos, read by GitHub App", ext)
+  node(2.9, 6.1, "GitHub Enterprise", "source repos, read by GitHub App", ext)
   node(20.3, 6.1, "Identity Provider", "Keycloak: OIDC, mlops realm", ext)
   node(20.3, 3.9, "Dockerhub", "container images", ext)
 
@@ -158,7 +158,7 @@
   gutter: 10mm,
   [
     #text(weight: "bold")[Machine rules]
-    - *Client* talks to the Server (REST), to GitHub (git) and to the object store on the NAS (datasets and artifacts, through presigned S3 URLs).
+    - *Client* talks to the Server (REST), to GitHub Enterprise (git) and to the object store on the NAS (datasets and artifacts, through presigned S3 URLs).
     - *Server* runs the API, the web app, the scheduler and the stores: MongoDB for tasks and metadata, Redis and Elasticsearch for caches and events. It also runs the sign-in service (Keycloak) and the object store (RustFS) in the same deploy stack.
     - *NAS* holds the four buckets of the object store: dataset, model, artifact and debug.
     - *Agents* are enrolled by an admin with a device key. They get a token per job, a short-lived GitHub token for the job's one repository, and presigned S3 URLs for transfers. Jobs run in containers (Docker on the host, or a Docker daemon in a `dind` container). They pull images from Dockerhub.
@@ -166,7 +166,7 @@
   [
     #text(weight: "bold")[Data and identity]
     - Datasets and artifacts are ClearML datasets and artifacts. A run stores their ids and hashes, not the files.
-    - Source repositories are on GitHub. The server reads them with a read-only GitHub App and gives each job a token for its one repository.
+    - Source repositories are on GitHub Enterprise. The server reads them with a read-only GitHub App and gives each job a token for its one repository.
     - Clients enroll once through a Keycloak login, then use their device key only. Agents are enrolled by an admin only.
     - Presigned S3 URLs name the object store's public address, so clients must be able to reach it.
     - Dashed arrows: identity and authentication checks.
