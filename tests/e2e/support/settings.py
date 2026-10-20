@@ -39,5 +39,5 @@ def configure(*, api: str, web: str, idp: str, storage: str, admin_user: str, ad
 
 
 def github_tests_enabled() -> bool:
-    """The GitHub-only tests need a repository on github.com that this machine's App can read (E2E.md)."""
+    """The GitHub-only tests need a repository on github.com that this machine's App can read (docs/e2e_testing/E2E.md)."""
     return bool(os.environ.get("MLOPS_E2E_GITHUB_REPO"))

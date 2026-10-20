@@ -1,4 +1,4 @@
-"""Section 1 of E2E.md: enrolling a machine, checking it, re-enrolling and signing out.
+"""Section 1 of docs/e2e_testing/E2E.md: enrolling a machine, checking it, re-enrolling and signing out.
 
 Every enrolment here goes through clearml-init and the real sign-in page (headless browser).
 """

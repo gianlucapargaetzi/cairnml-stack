@@ -1,4 +1,4 @@
-"""Section 2 of E2E.md: artifacts of every kind, read back on another machine, with their hashes and metadata.
+"""Section 2 of docs/e2e_testing/E2E.md: artifacts of every kind, read back on another machine, with their hashes and metadata.
 
 The upload runs once per module, in one task. Every check then reads the task back in a new process, so the
 content is what the server stored, not what the uploading process still has in memory.

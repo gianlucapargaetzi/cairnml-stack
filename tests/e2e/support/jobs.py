@@ -88,5 +88,5 @@ def wait_for(api, task_id: str, states, timeout: float = 60) -> dict:
 
 def wait_for_start(api, task_id: str, timeout: float = 60) -> dict:
     """Waits until the job body has started (its first scalar is logged). A job that never starts fails here with the
-    step it reached, instead of timing out in the test that needed it (E2E.md, speed section, item 8)."""
+    step it reached, instead of timing out in the test that needed it (docs/e2e_testing/E2E.md, speed section, item 8)."""
     return _follow(api, task_id, lambda r: r.get("last_metrics"), "waiting for the job to start", timeout)

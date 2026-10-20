@@ -1,4 +1,4 @@
-"""Section 8 of E2E.md: deleting what the suite made. The stack itself is removed at the end of the session (conftest).
+"""Section 8 of docs/e2e_testing/E2E.md: deleting what the suite made. The stack itself is removed at the end of the session (conftest).
 
 The bytes of a deleted run are removed from object storage by the asynchronous delete service, so the check waits
 for that service rather than asking once.

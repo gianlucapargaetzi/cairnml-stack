@@ -1,5 +1,5 @@
 #!/bin/sh
-# Runs the end-to-end suite in the isolated environment (E2E.md, The isolated environment). The host runs one container, dind, and nothing
+# Runs the end-to-end suite in the isolated environment (docs/e2e_testing/E2E.md, The isolated environment). The host runs one container, dind, and nothing
 # else: the runner and the ClearML stack run inside it (inside.sh).
 #
 #   tests/e2e/docker/run.sh                       the whole suite

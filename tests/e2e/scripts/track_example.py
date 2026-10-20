@@ -46,7 +46,7 @@ def main() -> None:
     parser.add_argument("--steps", type=int, default=100)
     parser.add_argument("--batch", default="",
                         help="a JSON file listing {name, steps} runs to record in this process, one after another "
-                             "(E2E.md, speed section, item 12)")
+                             "(docs/e2e_testing/E2E.md, speed section, item 12)")
     args = parser.parse_args()
     if args.batch:
         for entry in json.loads(Path(args.batch).read_text()):

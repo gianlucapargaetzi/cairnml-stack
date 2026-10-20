@@ -1,4 +1,4 @@
-"""Section 3 of E2E.md: metrics, parameters, single values, console, text and debug samples.
+"""Section 3 of docs/e2e_testing/E2E.md: metrics, parameters, single values, console, text and debug samples.
 
 A run is recorded by a script on the client machine. Every check reads the run back from the server in another
 process, so only what the server stored can pass.
@@ -124,7 +124,7 @@ def test_two_runs_of_one_name_are_two_experiments(client_home, project, tmp_path
     Expect: Both tasks are listed under that name, with different ids.
     """
     name = new_name("repeated")
-    # both runs are recorded by one process, one after another (E2E.md, speed section, item 12)
+    # both runs are recorded by one process, one after another (docs/e2e_testing/E2E.md, speed section, item 12)
     (tmp_path / "runs.json").write_text(json.dumps([{"name": name, "steps": 3}, {"name": name, "steps": 3}]))
     first, second = workspace.run_json_lines(client_home, "track_example.py",
                                              ["--project", project, "--batch", tmp_path / "runs.json"])

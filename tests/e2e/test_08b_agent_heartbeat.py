@@ -1,7 +1,7 @@
-"""Section 5 of E2E.md, heartbeat on its own: a stopped agent and the scheduler's lost-worker rule.
+"""Section 5 of docs/e2e_testing/E2E.md, heartbeat on its own: a stopped agent and the scheduler's lost-worker rule.
 
 This module runs one agent and nothing else that calls the scheduler, so what it sees is the server's rule and
-not the activity of other machines. The rule is run by the scheduler's sweep timer (see E2E.md, known defects).
+not the activity of other machines. The rule is run by the scheduler's sweep timer (see docs/e2e_testing/E2E.md, known defects).
 """
 
 import pytest

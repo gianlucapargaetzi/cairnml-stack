@@ -9,7 +9,7 @@ The stack is a separate compose project (tests/e2e/stack/compose.yaml) with:
 Only the Docker daemon and the image cache are shared with the rest of the machine. The clearml-server image is
 the one the deploy/ stack builds; the suite does not change it.
 
-Reuse (MLOPS_E2E_REUSE_STACK=1, see E2E.md, speed section item 1): the stack keeps its state, ports and accounts in
+Reuse (MLOPS_E2E_REUSE_STACK=1, see docs/e2e_testing/E2E.md, speed section item 1): the stack keeps its state, ports and accounts in
 REUSE_DIR and is left running at the end of the session. The next session finds it healthy and starts at once. It is
 rebuilt and restarted only when the server or web sources, or the compose file, have changed since it was started.
 Stop it with `python -m support.stack --stop` (run in tests/e2e).

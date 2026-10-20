@@ -1,4 +1,4 @@
-"""Section 4 of E2E.md: git-managed and unmanaged code, as the run records it, and as a job checks it out.
+"""Section 4 of docs/e2e_testing/E2E.md: git-managed and unmanaged code, as the run records it, and as a job checks it out.
 
 Repositories here are local: a bare remote on this machine, and a checkout of it. The GitHub-only rules (tokens
 for a repository on github.com, a private repository refused) need a GitHub App and a reachable repository; they are
@@ -125,7 +125,7 @@ def test_job_clones_the_recorded_commit_and_reports_it(client_home, project, che
 
 
 def test_repository_on_github_is_refused_at_enqueue_without_the_app(client_home, project, checkout):
-    """E2E.md and README: a job whose repository is on GitHub is refused when enqueued unless the GitHub App is set up.
+    """docs/e2e_testing/E2E.md and README: a job whose repository is on GitHub is refused when enqueued unless the GitHub App is set up.
 
     Expect: The enqueue is refused, and its message names GitHub.
     """

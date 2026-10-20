@@ -7,7 +7,7 @@ artifact, and prints a JSON line at the end.
 Recording: run from a client (no agent around it), the script only records the job: its task, its arguments, its base
 image. The body runs on the agent, with the same arguments, which are kept on the task in its "Args" section.
 `--batch <file>` records several jobs in one process: the file lists {"argv": [...]} entries, one task each
-(E2E.md, speed section, item 12). Each job's arguments are connected to its own task, so no job sees another's.
+(docs/e2e_testing/E2E.md, speed section, item 12). Each job's arguments are connected to its own task, so no job sees another's.
 """
 
 import argparse
@@ -103,7 +103,7 @@ def main() -> None:
             record(entry["argv"], parser)
         return
     if not os.environ.get("CLEARML_WORKER_ID"):
-        # on the client the script only records the job (item 14 of E2E.md, speed section)
+        # on the client the script only records the job (item 14 of docs/e2e_testing/E2E.md, speed section)
         record(sys.argv[1:], parser)
         return
     run_body(args)

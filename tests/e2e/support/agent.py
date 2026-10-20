@@ -67,7 +67,7 @@ class AgentMachine:
         env = cli.environment(self.home)
         env["CLEARML_WORKER_NAME"] = self.worker_name
         # The test stack's scheduler syncs every 2 s (compose.yaml); the agent syncs at the same rate, so a worker is
-        # registered and lost within seconds, not minutes (E2E.md, speed section, item 3).
+        # registered and lost within seconds, not minutes (docs/e2e_testing/E2E.md, speed section, item 3).
         env["CLEARML_AGENT__services__scheduler__sync_interval_sec"] = str(SYNC_INTERVAL_SEC)
         env.update(shared_cache_settings())
         log = open(self.log_path, "ab")

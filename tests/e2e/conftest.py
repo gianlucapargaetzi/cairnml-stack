@@ -5,7 +5,7 @@ ports. Nothing here touches deploy/ or the stack it runs. Every session gets its
 ~/.clearml is never touched, and the test devices are enrolled through the real sign-in page.
 
 Set MLOPS_E2E_KEEP_STACK=1 to leave the stack running after the session, for debugging.
-Set MLOPS_E2E_REUSE_STACK=1 to keep the stack running for the next session (see E2E.md, speed section, item 1). A reused
+Set MLOPS_E2E_REUSE_STACK=1 to keep the stack running for the next session (see docs/e2e_testing/E2E.md, speed section, item 1). A reused
 stack is reset at the start of each run, through the suite's own reset (system.e2e_reset, off unless the stack is the
 suite's).
 Each session writes the report to tests/e2e/reports/ (support/report.py).
@@ -34,11 +34,11 @@ REGISTRATION_TIMEOUT = 60
 
 def pytest_collection_modifyitems(config, items):
     """Tests marked github need a GitHub repository this machine can reach. They are skipped unless
-    MLOPS_E2E_GITHUB_REPO names one (see E2E.md)."""
+    MLOPS_E2E_GITHUB_REPO names one (see docs/e2e_testing/E2E.md)."""
     e2e_report.collect(items)
     if settings.github_tests_enabled():
         return
-    skip = pytest.mark.skip(reason="needs a reachable GitHub repository: set MLOPS_E2E_GITHUB_REPO (E2E.md)")
+    skip = pytest.mark.skip(reason="needs a reachable GitHub repository: set MLOPS_E2E_GITHUB_REPO (docs/e2e_testing/E2E.md)")
     for item in items:
         if "github" in item.keywords:
             item.add_marker(skip)

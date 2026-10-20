@@ -1,4 +1,4 @@
-"""E2E.md, UI check after a restart of the API: this is the one test that restarts a service of the stack.
+"""docs/e2e_testing/E2E.md, UI check after a restart of the API: this is the one test that restarts a service of the stack.
 
 It is in its own module, which runs last (pytest runs the modules in name order), so no other test waits for the restart.
 """
@@ -11,7 +11,7 @@ pytestmark = [pytest.mark.ui, pytest.mark.docker, pytest.mark.restart]
 
 
 def test_restarting_the_api_keeps_the_dashboard_rendering(browser, isolated_stack):
-    """Restart regression of E2E.md: after the API container restarts, a reload renders the same dashboard, with
+    """Restart regression of docs/e2e_testing/E2E.md: after the API container restarts, a reload renders the same dashboard, with
     no half-loaded page. The restart is of this suite's own stack.
 
     Expect: after the API restarts and the page reloads, the same three dashboard sections are shown.
