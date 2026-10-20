@@ -4,6 +4,7 @@
 //
 // Layout is absolute: every box is placed by its centre (x, y) on a grid.
 // Units are canvas units (0.9 cm each). Node size: W x H.
+// Rows, top to bottom: external services, client | server | agents, NAS.
 
 #import "@preview/cetz:0.4.2": canvas, draw
 
@@ -74,8 +75,10 @@
 #v(4mm)
 
 #canvas(length: 0.9cm, {
-  // ============ Machine frames ============
-  // Row 1: Client | Server | Agents
+  // ============ Row 1: external services ============
+  frame(0, 19.4, 41.2, 25.2, ext, "5 · External services")
+
+  // ============ Row 2: Client | Server | Agents ============
   frame(0, 10.4, 5.8, 18.0, cli, "1 · Client")
   frame(7.0, 10.4, 23.2, 18.0, srv, "2 · Server")
   frame(24.8, 10.4, 41.2, 18.0, agt, "4 · Agents")
@@ -83,9 +86,9 @@
     (25.1, 17.1), anchor: "west",
     text(size: 6.8pt, fill: ink)[auth: device key → agent token · per-job token · GitHub token · presigned S3 URLs],
   )
-  // Row 2: External | NAS, the same width
-  frame(0, 2.6, 19.8, 8.0, ext, "5 · External services")
-  frame(21.4, 2.6, 41.2, 8.0, nas, "3 · NAS")
+
+  // ============ Row 3: NAS ============
+  frame(0, 2.6, 41.2, 8.0, nas, "3 · NAS")
 
   // ============ Client (one node) ============
   draw.rect(
@@ -115,16 +118,16 @@
   node(38.1, 13.9, "Container runner", "Docker: host or dind", agt)
 
   // ============ External ============
-  node(2.9, 6.1, "GitHub Enterprise", "source repos, read by GitHub App", ext)
-  node(12.0, 6.1, "Dockerhub", "container images", ext)
+  node(2.9, 21.9, "GitHub Enterprise", "source repos, read by GitHub App", ext)
+  node(20.3, 21.9, "Dockerhub", "container images", ext)
 
   // ============ NAS ============
   draw.rect(
-    (22.0, 5.2), (36.5, 6.9),
+    (6.0, 5.2), (35.2, 6.9),
     fill: nas.fill, stroke: 0.8pt + nas.stroke, radius: 3pt,
   )
   draw.content(
-    (29.25, 6.05), width: 12.0,
+    (20.6, 6.05), width: 20.0,
     align(center)[
       #text(weight: "bold", size: 8.5pt)[Object storage (RustFS)] \
       #text(size: 7pt, fill: ink)[S3 API · buckets: dataset, model, artifact, debug]
@@ -134,8 +137,8 @@
   // ============ Wires: client ============
   wire(((5.4, 14.6), (6.4, 14.6), (6.4, 16.1), (7.7, 16.1)))
   tag(6.4, 15.3, [REST])
-  wire(((2.9, 13.3), (2.9, 6.7)))
-  tag(2.9, 9.2, [git clone / push])
+  wire(((2.9, 15.1), (2.9, 21.3)))
+  tag(2.9, 16.6, [git clone / push])
   wire(((5.4, 13.6), (6.4, 13.6), (6.4, 9.2), (26.0, 9.2), (26.0, 6.9)))
   tag(14.0, 9.2, [dataset and artifact transfer, presigned S3 URLs])
 
@@ -149,6 +152,10 @@
   wire(((20.3, 12.3), (20.3, 15.5)), dash: true, both: true)
   tag(21.8, 14.6, [OIDC: login, user sync])
 
+  // Server -> GitHub: read-only GitHub App (fetch remote status)
+  wire(((7.6, 18.0), (7.6, 21.9), (5.1, 21.9)), dash: true)
+  tag(10.2, 19.8, [server: GitHub App, read])
+
   // ============ Wires: scheduler -> agents ============
   wire(((12.1, 13.9), (24.0, 13.9), (24.0, 16.1), (30.7, 16.1)), both: true)
   tag(18.0, 14.3, [REST: register, poll, logs, job tokens])
@@ -158,14 +165,10 @@
   tag(29.0, 9.2, [dataset pull, S3 URLs])
   wire(((32.9, 13.3), (32.9, 6.9)))
   tag(33.6, 9.2, [upload artifacts])
-  wire(((38.1, 13.3), (38.1, 3.9), (12.0, 3.9), (12.0, 5.5)))
-  tag(30.5, 4.3, [pull images])
-  wire(((26.4, 13.3), (26.4, 10.0), (20.6, 10.0), (20.6, 3.0), (4.2, 3.0), (4.2, 5.5)))
-  tag(13.0, 3.0, [git clone with job token])
-
-  // Server -> GitHub: read-only GitHub App (fetch remote status)
-  wire(((7.6, 10.4), (7.6, 8.6), (5.0, 8.6), (5.0, 6.7)), dash: true)
-  tag(6.4, 8.2, [server: GitHub App, read])
+  wire(((38.1, 14.5), (38.1, 21.9), (22.5, 21.9)))
+  tag(30.5, 21.9, [pull images])
+  wire(((26.4, 18.0), (26.4, 23.4), (4.2, 23.4), (4.2, 22.5)))
+  tag(14.0, 23.4, [git clone with job token])
 })
 
 #v(5mm)
