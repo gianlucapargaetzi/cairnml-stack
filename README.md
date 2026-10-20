@@ -230,3 +230,40 @@ In the SDK and the API, the record of an experiment is still called a `Task`.
 ## 7. Status
 
 The setup is complete. Not yet verified end to end on a live stack: the browser sign-in for each kind of machine, and a job from enqueue through to its artifacts.
+
+## 8. Tests
+
+Two kinds: unit tests in each fork, and the end-to-end suite in `tests/e2e/`, which starts its own stack and checks the
+whole workflow against it (see [E2E.md](E2E.md) and [E2E_TESTS.md](E2E_TESTS.md)).
+
+### Unit tests
+
+| Fork | Command | Notes |
+|---|---|---|
+| `clearml` (SDK) | `cd clearml && python -m pytest tests` | Runs without services. Last run: 61 passed. |
+| `clearml-agent` | `cd clearml-agent && python -m pytest tests --ignore=tests/requirements` | Needs the fork installed (`pip install -e .`). Last run: 7138 passed, 6 failed in `tests/package/test_task_script.py` (a missing file), which is not yet explained. `tests/requirements` does not import. |
+| `clearml-server` | run in the server image, with MongoDB, Redis and Elasticsearch running (see below) | Without the services, 198 tests fail with "connection refused" on `127.0.0.1:27017`. |
+| `clearml-web` | `cd clearml-web && npm ci && npm test` | Karma, which needs Chrome. Not run in the last check. |
+
+To run the server's unit tests, start the stack's services and point the image at them. The simplest way is the
+end-to-end stack's own compose project (its services are on a private network), or any MongoDB, Redis and Elasticsearch
+reachable from the container. Mount `clearml-server/apiserver/tests` into the image and run pytest from `/opt/clearml`,
+after creating `/var/log/clearml` (the logging configuration writes there).
+
+### End-to-end tests
+
+Prerequisites, and the full list of what the suite checks, are in [E2E.md](E2E.md). In short:
+
+```bash
+uv venv .venv --python 3.12
+uv pip install -r tests/e2e/requirements.txt
+uv pip install -e ./clearml -e ./clearml-agent
+playwright install chromium
+
+.venv/bin/pytest tests/e2e                 # everything: starts its own stack, about 70 minutes
+.venv/bin/pytest tests/e2e -m "not slow"   # without the long checks
+.venv/bin/pytest tests/e2e -k artifacts    # one area
+```
+
+The suite does not use `deploy/`. It needs Docker, nine free ports in 18000 to 18999 on the loopback interface, and the forks
+checked out as submodules. Known failures are listed in [E2E_TESTS.md](E2E_TESTS.md) and as issues in each fork.
