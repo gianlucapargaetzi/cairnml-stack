@@ -59,6 +59,11 @@ def test_a_job_longer_than_its_token_lifetime_completes_and_its_token_is_renewed
     api = workspace.device_api(client_home)
     jobs.enqueue(client_home, long_job)
     record = jobs.wait_for(api, long_job, ("completed", "failed"), timeout=JOB_SLEEP_SEC + 300)
-    assert record["status"] == "completed", jobs.explain(api, long_job, record)
+    assert record["status"] == "completed", (
+        jobs.explain(api, long_job, record) + "\n" + "\n".join(jobs.console(api, long_job, size=200)[-40:])
+    )
     assert "result" in [a["key"] for a in record["execution"]["artifacts"]]
-    assert f"Job token renewed for task {long_job}" in job_agent.log(), job_agent.log()[-2000:]
+    # the agent writes its own log of the job next to the job's temporary files; the renewals are logged there
+    agent_logs = list(Path(tempfile.gettempdir()).glob(f"clearml-jobs-*/{long_job}.log"))
+    agent_log = agent_logs[0].read_text(errors="replace") if agent_logs else ""
+    assert f"Job token renewed for task {long_job}" in agent_log, agent_log[-3000:]
