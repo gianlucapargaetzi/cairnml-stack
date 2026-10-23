@@ -25,7 +25,7 @@ def test_restarting_the_api_keeps_the_dashboard_rendering(browser, isolated_stac
     page.reload()
     page.wait_for_selector("text=RECENT EXPERIMENTS", timeout=60_000)
     after = page.inner_text("body")
-    for heading in ("RECENT PROJECTS", "RECENT EXPERIMENTS", "MANAGE WORKERS AND JOBS"):
+    for heading in ("RECENT PROJECTS", "RECENT EXPERIMENTS", "MANAGE WORKERS AND QUEUES"):
         assert heading in after, f"{heading} missing after the restart"
     assert before.split("\n")[0] == after.split("\n")[0]
     context.close()

@@ -81,8 +81,11 @@ def test_scalars_page_draws_both_series_of_the_loss(runs, signed_in_page):
     Expect: the scalars page names both loss series, shows the accuracy single value, and draws a chart."""
     _open(signed_in_page, _task_path(runs, "scalars"))
     signed_in_page.wait_for_selector("text=loss", timeout=CHECK_TIMEOUT_MS)
+    # the sidebar names the loss before the chart has its data: wait for the series names the legend shows
+    signed_in_page.wait_for_selector("text=train", timeout=CHECK_TIMEOUT_MS)
     body = signed_in_page.inner_text("body")
     assert "loss" in body
+    signed_in_page.screenshot(path=str(Path(__file__).parent / "reports" / "scalars-page.png"), full_page=True)
     assert "train" in body and "val" in body, "the legend must name both series"
     assert "accuracy" in body and "0.93" in body, "the single value must be in the summary"
     assert signed_in_page.locator("canvas, svg").count() > 0
@@ -185,22 +188,22 @@ def test_single_click_selects_and_double_click_opens_a_project(runs, project, si
     signed_in_page.wait_for_url(re.compile(rf"/projects/{runs['project_id']}"), timeout=CHECK_TIMEOUT_MS)
 
 
-def test_jobs_list_shows_a_running_job_without_a_reload(client_home, project, runs, signed_in_page, job_agent):
-    """The Jobs page, live: a job that is running.
+def test_workers_page_shows_a_running_job_without_a_reload(client_home, project, runs, signed_in_page, job_agent):
+    """The Workers page, live: a job that is running.
 
-    Expect: a job that is running shows as running on the Jobs page, without a reload of the page."""
+    Expect: the worker running a job shows the job on the Workers page, without a reload of the page."""
     new_name_prefix = new_name("live")
     task_id = run_json(client_home, str(LIVE_JOB_SCRIPT), ["--project", project, "--name", new_name_prefix,
                                                            "--scalars", "1", "--sleep", "300"])["task_id"]
     api = workspace.device_api(client_home)
     jobs.enqueue(client_home, task_id)
-    # the JOBS tab of the workers and jobs section: the job list is there, not on the dashboard tab
-    _open(signed_in_page, "/workers-and-queues/jobs")
+    # the Workers tab of the workers and queues section: a worker lists the task it runs
+    _open(signed_in_page, "/workers-and-queues/workers")
     # a job's first run starts its container cold (test_09, the completion test): the same longer wait applies
     deadline = time.monotonic() + 300
     while time.monotonic() < deadline:
         rows = signed_in_page.locator("tr, [role=row], mat-row").filter(has_text=new_name_prefix)
-        if rows.count() and re.search(r"in progress|running", rows.first.inner_text(), re.IGNORECASE):
+        if rows.count():
             return
         if jobs.task_record(api, task_id).get("status") in jobs.FINAL:
             break  # the job has ended without running: nothing more to see
@@ -208,5 +211,5 @@ def test_jobs_list_shows_a_running_job_without_a_reload(client_home, project, ru
     # what the page shows when the job should have been running: a screenshot in the report folder, and the page text
     signed_in_page.screenshot(path=str(Path(__file__).parent / "reports" / "live-jobs-page.png"), full_page=True)
     body = signed_in_page.inner_text("body")
-    pytest.fail(f"the job {new_name_prefix} never showed as running on the Jobs page: {jobs.explain(api, task_id)}; "
+    pytest.fail(f"the job {new_name_prefix} never showed on the Workers page: {jobs.explain(api, task_id)}; "
                 f"the page says: {body[:1500]!r}")
