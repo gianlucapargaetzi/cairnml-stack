@@ -115,43 +115,30 @@ Section 7 of E2E.md. Each step runs in its own process.
 
 ## test_08_agents.py: enrolling and running an agent
 
-Section 5 of E2E.md. The agent is the managed daemon, in its own home, with its own device key and worker name.
+Section 5 of E2E.md. The agent is the daemon on the default queue, in its own home, with its own device key and worker name.
 
 | Test | Checks |
 |---|---|
 | `test_admin_enrols_the_agent_machine_with_its_own_key` | `clearml-agent init` (as admin) writes an agent key with mode 0600 and a device id. |
 | `test_agent_device_is_kind_agent` | The device is listed as kind `agent`, not revoked. |
 | `test_member_cannot_enrol_an_agent` | A plain user is refused ("only an admin may enrol an agent"); no key is written. |
-| `test_agent_registers_as_a_worker_with_its_host_resources` | The worker is active; CPUs equal the host's, RAM is within 5 % of the host's, the GPU count equals `nvidia-smi`. |
-| `test_agent_keeps_a_share_of_the_machine_for_the_host` | The agent reserves at least one CPU and some RAM for the host. |
+| `test_agent_registers_as_a_worker_listening_to_its_queue` | The worker is in the server's worker list, and its queues include the default queue. |
 | `test_agent_reports_its_usage` | Usage is reported at each sync: CPU percent, RAM in use, disk in use percent, all in range. |
 | `test_agent_without_its_key_does_not_register` | An agent whose key is removed never registers, and its log names the key. |
 | `test_agent_without_its_key_says_to_enrol_it` | The log says to run `clearml-agent init`, not a raw `Errno 2`. |
-| `test_stopped_agent_is_lost_by_the_sweep_and_comes_back_without_enrolling` | The scheduler's sweep (its own timer, not a placement pass) marks the stopped agent lost within about 30 s; it returns active on its own, with the same device and key. |
 
-## test_08b_agent_heartbeat.py: the heartbeat on its own
+## test_09_jobs.py: queue and execution
 
-| Test | Checks |
-|---|---|
-| `test_stopped_agent_is_marked_lost_by_the_timeout_alone` | With no other scheduler activity, a stopped agent is marked lost after the heartbeat timeout. |
-
-## test_09_jobs.py: queue, placement, execution
-
-Section 6 of E2E.md. 
+Section 6 of E2E.md. A job waits in the default queue until the agent takes it.
 
 | Test | Checks |
 |---|---|
-| `test_job_that_no_machine_fits_stays_queued_with_the_reason` | A job asking for 50 GPUs stays queued, and the Jobs view (`scheduler.get_jobs`, pending) gives its reason. |
-| `test_job_that_fits_is_placed_on_the_agent` | A job that fits gets a `placed` event on the agent. |
-| `test_job_placed_on_the_agent_is_claimed_by_it` | The agent claims a placed job (`claimed` event). |
 | `test_enqueueing_a_queued_task_again_leaves_it_queued_once` | Enqueueing a queued task again is accepted and leaves it queued, once. |
 | `test_enqueue_works_after_the_task_was_read` | Enqueue after a service call is refused ("upgrade clearml-server"). |
 | `test_job_with_a_missing_image_fails_once_and_is_not_rescheduled` | An image that cannot be pulled ends the job `failed`, with no retry: only lost attempts are retried. |
-| `test_higher_priority_job_is_placed_before_a_lower_one` | A holder job takes the whole machine; a low and a high priority job wait behind it; the high one must be placed first. **Currently failing** in the last full run: the low priority job was placed first. Not yet explained. |
 | `test_job_runs_to_completion_with_its_scalars_and_artifact` | The job completes, with its scalars and its artifact. |
 | `test_failing_job_is_failed_with_its_traceback_and_the_agent_is_free` | A job raising after two scalars ends `failed`, with the traceback in its log. |
 | `test_aborted_job_stops_within_thirty_seconds` | A job whose body has started is aborted, and stops within 30 s. |
-| `test_lost_agent_during_a_job_retries_the_job_once` | A job whose agent is killed mid-run is retried once (`retried` event). |
 | `test_agent_reports_no_running_job_once_a_job_completes` | After a job completes, the agent reports no running job. |
 
 Not yet covered (E2E.md, section 6): live usage of a running job, resource limits inside the container, and the job's
@@ -163,13 +150,13 @@ UI checks of E2E.md, in headless Chromium. Each test signs in through the real s
 
 | Test | Checks |
 |---|---|
-| `test_sign_in_renders_the_dashboard` | Sign-in lands on the dashboard, with recent projects, recent experiments and "Manage workers and jobs". |
+| `test_sign_in_renders_the_dashboard` | Sign-in lands on the dashboard, with recent projects, recent experiments and "Manage workers and queues". |
+| `test_manage_workers_and_queues_page_opens` | "Manage workers and queues" opens the page with the WORKERS and QUEUES tabs. |
 | `test_recent_experiments_list_a_run_recorded_from_the_client` | A run recorded from the client appears under recent experiments. |
 | `test_stale_cookie_goes_to_the_sign_in_page` | A stale session cookie sends the browser to sign-in; no half-loaded page. |
 | `test_dark_mode_renders_with_a_dark_background` | In dark mode the painted background is dark. |
 | `test_light_mode_renders_with_a_light_background` | In light mode the painted background is light. |
 | `test_dashboard_has_no_horizontal_scroll_at_phone_width` | At 390 px wide the dashboard does not scroll sideways. |
-| `test_manage_workers_and_jobs_page_opens` | "Manage workers and jobs" opens the workers and jobs page. |
 | `test_restarting_the_api_keeps_the_dashboard_rendering` (`test_13_api_restart.py`) | Restart regression: after the API container restarts, a reload renders the same dashboard. Runs last, in its own module. |
 
 ## test_11_cleanup.py: deleting what the suite made
@@ -195,7 +182,13 @@ The scalars chart, console, debug samples, comparison, dashboards and live job s
 | `test_project_tabs_offer_tasks_and_experiments` | The project header shows the TASKS and EXPERIMENTS tabs. |
 | `test_task_folder_lists_its_experiments` | The project's TASKS tab lists the run's task. |
 | `test_single_click_selects_and_double_click_opens_a_project` | A single click on a project does not navigate; a double click opens the project. |
-| `test_jobs_list_shows_a_running_job_without_a_reload` | The job's own row on the Jobs page shows it running, without a reload. |
+| `test_workers_page_shows_a_running_job_without_a_reload` | The worker that runs a job shows the job on the Workers page, without a reload of the page. |
+
+## test_14_job_token_renewal.py: a long job keeps its token
+
+| Test | Checks |
+|---|---|
+| `test_a_job_longer_than_its_token_lifetime_completes_and_its_token_is_renewed` | A job that runs past its first token's expiry completes with its result artifact, and the agent's log records a renewal for the task. |
 
 ## Status of the last full run
 

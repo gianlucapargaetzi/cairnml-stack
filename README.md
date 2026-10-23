@@ -297,7 +297,7 @@ whole workflow against it (see [docs/e2e_testing/E2E.md](docs/e2e_testing/E2E.md
 
 | Fork | Command | Notes |
 |---|---|---|
-| `clearml` (SDK) | `cd clearml && python -m pytest tests` | Runs without services. Last run: 87 passed. The dataset tests start git and DVC and take about a minute. |
+| `clearml` (SDK) | `cd clearml && python -m pytest tests` | Runs without services. Last run: 77 passed. The dataset tests start git and DVC and take about a minute. |
 | `clearml-agent` | `cd clearml-agent && python -m pytest tests --ignore=tests/requirements` | Needs the fork installed (`pip install -e .`). Last run: 7138 passed, 6 failed in `tests/package/test_task_script.py` (a missing file), which is not yet explained. `tests/requirements` does not import. |
 | `clearml-server` | run in the server image, with MongoDB, Redis and Elasticsearch running (see below) | Without the services, 198 tests fail with "connection refused" on `127.0.0.1:27017`. |
 | `clearml-web` | `cd clearml-web && npm ci && npm test` | Karma, which needs Chrome. Not run in the last check. |

@@ -106,14 +106,14 @@
   // ============ Server ============
   node(9.9, 16.1, "API server", "clients + agents, REST", srv)
   node(15.1, 16.1, "Experiment Tracking", "runs, metrics, artifacts", srv)
-  node(9.9, 13.9, "Job Scheduler", "resource matching", srv)
+  node(9.9, 13.9, "Job queues", "agents take the next job", srv)
   node(15.1, 11.7, "Database", "MongoDB · Redis · Elasticsearch", srv)
   node(20.3, 11.7, "Auth middleware", "token check, admin role", srv)
   node(20.3, 16.1, "Identity Provider", "Keycloak: OIDC, mlops realm", srv)
 
   // ============ Agents ============
-  node(32.9, 16.1, "Resource inventory", "CPU, RAM, GPU, labels", agt)
-  node(27.7, 13.9, "Agent daemon", "clearml-agent --managed", agt)
+  node(32.9, 16.1, "Resource usage", "CPU, RAM, GPU, disk", agt)
+  node(27.7, 13.9, "Agent daemon", "clearml-agent daemon --queue", agt)
   node(32.9, 13.9, "Python runner", "venv per job", agt)
   node(38.1, 13.9, "Container runner", "Docker: host or dind", agt)
 
@@ -156,9 +156,9 @@
   wire(((7.6, 18.0), (7.6, 19.6), (3.8, 19.6), (3.8, 21.3)), dash: true)
   tag(5.7, 19.6, [GitHub App, read])
 
-  // ============ Wires: scheduler -> agents ============
+  // ============ Wires: queues -> agents ============
   wire(((12.1, 13.9), (24.0, 13.9), (24.0, 16.1), (30.7, 16.1)), both: true)
-  tag(18.0, 14.3, [REST: register, poll, logs, job tokens])
+  tag(18.0, 14.3, [REST: register, take jobs, logs, job tokens])
 
   // ============ Wires: agents -> NAS / Dockerhub / GitHub ============
   wire(((27.7, 13.3), (27.7, 6.9)))
@@ -180,7 +180,7 @@
   [
     #text(weight: "bold")[Machine rules]
     - *Client* is the Python SDK. It talks to the Server (REST), to GitHub Enterprise (git) and to the object store on the NAS (artifacts through presigned S3 URLs; datasets through DVC, with short-lived keys from the server) and keeps a per-user cache of datasets.
-    - *Server* runs the API, the scheduler, the database (MongoDB for tasks and metadata, Redis and Elasticsearch for caches and events) and the sign-in service (Keycloak), in the same deploy stack.
+    - *Server* runs the API, the job queues, the database (MongoDB for tasks and metadata, Redis and Elasticsearch for caches and events) and the sign-in service (Keycloak), in the same deploy stack.
     - *NAS* runs the object store: one S3-compatible service (RustFS) with four buckets (dataset, model, artifact, debug), and one service user that may only use those buckets. The server uses it to issue short-lived keys limited to the dataset bucket.
     - *Agents* are enrolled by an admin with a device key. Each job gets a token, and a short-lived GitHub token that clones its repository from GitHub Enterprise. Jobs run in containers (Docker on the host, or a Docker daemon in a `dind` container). They pull images from Dockerhub, move artifacts with presigned S3 URLs and datasets with short-lived S3 keys, and keep a dataset cache that persists between jobs.
   ],
