@@ -170,7 +170,7 @@ after the fix, because of it.
 | D1 | [clearml-agent #1](https://github.com/gianlucapargaetzi/clearml-agent/issues/1) | Fixed in this environment: job containers install the agent and the SDK from local source, and jobs run to completion. | `test_09_jobs.py` (completion, failure, abort, lost agent, release), `test_06_git.py` (clone) |
 | D2 | [clearml-server #1](https://github.com/gianlucapargaetzi/clearml-server/issues/1) | Enqueue of a github.com repository should be refused with a message that names GitHub, because the GitHub App is not set up. In the last full run the enqueue was accepted. | `test_06_git.py::test_repository_on_github_is_refused_at_enqueue_without_the_app` |
 | D3 | [clearml-server #2](https://github.com/gianlucapargaetzi/clearml-server/issues/2) | Fixed: a scheduler sweep marks a stopped agent lost on its own timer. | `test_08b_agent_heartbeat.py::test_stopped_agent_is_marked_lost_by_the_timeout_alone` |
-| D4 | [clearml #1](https://github.com/gianlucapargaetzi/clearml/issues/1) | `Dataset.add_files` on a finalized dataset is accepted, though finalized datasets are documented as immutable. | `test_07_datasets_models.py::test_finalized_dataset_refuses_new_files` |
+| D4 | [clearml #1](https://github.com/gianlucapargaetzi/clearml/issues/1) | Moot: the ClearML `Dataset` that accepted files after finalize is removed. Datasets are git repositories with DVC; a version is a commit and cannot change. | none |
 | D6 | [clearml #2](https://github.com/gianlucapargaetzi/clearml/issues/2) | Fixed in the SDK: `Task.enqueue` checked the API level the process was using, which the SDK lowers to its newest service version (2.23) after any service call. It now checks the server's level. | `test_09_jobs.py::test_enqueue_works_after_the_task_was_read` (passes) |
 | D7 | [clearml-agent #2](https://github.com/gianlucapargaetzi/clearml-agent/issues/2) | A machine with no device key logs a raw `Errno 2` instead of "run clearml-agent init". | `test_08_agents.py::test_agent_without_its_key_says_to_enrol_it` |
 | Policy | [clearml-server #3](https://github.com/gianlucapargaetzi/clearml-server/issues/3) | A plain user can delete another user's run. Expected 403 until user access management exists (decided). | `test_05_artifacts.py::test_a_member_who_is_not_the_owner_cannot_delete_the_run` |
@@ -187,6 +187,8 @@ the group first, and `test_set_parameters_replaces_the_whole_set_and_set_paramet
 
 ## Status of the last full run
 
+The dataset tests in `test_07_datasets_models.py` were replaced after this run, when datasets moved to git and DVC, and have not been run yet. The numbers below are from before the change.
+
 Latest full run, in the isolated environment, from a stack that was stopped first, with no restarts: 101 tests,
 16 minutes 21 seconds, **92 passed, 6 failed, 3 skipped**.
 
@@ -194,7 +196,6 @@ The 6 that failed, by cause:
 
 - **Known defects, failing as designed:**
   - `test_a_member_who_is_not_the_owner_cannot_delete_the_run`: the owner policy is not built (clearml-server #3).
-  - `test_finalized_dataset_refuses_new_files`: a finalized dataset accepts files (D4).
   - `test_agent_without_its_key_says_to_enrol_it`: the message is a raw error, not the instruction (D7).
   - `test_repository_on_github_is_refused_at_enqueue_without_the_app`: the enqueue is accepted (D2).
 - **Open, explained (see Open results):** the git job clone, and the live jobs list.

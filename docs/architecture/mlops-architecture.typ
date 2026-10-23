@@ -140,7 +140,7 @@
   wire(((2.9, 15.1), (2.9, 21.3)))
   tag(2.9, 16.6, [git clone / push])
   wire(((5.4, 13.6), (6.4, 13.6), (6.4, 9.2), (26.0, 9.2), (26.0, 6.9)))
-  tag(14.0, 9.2, [dataset and artifact transfer, presigned S3 URLs])
+  tag(14.0, 9.2, [artifact transfer: presigned URLs; dataset transfer: short-lived S3 keys])
 
   // ============ Wires: server ============
   wire(((12.1, 16.1), (12.9, 16.1)))
@@ -162,7 +162,7 @@
 
   // ============ Wires: agents -> NAS / Dockerhub / GitHub ============
   wire(((27.7, 13.3), (27.7, 6.9)))
-  tag(29.0, 9.2, [dataset pull, S3 URLs])
+  tag(29.0, 9.2, [dataset pull, short-lived S3 keys])
   wire(((32.9, 13.3), (32.9, 6.9)))
   tag(33.6, 9.2, [upload artifacts])
   wire(((38.1, 14.5), (38.1, 21.0), (19.0, 21.0), (19.0, 21.3)))
@@ -179,14 +179,14 @@
   gutter: 10mm,
   [
     #text(weight: "bold")[Machine rules]
-    - *Client* is the Python SDK. It talks to the Server (REST), to GitHub Enterprise (git) and to the object store on the NAS (datasets and artifacts, through presigned S3 URLs).
+    - *Client* is the Python SDK. It talks to the Server (REST), to GitHub Enterprise (git) and to the object store on the NAS (artifacts through presigned S3 URLs; datasets through DVC, with short-lived keys from the server) and keeps a per-user cache of datasets.
     - *Server* runs the API, the scheduler, the database (MongoDB for tasks and metadata, Redis and Elasticsearch for caches and events) and the sign-in service (Keycloak), in the same deploy stack.
-    - *NAS* runs the object store: one S3-compatible service (RustFS) with four buckets (dataset, model, artifact, debug), and one service user that may only use those buckets.
-    - *Agents* are enrolled by an admin with a device key. Each job gets a token, and a short-lived GitHub token that clones its repository from GitHub Enterprise. Jobs run in containers (Docker on the host, or a Docker daemon in a `dind` container). They pull images from Dockerhub, and move datasets and artifacts with presigned S3 URLs.
+    - *NAS* runs the object store: one S3-compatible service (RustFS) with four buckets (dataset, model, artifact, debug), and one service user that may only use those buckets. The server uses it to issue short-lived keys limited to the dataset bucket.
+    - *Agents* are enrolled by an admin with a device key. Each job gets a token, and a short-lived GitHub token that clones its repository from GitHub Enterprise. Jobs run in containers (Docker on the host, or a Docker daemon in a `dind` container). They pull images from Dockerhub, move artifacts with presigned S3 URLs and datasets with short-lived S3 keys, and keep a dataset cache that persists between jobs.
   ],
   [
     #text(weight: "bold")[Data and identity]
-    - Datasets and artifacts are ClearML datasets and artifacts. A run stores their ids and hashes, not the files.
+    - Artifacts are ClearML artifacts. Datasets are GitHub repositories with their files in DVC: the commit is the version, and a run stores the repository, the commit and a hash of the files, not the files. Outside datasets (Hugging Face and others) are read through adapters kept in an external-datasets repository.
     - Source repositories are on GitHub Enterprise. The server reads them with a read-only GitHub App; a job clones its repository with its own token.
     - Clients enroll once through a Keycloak login, then use their device key only. Agents are enrolled by an admin only.
     - Presigned S3 URLs name the object store's public address, so clients must be able to reach it.

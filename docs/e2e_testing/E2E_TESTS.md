@@ -104,10 +104,12 @@ Section 7 of E2E.md. Each step runs in its own process.
 
 | Test | Checks |
 |---|---|
-| `test_dataset_is_created_and_finalized` | A dataset of three files and a CSV is created, uploaded and finalized. |
-| `test_finalized_dataset_refuses_new_files` | Fails on defect (D4): adding files to a finalized dataset is refused. |
-| `test_second_machine_gets_the_same_files_and_hashes` | `Dataset.get` in another process gives the same files with the same hashes. |
-| `test_dataset_fetch_of_an_unknown_id_fails` | An unknown dataset id fails. |
+| `test_dataset_is_published_in_two_versions` | A dataset repository is published twice; the second commit lacks the image that was removed. |
+| `test_second_machine_gets_the_same_files_and_hashes` | `Dataset.get` in another process gives the same files with the same hashes, for both commits. |
+| `test_an_older_version_keeps_its_deleted_file` | The first commit still has the file the second one removed. |
+| `test_a_run_records_the_dataset_it_used` | The run has the repository, commit and content hash under `Datasets/<alias>`. |
+| `test_a_commit_that_was_not_pushed_is_refused` | A commit that exists only on the author's machine cannot be fetched. |
+| `test_dataset_fetch_of_an_unknown_commit_fails` | An unknown commit fails. |
 | `test_model_is_listed_under_its_run` | The model is listed in the run's output models. |
 | `test_model_downloads_intact_on_another_machine` | The model's weights come back with the same digest. |
 

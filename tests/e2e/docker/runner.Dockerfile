@@ -21,7 +21,7 @@ RUN pip install -r /tmp/requirements.txt \
 # The SDK and the agent are installed from the submodules, editable, as the host's venv has them.
 COPY src/clearml /src/clearml
 COPY src/clearml-agent /src/clearml-agent
-RUN pip install -e /src/clearml -e /src/clearml-agent
+RUN pip install -e "/src/clearml[dataset]" -e /src/clearml-agent
 
 # git reads the mounted repository, whose files belong to another user
 RUN git config --system --add safe.directory '*'
