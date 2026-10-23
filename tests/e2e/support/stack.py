@@ -205,9 +205,9 @@ class IsolatedStack:
         shutil.copy(STORAGE_SCRIPT, self.state / "init.py")
         self._write_nginx_template()
         self._write_realm()
-        # The web app's API address: the web server's /api route, so the app never reaches a port of its own guess.
+        # No configuration.json: the web app finds its API on its own origin (clearml-web, app.constants.ts), so the
+        # UI tests check that default. The folder stays, as the web server mounts it.
         (self.state / "configs").mkdir(exist_ok=True)
-        (self.state / "configs" / "configuration.json").write_text(json.dumps({"apiBaseUrl": "/api"}))
 
     def _write_nginx_template(self) -> None:
         """The web server's nginx template, as the server image has it, listening on this stack's port."""
