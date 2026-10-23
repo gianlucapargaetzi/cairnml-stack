@@ -70,7 +70,8 @@ class AgentMachine:
         env.update(shared_cache_settings())
         log = open(self.log_path, "ab")
         self._proc = subprocess.Popen(
-            [str(cli.VENV_BIN / "clearml-agent"), "daemon", "--queue", "default", "--polling-interval", str(POLLING_INTERVAL_SEC)],
+            [str(cli.VENV_BIN / "clearml-agent"), "daemon", "--queue", "default", "--docker", "python:3.12-slim",
+             "--polling-interval", str(POLLING_INTERVAL_SEC)],
             env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
         )
 
@@ -104,4 +105,6 @@ class AgentMachine:
 def worker_record(api, worker_name: str):
     """This worker as the server lists it, or None."""
     workers = api.authed("workers.get_all", {})
-    return next((w for w in workers.get("workers", []) if w.get("id") == worker_name), None)
+    # the server names a worker "<name>:<n>", where <n> counts the daemons of that name
+    return next((w for w in workers.get("workers", [])
+                 if w.get("id") == worker_name or str(w.get("id", "")).startswith(worker_name + ":")), None)

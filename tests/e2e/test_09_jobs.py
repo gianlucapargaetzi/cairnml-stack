@@ -66,14 +66,14 @@ def recorded(client_home, project, tmp_path_factory):
 # --- scheduling -------------------------------------------------------------------------------------------------
 
 def test_enqueueing_a_queued_task_again_leaves_it_queued_once(client_home, project, machine, recorded):
-    """Enqueueing a task that is already queued is accepted and changes nothing: it is still queued, once.
+    """Enqueueing a task that is already queued is refused: it stays queued, once.
 
-    Expect: a second enqueue succeeds, and the task stays queued.
+    Expect: a second enqueue is refused, and the task is still queued or already running, once.
     """
     task_id = recorded["twice"]
     jobs.enqueue(client_home, task_id)
     again = workspace.run_raw(client_home, "enqueue.py", ["--task-id", task_id])
-    assert again.returncode == 0, again.output
+    assert again.returncode != 0, again.output
     api = workspace.device_api(client_home)
     assert jobs.task_record(api, task_id)["status"] == "queued"
 

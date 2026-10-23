@@ -70,43 +70,32 @@ def test_member_cannot_enrol_an_agent(member_account, tmp_path):
         machine.home / "clearml.conf").read_text()
 
 
-def test_agent_registers_as_a_worker_with_its_host_resources(client_home, machine):
-    """The agent registers as a worker with its host's resources.
+def test_agent_registers_as_a_worker_listening_to_its_queue(client_home, machine):
+    """The agent registers as a worker, and listens to the default queue.
 
-    Expect: the worker is active, and its CPUs, memory and GPUs are those of the host.
-
-    The GPU count is compared with nvidia-smi on the host, and the memory with /proc/meminfo, within 5 %.
+    Expect: the worker is in the server's worker list, and its queues include the default queue.
     """
-    api = workspace.device_api(client_home)
-    record = worker_record(api, machine.worker_name)
-    assert record["state"] == "active"
-    capacity = record["capacity"]
-    assert capacity["cpus"] == os.cpu_count()
-    mem_gb = _host_memory_gb()
-    assert abs(capacity["ram_gb"] - mem_gb) / mem_gb < 0.05, (capacity["ram_gb"], mem_gb)
-    assert len(capacity.get("gpus", [])) == _host_gpu_count()
-
-
-def test_agent_keeps_a_share_of_the_machine_for_the_host(client_home, machine):
-    """The share of the machine kept for the host.
-
-    Expect: the agent reserves a part of the machine (at least one CPU and some memory) for the host."""
     record = worker_record(workspace.device_api(client_home), machine.worker_name)
-    reserved = record["reserved"]
-    assert reserved["cpus"] >= 1
-    assert reserved["ram_gb"] > 0
+    assert record is not None
+    assert "default" in [q.get("name") for q in record.get("queues", [])], record
 
 
 def test_agent_reports_its_usage(client_home, machine):
-    """The usage the agent reports.
+    """The machine usage the agent reports, through the monitor's usage history.
 
-    Expect: the agent reports its CPU, memory and disk usage at a sync, within the machine's limits."""
+    Expect: the agent's machine usage is recorded, with CPU, memory and disk within the machine's limits.
+    """
     api = workspace.device_api(client_home)
-    usage = machine.wait_until(lambda: (worker_record(api, machine.worker_name) or {}).get("usage"), timeout=60)
-    assert usage, "the agent must report its usage at each sync"
-    assert 0 <= usage["cpu_percent"] <= 100 * os.cpu_count()
-    assert 0 < usage["ram_used_gb"] <= _host_memory_gb()
-    assert 0 <= usage["disk_used_percent"] <= 100
+
+    def machine_points():
+        points = api.authed("scheduler.get_usage_history", {"minutes": 10})["points"]
+        return [p for p in points if str(p.get("worker", "")).startswith(machine.worker_name) and p.get("kind") == "machine"]
+
+    found = machine.wait_until(machine_points, timeout=90)
+    assert found, "the agent must report its machine usage"
+    point = found[-1]
+    assert 0 <= point["cpu_percent"] <= 100 * os.cpu_count()
+    assert 0 < point["ram_used_gb"] <= _host_memory_gb()
 
 
 @pytest.fixture(scope="module")

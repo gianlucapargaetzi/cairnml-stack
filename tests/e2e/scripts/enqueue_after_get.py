@@ -17,8 +17,8 @@ def main() -> None:
     args = parser.parse_args()
 
     Task.get_task(task_id=args.task_id)
-    result = Task.enqueue(args.task_id, force=True)
-    report({"queued": result["data"]["queued"]})
+    result = Task.enqueue(args.task_id, queue_name="default", force=True)
+    report({"queued": result.queued})
 
 
 if __name__ == "__main__":
