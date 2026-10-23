@@ -130,7 +130,7 @@ apply() {
   api -X PUT "repos/$OWNER/$repo/actions/permissions/selected-actions" \
     -F github_owned_allowed=true -F verified_allowed=false \
     -f 'patterns_allowed[]=pypa/gh-action-pypi-publish@*' -f 'patterns_allowed[]=pnpm/action-setup@*' -f 'patterns_allowed[]=github/codeql-action/*@*' \
-    -f 'patterns_allowed[]=docker/*@*' -f 'patterns_allowed[]=aquasecurity/trivy-action@*'
+    -f 'patterns_allowed[]=docker/*@*' -f 'patterns_allowed[]=aquasecurity/trivy-action@*' -f 'patterns_allowed[]=aquasecurity/setup-trivy@*'
   api -X PUT "repos/$OWNER/$repo/actions/permissions/workflow" -f default_workflow_permissions=read -F can_approve_pull_request_reviews=false
   api -X PUT "repos/$OWNER/$repo/actions/permissions/fork-pr-contributor-approval" -f approval_policy=all_external_contributors
   api -X PATCH "repos/$OWNER/$repo" \
