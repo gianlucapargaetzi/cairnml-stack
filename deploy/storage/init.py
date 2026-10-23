@@ -4,7 +4,7 @@ Standard library only, so the init container needs no pip install. Requests are 
 AWS Signature V4; the admin endpoints are the RustFS ones under /rustfs/admin/v3/.
 Re-running is safe: every step is idempotent. Any failure exits non-zero.
 
-The service user gets object read, write and delete on the four buckets and nothing else. The root
+The service user gets object read, write and delete on the four buckets, the listing and multipart actions on the dataset bucket, and STS AssumeRole for the dataset keys. Nothing else. The root
 user is used here only, never by the server.
 """
 
@@ -35,7 +35,22 @@ POLICY = {
             "Effect": "Allow",
             "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
             "Resource": [f"arn:aws:s3:::{b}/*" for b in BUCKETS],
-        }
+        },
+        # The server hands out short-lived keys for the dataset bucket (DVC uses them), by assuming a
+        # session policy that is a subset of this one. A session can only do what this user may do,
+        # so the actions DVC needs on that bucket are listed here. RustFS refuses mixed action
+        # families in one statement, and a resource of "*" for sts, so each has its own.
+        {
+            "Effect": "Allow",
+            "Action": ["s3:AbortMultipartUpload", "s3:ListMultipartUploadParts"],
+            "Resource": ["arn:aws:s3:::dataset/*"],
+        },
+        {
+            "Effect": "Allow",
+            "Action": ["s3:ListBucket", "s3:GetBucketLocation"],
+            "Resource": ["arn:aws:s3:::dataset"],
+        },
+        {"Effect": "Allow", "Action": ["sts:AssumeRole"], "Resource": ["arn:aws:s3:::*"]},
     ],
 }
 

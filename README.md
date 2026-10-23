@@ -4,7 +4,8 @@ Our experiment tracking, remote jobs and dataset setup, on a modified fork of [C
 
 - **Track** a training script with a few lines of Python: metrics, parameters, logs and artifacts are recorded on our server.
 - **Explore** runs in the web app.
-- **Run** jobs on agents that we operate. The scheduler places each job on a machine with the resources it asks for.
+- **Run** jobs on agents that we operate. A job waits in a queue until an agent that listens to that queue takes it.
+- **Version** datasets with git and DVC. A dataset is a git repository, its commit is its version, and every run records the commit it used.
 - **Sign in** with our identity provider (Keycloak). Each machine has its own key; nobody copies access keys.
 
 This repository holds the setup: the sign-in service, the ClearML server, and the scripts to start them. The ClearML code itself is in four forks, included as submodules (below).
@@ -19,6 +20,8 @@ This repository holds the setup: the sign-in service, the ClearML server, and th
 | `deploy/scripts/teardown.sh` | Removes the stack and this machine's keys (`--dry-run` first) |
 | `deploy/scripts/check-clearml-secrets.sh` | Fails if a secret is committed to a ClearML repository |
 | `clearml-server`, `clearml-web`, `clearml`, `clearml-agent` | Our forks, as submodules |
+| `clearml/docs/datasets.md` | How datasets work: `clearml-dataset`, `Dataset.get`, outside datasets, the cache |
+| `external-datasets` (its own repository, not a submodule) | One pin file and one adapter per outside dataset (Hugging Face, git, local folders), with the tests that keep its `main` working |
 
 The old platform (`mlops`) is removed from this branch. It is still in the history of `main` until the cut-over.
 
@@ -88,6 +91,8 @@ docker compose -f deploy/compose.yaml up -d --force-recreate apiserver
 
 Without the App, jobs that clone a repository are refused when they are enqueued.
 
+Jobs that use a dataset clone its repository too. List the dataset repositories, and the `external-datasets` repository, in the server setting `apiserver.idp.dataset_repositories` (`owner/name`, or `owner/*` for all of an owner's), set the same way as the other `apiserver.idp` settings, and install the App on them. A job gets a read-only token for a listed repository only; a person uses their own git login.
+
 ### Addresses and https
 
 The addresses are set in `deploy/compose.yaml` (`CLEARML__apiserver__idp__*`): the web app at `http://mlops-clearml:8080`, the API at `http://mlops-clearml:8008`. To serve over https, change those addresses to https, and set `CLEARML_COOKIE_SECURE=true` in `deploy/.env`. The server refuses to start with https addresses and an insecure session cookie.
@@ -98,7 +103,7 @@ The server's data is in `deploy/data/` and its keys in `deploy/secrets/`. Both a
 
 ### Object storage and the NAS
 
-Object storage (RustFS, with the buckets `dataset`, `model`, `artifact` and `debug`) runs in this stack, on the server host, and keeps its data in `deploy/data/rustfs`. The architecture diagram (`docs/architecture/`) shows it on a separate NAS, which is not set up yet. To move it, change the `rustfs` volume in `deploy/compose.yaml` to the NAS path, and set `MLOPS_STORAGE_PUBLIC_URL` in `deploy/.env` to an address that clients can reach.
+Object storage (RustFS, with the buckets `dataset`, `model`, `artifact` and `debug`) runs in this stack, on the server host, and keeps its data in `deploy/data/rustfs`. Artifacts, models and debug data move through presigned URLs. The files of datasets move through DVC, with short-lived keys that the server issues for the `dataset` bucket only (`datachunks.dataset_credentials`), so no access key is stored on a machine. Run `deploy/scripts/bootstrap.sh` again after an update: it gives the server's storage user the policy for issuing those keys. The architecture diagram (`docs/architecture/`) shows it on a separate NAS, which is not set up yet. To move it, change the `rustfs` volume in `deploy/compose.yaml` to the NAS path, and set `MLOPS_STORAGE_PUBLIC_URL` in `deploy/.env` to an address that clients can reach.
 
 ## 2. Client (a person's machine)
 
@@ -150,6 +155,43 @@ task.close()
 
 The run appears in the web app under the project `demo`, with its metrics.
 
+### Datasets
+
+A dataset is a git repository with a `data/` folder. Git holds the history, DVC holds the files in the `dataset` bucket, and the commit is the version. Install the extra (Python 3.9 or newer, and `git`):
+
+```bash
+pip install -e "./clearml[dataset]"
+```
+
+Create an empty repository on GitHub, clone it, and inside it:
+
+```bash
+clearml-dataset init                  # git tracking and file storage
+cp -r /path/to/measurements data/     # your files
+clearml-dataset status                # branch, and what is new, changed or deleted
+clearml-dataset add                   # records data/ as it is now, deleted files included
+clearml-dataset commit -m "March measurements"
+clearml-dataset push                  # the files first, then the commits
+```
+
+A script uses a version by its commit. The run records the repository, the commit and a hash of the files, and the files are kept in a per-user cache, so a second run does not download them again:
+
+```python
+from clearml.datasets import Dataset
+
+data = Dataset.get("https://github.com/acme/cars-data.git", "3f2a9c1")   # a commit, not a branch, to rerun it later
+print(data.path)
+```
+
+Outside datasets (Hugging Face, git, a local folder) are read through adapters in the `external-datasets` repository, into one standard shape of samples with named modalities and typed labels:
+
+```python
+data = Dataset.get_external("coco-det")            # the latest main of external-datasets
+data = Dataset.get_external("coco-det", "a1b2c3d") # a fixed commit, to rerun an earlier run exactly
+```
+
+The cache is `~/.clearml/cache/datasets`, limited to 50 GB by default (`clearml-dataset cache info`, `cache limit 20GB`, `cache clean`). See `clearml/docs/datasets.md` for the details, including how to write an adapter.
+
 To enrol a second laptop, run `clearml-init --server ...` on it. Each machine has its own key. A lost machine is revoked by its owner or an admin with the `devices.revoke` call of the API, and its key stops working at once. There is no page for this in the web app yet.
 
 ## 3. Agent (a machine that runs jobs)
@@ -171,13 +213,15 @@ Enrol it. An admin signs in when the browser opens; a non-admin is refused, and 
 clearml-agent init
 ```
 
-Then start the agent. It serves the whole machine as one worker:
+Then start the agent on a queue. It takes one job at a time from the queue and runs it:
 
 ```bash
-clearml-agent daemon --managed
+clearml-agent daemon --queue default
 ```
 
-Each job runs with its own token, issued to this agent when the job starts. The job never gets the agent's own token, and the repository is cloned with a short-lived GitHub token for that one repository.
+Add `--docker` to run each job in a container, and `--gpus 0` to give the agent chosen GPUs. A machine with several GPUs can run one agent per GPU, each on its own queue. Run `clearml-agent daemon --help` for the rest, including services mode.
+
+Each job runs with its own token, issued to this agent when the job starts. The agent renews it while the job runs, and the job never gets the agent's own token. The repository is cloned with a short-lived GitHub token for that one repository.
 
 ### In a container
 
@@ -192,28 +236,21 @@ docker compose up -d agent
 
 The server address in the agent's configuration must be reachable from inside `dind`: a LAN name or IP, not `localhost`. Only one agent may run per daemon. See `deploy/agent/README.md` for the layout, the volumes and the limits.
 
-### Resource-aware scheduling
+### Queues
 
-The server offers the machine the tasks that fit it, and the agent runs each one in its own container with the CPUs, memory and GPUs of its reservation.
+A job waits in a queue until an agent that listens to it takes the job. The `default` queue exists from the start; create more in the web app (Workers & Queues), for example one per kind of machine.
 
-The machine is one worker. The agent keeps a share of it for the operating system and the host services (by default 1 CPU and 10 % of RAM and disk). Each job is held to its reservation by Docker: its CPUs, a memory limit, its GPUs, and a process limit.
-
-A task says what it needs, or nothing:
+Put a task in a queue from a script, or from the web app (enqueue on the task's page):
 
 ```python
 from clearml import Task
 
 task = Task.init(project_name="demo", task_name="training")
-task.set_requirements(cpus=4, ram_gb=12, gpus=1, gpu_memory_gb=24, disk_gb=50, max_runtime_min=720)
-task.set_priority(80)          # 0 to 100, higher runs first; default 50
-Task.enqueue(task)
+Task.enqueue(task, queue_name="default")       # run the recorded task on an agent
+# or: task.execute_remotely(queue_name="default")   # stop this process and run the script on an agent
 ```
 
-All of `cpus`, `ram_gb`, `gpus` and `disk_gb` are given together, or none is. A task with none runs alone on a machine.
-
-A job that ends badly is reported with its reason: `oom` (out of memory, with the limit and the peak), `time_limit`, `gpu_error`, `disk_full` or `error`. The reason is on the task and in its log. A job whose machine is lost is retried once, then failed.
-
-The Workers tab shows each machine with its live usage; expanding a machine shows its jobs. The Jobs tab lists the running and waiting jobs, and says why a waiting job waits.
+An agent takes one job at a time, so a job waits while its agent is busy. A machine that should run several jobs at once runs several agents, each on its own queue or GPU. The Workers page shows each machine, the task it runs and its live usage, and the Queues page shows what waits. A job that is waiting but never starts has no agent listening to its queue.
 
 ## 4. Web app
 
@@ -225,7 +262,7 @@ The dashboard lists the projects at the top and the recent experiments at the bo
 
 - **Task**: a procedure, such as "train model X". Its runs are experiments, and they are grouped under it by name.
 - **Experiment**: one execution of a task. Each run is an experiment, whether it was started from the web app, with `execute_remotely()` or `enqueue()`, or run locally with `Task.init`. Each experiment has its own id, metrics and artifacts.
-- **Job**: one scheduled experiment, from the moment the scheduler places it on a machine until it ends. A job that is lost with its machine is retried once; a second loss fails the task.
+- **Job**: one experiment taken from a queue by an agent, from the moment the agent starts it until it ends.
 
 In the SDK and the API, the record of an experiment is still called a `Task`.
 
@@ -243,6 +280,9 @@ In the SDK and the API, the record of an experiment is still called a `Task`.
 | `clearml-init` says the machine is enrolled | The key file `~/.clearml/device.key` exists. Remove it only to enrol again, and revoke the old device in the web app |
 | `clearml-agent init` is refused | Only an admin may enrol an agent. Ask an admin to run it |
 | A job is refused when it is enqueued | The repository's commit is not on GitHub, or the GitHub App is not installed on it. The message says which |
+| A job stays queued | No agent listens to its queue. Start `clearml-agent daemon --queue <name>`, and look for the worker on the Workers page |
+| `Dataset.get` says a commit is not on the repository, or its files are not in storage | Push it: `clearml-dataset push`. A commit that exists only on one machine cannot be used by another |
+| An adapter stops a run with a message that names it | The source changed its layout. Add an adapter for the new revisions and list them under `overrides` in the dataset's pin file in `external-datasets` |
 
 ## 7. Status
 
@@ -257,7 +297,7 @@ whole workflow against it (see [docs/e2e_testing/E2E.md](docs/e2e_testing/E2E.md
 
 | Fork | Command | Notes |
 |---|---|---|
-| `clearml` (SDK) | `cd clearml && python -m pytest tests` | Runs without services. Last run: 61 passed. |
+| `clearml` (SDK) | `cd clearml && python -m pytest tests` | Runs without services. Last run: 77 passed. The dataset tests start git and DVC and take about a minute. |
 | `clearml-agent` | `cd clearml-agent && python -m pytest tests --ignore=tests/requirements` | Needs the fork installed (`pip install -e .`). Last run: 7138 passed, 6 failed in `tests/package/test_task_script.py` (a missing file), which is not yet explained. `tests/requirements` does not import. |
 | `clearml-server` | run in the server image, with MongoDB, Redis and Elasticsearch running (see below) | Without the services, 198 tests fail with "connection refused" on `127.0.0.1:27017`. |
 | `clearml-web` | `cd clearml-web && npm ci && npm test` | Karma, which needs Chrome. Not run in the last check. |
