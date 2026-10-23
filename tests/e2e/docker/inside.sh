@@ -20,6 +20,8 @@ mkdir -p "$STAGE/src"
 cp /workspace/tests/e2e/docker/runner.Dockerfile /workspace/tests/e2e/docker/requirements.txt "$STAGE/"
 cp -r /workspace/clearml "$STAGE/src/clearml"
 cp -r /workspace/clearml-agent "$STAGE/src/clearml-agent"
+# build output is not source: a stale build/ folder would be packed into the wheel instead of the sources
+rm -rf "$STAGE/src/clearml/build" "$STAGE/src/clearml/dist" "$STAGE/src/clearml-agent/build" "$STAGE/src/clearml-agent/dist"
 docker build -q -t "$IMAGE" -f "$STAGE/runner.Dockerfile" "$STAGE" >/dev/null
 
 RUN="docker run --rm -i --network host \

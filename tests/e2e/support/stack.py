@@ -109,6 +109,7 @@ class IsolatedStack:
         self.keep = keep
         self.reuse = reuse_requested() if reuse is None else reuse
         self.host = HOST
+        self.job_token_ttl_sec = 3600
         saved = self._read_saved() if self.reuse else None
         if saved:
             self.state = Path(saved["state"])
@@ -204,9 +205,9 @@ class IsolatedStack:
         shutil.copy(STORAGE_SCRIPT, self.state / "init.py")
         self._write_nginx_template()
         self._write_realm()
-        # The web app's API address: the web server's /api route, so the app never reaches a port of its own guess.
+        # No configuration.json: the web app finds its API on its own origin (clearml-web, app.constants.ts), so the
+        # UI tests check that default. The folder stays, as the web server mounts it.
         (self.state / "configs").mkdir(exist_ok=True)
-        (self.state / "configs" / "configuration.json").write_text(json.dumps({"apiBaseUrl": "/api"}))
 
     def _write_nginx_template(self) -> None:
         """The web server's nginx template, as the server image has it, listening on this stack's port."""
@@ -246,6 +247,7 @@ class IsolatedStack:
             "E2E_RUSTFS_USER": "e2e-rustfs",
             "E2E_RUSTFS_PASSWORD": self.rustfs_password,
             "E2E_S3_ACCESS_KEY": self.s3_access,
+            "E2E_JOB_TOKEN_TTL_SEC": str(self.job_token_ttl_sec),
         }
 
     # --- compose ---------------------------------------------------------------------------------------------------
@@ -253,6 +255,15 @@ class IsolatedStack:
     def compose(self, *args, timeout=900) -> subprocess.CompletedProcess:
         return subprocess.run(["docker", "compose", "-p", self.project, "-f", str(COMPOSE_FILE), *args],
                               env=self._env(), capture_output=True, text=True, timeout=timeout)
+
+    def set_job_token_ttl(self, seconds: int) -> None:
+        """Restarts only the API with another job token lifetime. The data and the other services are kept; the
+        API is back at the default once this is called with 3600 again."""
+        self.job_token_ttl_sec = seconds
+        result = self.compose("up", "-d", "--no-deps", "apiserver", timeout=300)
+        if result.returncode != 0:
+            raise StackError(f"cannot restart the API with a job token lifetime of {seconds} s:\n{result.stderr[-3000:]}")
+        self._wait(self._api_answers, 120, "the ClearML API after the restart")
 
     def _chown_data(self) -> None:
         """The containers run as their own users; the folders must be theirs. Done in a container, as bootstrap does."""

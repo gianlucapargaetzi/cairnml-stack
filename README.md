@@ -184,7 +184,8 @@ Each job runs with its own token, issued to this agent when the job starts. The 
 The agent can also run as a container, in `deploy/agent/`. The agent container runs on the host's Docker daemon; it starts each job's container on a second daemon, in a privileged `dind` container. The host's daemon never runs a job and is not reachable from the jobs. Start it from `deploy/agent/`:
 
 ```bash
-docker compose up -d --build
+docker compose build agent
+docker compose up -d dind
 docker compose run --rm agent clearml-agent init
 docker compose up -d agent
 ```
