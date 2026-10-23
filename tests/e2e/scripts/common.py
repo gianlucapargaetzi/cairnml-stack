@@ -1,11 +1,16 @@
 """Helpers shared by the example scripts: the one JSON line a script prints at the end, and the digests the
 artifact scripts compare (the upload side writes them, the check side recomputes them from what came back)."""
 
+import faulthandler
 import hashlib
 import io
 import json
 import os
+import sys
 from pathlib import Path
+
+# A script that hangs (the client does not exit) dumps the stack of every thread to stderr, for the test's report.
+faulthandler.dump_traceback_later(90, repeat=False, file=sys.stderr)
 
 
 def report(result: dict) -> None:
