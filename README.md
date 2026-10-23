@@ -91,13 +91,14 @@ docker compose -f deploy/compose.yaml up -d --force-recreate apiserver
 
 Without the App, jobs that clone a repository are refused when they are enqueued.
 
-Jobs that use a dataset clone its repository too. List the dataset repositories, and the `external-datasets` repository, as a JSON list in `deploy/.env` (`owner/name`, or `owner/*` for all of an owner's), install the App on them, and restart the API server as above:
+Jobs that use a dataset clone its repository too. The dataset registry (the `external-datasets` repository) is the only list of dataset repositories: a job gets a read-only token for the registry and for the repositories its entries point to, and for nothing else. Name the registry and the owners whose datasets may be registered in `deploy/.env`, install the App on the registry and on the dataset repositories, and restart the API server as above:
 
 ```bash
-MLOPS_DATASET_REPOSITORIES='["acme/external-datasets", "acme/cars-data"]'
+MLOPS_DATASET_REGISTRY=acme/external-datasets
+MLOPS_DATASET_OWNERS='["acme"]'
 ```
 
-The list becomes the server setting `apiserver.idp.dataset_repositories`. A job gets a read-only token for a listed repository only; a person uses their own git login.
+A dataset enters the registry with `clearml-dataset register`; no server setting changes. The server reads the registry's default branch, so a new entry works about a minute after its pull request merges. A person uses their own git login.
 
 ### Addresses and https
 

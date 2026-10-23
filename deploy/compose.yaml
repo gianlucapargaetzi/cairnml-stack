@@ -166,9 +166,11 @@ services:
       CLEARML__apiserver__auth__cookies__secure: ${CLEARML_COOKIE_SECURE:-false}
       CLEARML__apiserver__idp__github_app_id: ${GITHUB_APP_ID:-}
       CLEARML__apiserver__idp__github_api_url: ${GITHUB_API_URL:-https://api.github.com}
-      # Dataset repositories a job may clone besides its own, as a JSON list in deploy/.env, for example
-      # MLOPS_DATASET_REPOSITORIES='["acme/external-datasets", "acme/cars-data"]' ("owner/*" allows all of an owner's).
-      CLEARML__apiserver__idp__dataset_repositories: ${MLOPS_DATASET_REPOSITORIES:-[]}
+      # The dataset registry (owner/name of its repository) and the owners whose dataset repositories may be registered
+      # in it, e.g. MLOPS_DATASET_REGISTRY=acme/external-datasets and MLOPS_DATASET_OWNERS='["acme"]' in deploy/.env.
+      # The registry is also the list of dataset repositories a job may clone: nothing else lists them.
+      CLEARML__apiserver__dataset_registry__repository: ${MLOPS_DATASET_REGISTRY:-}
+      CLEARML__apiserver__dataset_registry__allowed_owners: ${MLOPS_DATASET_OWNERS:-[]}
       CLEARML__services__async_urls_delete__enabled: "true"
       # Object storage: internal address for the server's own calls, public address that presigned
       # URLs name. Clients must be able to reach the public one.
