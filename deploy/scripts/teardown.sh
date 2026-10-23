@@ -122,11 +122,10 @@ fi
 # deploy/.env is read by compose from this folder, because compose.yaml is here.
 say "2. Stopping and removing the containers"
 run docker compose -f compose.yaml down -v --remove-orphans
-for image in cairnml-server-fork:local; do
-  if [ "$DRY_RUN" -eq 1 ] || docker image inspect "$image" >/dev/null 2>&1; then
-    run docker image rm -f "$image"
-  fi
-done
+image=cairnml-server-fork:local
+if [ "$DRY_RUN" -eq 1 ] || docker image inspect "$image" >/dev/null 2>&1; then
+  run docker image rm -f "$image"
+fi
 
 # ---------------------------------------------------------------- 3. data
 say "3. Removing the data (users, databases, logs)"
