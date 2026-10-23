@@ -166,13 +166,16 @@ pip install -e "./clearml[dataset]"
 Create an empty repository on GitHub, clone it, and inside it:
 
 ```bash
-clearml-dataset init                  # git tracking and file storage
+clearml-dataset init                  # git tracking, file storage, dataset.yaml
 cp -r /path/to/measurements data/     # your files
 clearml-dataset status                # branch, and what is new, changed or deleted
 clearml-dataset add                   # records data/ as it is now, deleted files included
-clearml-dataset commit -m "March measurements"
-clearml-dataset push                  # the files first, then the commits
+clearml-dataset commit -m "March measurements"   # checks the data and commits it with its footprint
+clearml-dataset push                  # the files first, then the commit (through a pull request)
+clearml-dataset register              # once: adds the dataset to the registry
 ```
+
+A dataset must be readable in the standard format: `dataset.yaml` says `format: native` (the standard sample table is in `data/`) or names an adapter (`clearml-dataset init --adapter <name>`). `commit` refuses data that is neither, and writes `dataset.lock.json`, a checksum record that a GitHub Action in the dataset repository verifies from git alone. See `clearml/docs/datasets.md`.
 
 A script uses a version by its commit. The run records the repository, the commit and a hash of the files, and the files are kept in a per-user cache, so a second run does not download them again:
 
@@ -282,6 +285,8 @@ In the SDK and the API, the record of an experiment is still called a `Task`.
 | A job is refused when it is enqueued | The repository's commit is not on GitHub, or the GitHub App is not installed on it. The message says which |
 | A job stays queued | No agent listens to its queue. Start `clearml-agent daemon --queue <name>`, and look for the worker on the Workers page |
 | `Dataset.get` says a commit is not on the repository, or its files are not in storage | Push it: `clearml-dataset push`. A commit that exists only on one machine cannot be used by another |
+| `clearml-dataset commit` says the data is not native and names no adapter | `dataset.yaml` must say `format: native` (with `samples.parquet` and `manifest.json` in `data/`) or `adapter: <name>`. Run `clearml-dataset check` to see what is wrong |
+| `push` says the footprint does not hold | The data or `dataset.yaml` changed after the check. Run `clearml-dataset commit` again |
 | An adapter stops a run with a message that names it | The source changed its layout. Add an adapter for the new revisions and list them under `overrides` in the dataset's pin file in `external-datasets` |
 
 ## 7. Status
