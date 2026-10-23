@@ -81,6 +81,8 @@ def test_scalars_page_draws_both_series_of_the_loss(runs, signed_in_page):
     Expect: the scalars page names both loss series, shows the accuracy single value, and draws a chart."""
     _open(signed_in_page, _task_path(runs, "scalars"))
     signed_in_page.wait_for_selector("text=loss", timeout=CHECK_TIMEOUT_MS)
+    # the sidebar names the loss before the chart has its data: wait for the series names the legend shows
+    signed_in_page.wait_for_selector("text=train", timeout=CHECK_TIMEOUT_MS)
     body = signed_in_page.inner_text("body")
     assert "loss" in body
     signed_in_page.screenshot(path=str(Path(__file__).parent / "reports" / "scalars-page.png"), full_page=True)
