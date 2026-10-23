@@ -167,22 +167,13 @@ after the fix, because of it.
 
 | # | Issue | What happens | Tests |
 |---|---|---|---|
-| D1 | [clearml-agent #1](https://github.com/gianlucapargaetzi/clearml-agent/issues/1) | Fixed in this environment: job containers install the agent and the SDK from local source, and jobs run to completion. | `test_09_jobs.py` (completion, failure, abort, lost agent, release), `test_06_git.py` (clone) |
-| D2 | [clearml-server #1](https://github.com/gianlucapargaetzi/clearml-server/issues/1) | Enqueue of a github.com repository should be refused with a message that names GitHub, because the GitHub App is not set up. In the last full run the enqueue was accepted. | `test_06_git.py::test_repository_on_github_is_refused_at_enqueue_without_the_app` |
-| D3 | [clearml-server #2](https://github.com/gianlucapargaetzi/clearml-server/issues/2) | Fixed: a scheduler sweep marks a stopped agent lost on its own timer. | `test_08b_agent_heartbeat.py::test_stopped_agent_is_marked_lost_by_the_timeout_alone` |
-| D4 | [clearml #1](https://github.com/gianlucapargaetzi/clearml/issues/1) | Moot: the ClearML `Dataset` that accepted files after finalize is removed. Datasets are git repositories with DVC; a version is a commit and cannot change. | none |
-| D6 | [clearml #2](https://github.com/gianlucapargaetzi/clearml/issues/2) | Fixed in the SDK: `Task.enqueue` checked the API level the process was using, which the SDK lowers to its newest service version (2.23) after any service call. It now checks the server's level. | `test_09_jobs.py::test_enqueue_works_after_the_task_was_read` (passes) |
-| D7 | [clearml-agent #2](https://github.com/gianlucapargaetzi/clearml-agent/issues/2) | A machine with no device key logs a raw `Errno 2` instead of "run clearml-agent init". | `test_08_agents.py::test_agent_without_its_key_says_to_enrol_it` |
 | Policy | [clearml-server #3](https://github.com/gianlucapargaetzi/clearml-server/issues/3) | A plain user can delete another user's run. Expected 403 until user access management exists (decided). | `test_05_artifacts.py::test_a_member_who_is_not_the_owner_cannot_delete_the_run` |
-| Config | [clearml-web #3](https://github.com/gianlucapargaetzi/clearml-web/issues/3) | The web app assumes its API is on port 8008 of its own host. The suite works around it with `configuration.json`; no test fails without the workaround. | none (see Not caught by a test) |
 
-D5 is not a defect: `Task.set_parameters` replaces the whole parameter set, as its docstring says. The example script writes
-the group first, and `test_set_parameters_replaces_the_whole_set_and_set_parameter_adds` documents the behaviour.
+Defects that were fixed are not listed. `Task.set_parameters` replaces the whole parameter set, as its docstring says; the
+example script writes the group first, and `test_set_parameters_replaces_the_whole_set_and_set_parameter_adds` documents it.
 
 ### Not caught by a test
 
-- **Config (clearml-web #3).** The workaround hides it. A test would need a stack that runs without the
-  `configuration.json`, which is not what this suite does.
 - **Fixed-port derivation in `clearml-init`.** Skipped on other ports, so it is not run here.
 
 ## Status of the last full run
@@ -196,14 +187,12 @@ The 6 that failed, by cause:
 
 - **Known defects, failing as designed:**
   - `test_a_member_who_is_not_the_owner_cannot_delete_the_run`: the owner policy is not built (clearml-server #3).
-  - `test_agent_without_its_key_says_to_enrol_it`: the message is a raw error, not the instruction (D7).
-  - `test_repository_on_github_is_refused_at_enqueue_without_the_app`: the enqueue is accepted (D2).
 - **Open, explained (see Open results):** the git job clone, and the live jobs list.
 
 The 3 skipped: `test_init_accepts_the_web_address_and_finds_the_api` (the suite runs on ports other than the defaults), and
 the two GitHub tests (no GitHub repository is configured).
 
-Fixed since the earlier runs: D6 (the enqueue test passes), the job completion (the agent's `_unregister` fix), the
+Fixed since the earlier runs: the job completion (the agent's `_unregister` fix), the
 tracking and artifact tests (the result parser, and the runner's data packages), and the comparison view (it passes in
 this run; it failed in an earlier one, and it passes alone too, so its failure was timing or order, not the view).
 
@@ -227,7 +216,6 @@ this run; it failed in an earlier one, and it passes alone too, so its failure w
 - Resource limits inside a job container, and the job's working folder being removed afterwards.
 - Dashboard "Unassigned" bucket and the "All experiments" flat list.
 - Contrast checks in light and dark mode (the suite checks the painted background only).
-- A test for the `configuration.json` requirement (see Not caught by a test).
 
 ## Speed: what was changed, and why
 
@@ -238,12 +226,12 @@ ceilings and intervals, not measured; the report now records each test's duratio
 |---|---|---|
 | 1 | The stack is reused between runs (`MLOPS_E2E_REUSE_STACK`). It is rebuilt only when the server or web sources, or the compose file, changed. Starts take a lock. | 3 to 5 min per run after the first |
 | 2 | The reused stack is reset at the start of each run (`system.e2e_reset`, off by default), so no test needs a restart for repeatable state. | the restarts repeatability needed |
-| 3 | A lost worker is found by the scheduler's own sweep (`sweep_interval_sec`), not by a placement pass (defect D3). The e2e stack syncs every 2 s and sweeps every 1 s. | about 55 s per lost-worker test |
+| 3 | A lost worker is found by the scheduler's own sweep (`sweep_interval_sec`), not by a placement pass. The e2e stack syncs every 2 s and sweeps every 1 s. | about 55 s per lost-worker test |
 | 4 | The directory sync runs every 5 s on the e2e stack; the disabled-user test polls every 1 s. | up to about 90 s |
 | 5 | The two keyless checks share one daemon. Stopping waits 15 s (was 60 s), registration 60 s (was 240 s). | about 110 s per stopped agent |
 | 6 | Fixed sleeps that waited for nothing are gone: the keyless window is 10 s, the queued check polls, the holder's body is 15 s. | about 65 s per run |
 | 7 | Polls are 1 s. The deletion test waits on the delete service's own records (`system.e2e_deletions`), then checks the link. | 2 to 9 s per wait |
-| 8 | Job waits are 60 s, and a job that ends at once ends the wait. The first (cold) job of a run waits 300 s, the one exception. | about 240 s per job test that never started (D1) |
+| 8 | Job waits are 60 s, and a job that ends at once ends the wait. The first (cold) job of a run waits 300 s, the one exception. | about 240 s per job test that never started |
 | 9 | UI tests wait for the content they check, with 10 s ceilings, not for `networkidle`. | 30 to 60 s in the web-run module |
 | 10 | The API restart test is in its own module (`test_13_api_restart.py`), which runs last. | the modules after it no longer wait |
 | 11 | `pytest -n 4 -m "not restart"` runs modules in parallel, with the agent tests in one group. Needs reuse. | the sum of the parallel modules (not measured) |
@@ -253,7 +241,7 @@ ceilings and intervals, not measured; the report now records each test's duratio
 | 15 | The suite runs in an isolated environment: one `dind` container, with the runner, the stack and the job containers inside it. | no host daemon in use |
 | 16 | The agent's `_unregister` is a no-op. Its callers had outlived the method, so a finished job raised after its status was reported. | job completion is reported |
 | 17 | A script's result is its last JSON line (the SDK can print a GPU notice after it), and the runner has pandas, numpy and pillow. | the tracking and artifact tests run |
-| 18 | D6: `Task.enqueue` checks the server's API level, not the one in use (SDK fix). | enqueue after a service call works |
+| 18 | `Task.enqueue` checks the server's API level, not the one in use (SDK fix). | enqueue after a service call works |
 
 ## Open work
 

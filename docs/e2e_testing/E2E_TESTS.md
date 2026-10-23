@@ -1,7 +1,7 @@
 # End-to-end tests: the catalogue
 
 Every test of the suite in `tests/e2e/`, module by module, with what it checks. How the suite works, what it needs and how to
-run it is in [E2E.md](E2E.md). The defects (D1 to D7, and the access and web items) are described there, with their issues.
+run it is in [E2E.md](E2E.md). The one known defect (the access policy) is described there, with its issue.
 
 A test that names a defect fails because of that defect; no test is marked as expected to fail.
 **Skip**: skipped with the reason shown in the report.
@@ -57,7 +57,7 @@ Section 3 of E2E.md. A training script records a run on the client; every check 
 | `test_scalars_keep_the_iteration_of_each_point` | Iterations run from 0 to 99. |
 | `test_scalar_values_are_the_ones_reported` | First and last values equal what the script reported. |
 | `test_parameters_are_stored_in_the_configuration` | `General/epochs` and `General/lr` are in the run's configuration. |
-| `test_set_parameters_replaces_the_whole_set_and_set_parameter_adds` | A group write replaces the parameters; a single write adds one (the SDK's documented behaviour; see E2E.md, D5). |
+| `test_set_parameters_replaces_the_whole_set_and_set_parameter_adds` | A group write replaces the parameters; a single write adds one (the SDK's documented behaviour). |
 | `test_single_value_appears_in_the_summary` | The single value `accuracy` is in the summary. |
 | `test_console_line_is_stored` | The console line printed by the script is stored. |
 | `test_debug_image_is_stored` | The debug image is stored as a debug sample. |
@@ -93,9 +93,9 @@ Section 4 of E2E.md. The repositories are local (a bare remote and a checkout); 
 | `test_uncommitted_changes_are_recorded_as_a_diff` | An uncommitted change is recorded as the diff; the commit stays the last one. |
 | `test_script_outside_git_is_recorded_without_a_repository` | A script outside git has no repository recorded, and its code is kept with the run. |
 | `test_checkout_without_a_remote_records_commit_but_no_url` | A checkout with no remote records its commit and no URL. |
-| `test_job_clones_the_recorded_commit_and_reports_it` | Fails on defect (D1): a job clones the recorded commit and reports it. |
-| `test_repository_on_github_is_refused_at_enqueue_without_the_app` | Fails on defect (D2): enqueueing a github.com repository is refused with a message that names GitHub. Today the enqueue is accepted (the last full run). |
-| `test_private_repository_is_refused_at_clone_time` | **Skip** unless `MLOPS_E2E_GITHUB_PRIVATE_REPO` is set. Fails on defect (D1) otherwise: a job whose repository the App cannot read fails at clone, with no token in its message. |
+| `test_job_clones_the_recorded_commit_and_reports_it` | A job clones the recorded commit and reports it. |
+| `test_repository_on_github_is_refused_at_enqueue_without_the_app` | Enqueueing a github.com repository is refused with a message that names GitHub. |
+| `test_private_repository_is_refused_at_clone_time` | **Skip** unless `MLOPS_E2E_GITHUB_PRIVATE_REPO` is set. A job whose repository the App cannot read fails at clone, with no token in its message. |
 | `test_a_client_device_cannot_get_a_repository_token` | **Skip** unless `MLOPS_E2E_GITHUB_REPO` is set. A person's machine gets no repository token. |
 
 ## test_07_datasets_models.py: datasets and models
@@ -126,18 +126,18 @@ Section 5 of E2E.md. The agent is the managed daemon, in its own home, with its 
 | `test_agent_keeps_a_share_of_the_machine_for_the_host` | The agent reserves at least one CPU and some RAM for the host. |
 | `test_agent_reports_its_usage` | Usage is reported at each sync: CPU percent, RAM in use, disk in use percent, all in range. |
 | `test_agent_without_its_key_does_not_register` | An agent whose key is removed never registers, and its log names the key. |
-| `test_agent_without_its_key_says_to_enrol_it` | Fails on defect (D7): the log says to run `clearml-agent init`, not a raw `Errno 2`. |
+| `test_agent_without_its_key_says_to_enrol_it` | The log says to run `clearml-agent init`, not a raw `Errno 2`. |
 | `test_stopped_agent_is_lost_by_the_sweep_and_comes_back_without_enrolling` | The scheduler's sweep (its own timer, not a placement pass) marks the stopped agent lost within about 30 s; it returns active on its own, with the same device and key. |
 
 ## test_08b_agent_heartbeat.py: the heartbeat on its own
 
 | Test | Checks |
 |---|---|
-| `test_stopped_agent_is_marked_lost_by_the_timeout_alone` | Fails on defect (D3): with no other scheduler activity, a stopped agent is marked lost after the heartbeat timeout. |
+| `test_stopped_agent_is_marked_lost_by_the_timeout_alone` | With no other scheduler activity, a stopped agent is marked lost after the heartbeat timeout. |
 
 ## test_09_jobs.py: queue, placement, execution
 
-Section 6 of E2E.md. Scheduling tests run now; execution tests need a job to run, which D1 prevents.
+Section 6 of E2E.md. 
 
 | Test | Checks |
 |---|---|
@@ -145,17 +145,17 @@ Section 6 of E2E.md. Scheduling tests run now; execution tests need a job to run
 | `test_job_that_fits_is_placed_on_the_agent` | A job that fits gets a `placed` event on the agent. |
 | `test_job_placed_on_the_agent_is_claimed_by_it` | The agent claims a placed job (`claimed` event). |
 | `test_enqueueing_a_queued_task_again_leaves_it_queued_once` | Enqueueing a queued task again is accepted and leaves it queued, once. |
-| `test_enqueue_works_after_the_task_was_read` | Fails on defect (D6): enqueue after a service call is refused ("upgrade clearml-server"). |
+| `test_enqueue_works_after_the_task_was_read` | Enqueue after a service call is refused ("upgrade clearml-server"). |
 | `test_job_with_a_missing_image_fails_once_and_is_not_rescheduled` | An image that cannot be pulled ends the job `failed`, with no retry: only lost attempts are retried. |
 | `test_higher_priority_job_is_placed_before_a_lower_one` | A holder job takes the whole machine; a low and a high priority job wait behind it; the high one must be placed first. **Currently failing** in the last full run: the low priority job was placed first. Not yet explained. |
-| `test_job_runs_to_completion_with_its_scalars_and_artifact` | Fails on defect (D1): the job completes, with its scalars and its artifact. |
-| `test_failing_job_is_failed_with_its_traceback_and_the_agent_is_free` | Fails on defect (D1): a job raising after two scalars ends `failed`, with the traceback in its log. |
-| `test_aborted_job_stops_within_thirty_seconds` | Fails on defect (D1): a job whose body has started is aborted, and stops within 30 s. |
-| `test_lost_agent_during_a_job_retries_the_job_once` | Fails on defect (D1): a job whose agent is killed mid-run is retried once (`retried` event). |
-| `test_agent_reports_no_running_job_once_a_job_completes` | Fails on defect (D1): after a job completes, the agent reports no running job. |
+| `test_job_runs_to_completion_with_its_scalars_and_artifact` | The job completes, with its scalars and its artifact. |
+| `test_failing_job_is_failed_with_its_traceback_and_the_agent_is_free` | A job raising after two scalars ends `failed`, with the traceback in its log. |
+| `test_aborted_job_stops_within_thirty_seconds` | A job whose body has started is aborted, and stops within 30 s. |
+| `test_lost_agent_during_a_job_retries_the_job_once` | A job whose agent is killed mid-run is retried once (`retried` event). |
+| `test_agent_reports_no_running_job_once_a_job_completes` | After a job completes, the agent reports no running job. |
 
 Not yet covered (E2E.md, section 6): live usage of a running job, resource limits inside the container, and the job's
-working folder removed afterwards (all need D1 fixed).
+working folder removed afterwards.
 
 ## test_10_web_app.py: the web app as a person sees it
 
@@ -195,7 +195,7 @@ The scalars chart, console, debug samples, comparison, dashboards and live job s
 | `test_project_tabs_offer_tasks_and_experiments` | The project header shows the TASKS and EXPERIMENTS tabs. |
 | `test_task_folder_lists_its_experiments` | The project's TASKS tab lists the run's task. |
 | `test_single_click_selects_and_double_click_opens_a_project` | A single click on a project does not navigate; a double click opens the project. |
-| `test_jobs_list_shows_a_running_job_without_a_reload` | Fails on defect (D1): the job's own row on the Jobs page shows it running, without a reload. |
+| `test_jobs_list_shows_a_running_job_without_a_reload` | The job's own row on the Jobs page shows it running, without a reload. |
 
 ## Status of the last full run
 
