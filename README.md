@@ -34,14 +34,14 @@ On the machines of users and agents: Python 3 and `git`; the SDK and agent insta
 The four forks are git submodules at the root of this repository, on their `main` branches. Clone the repository with its submodules:
 
 ```bash
-git clone --recurse-submodules git@github.com:gianlucapargaetzi/mlops-framework.git
+git clone --recurse-submodules git@github.com:gianlucapargaetzi/cairnml-stack.git
 # or, after a plain clone:
 git submodule update --init
 ```
 
-The four forks are private repositories, so the submodule step needs access to them (`gianlucapargaetzi/cairnml-server`, `cairnml-web`, `cairnml` and `cairnml-agent`). Without that access the clone still works, but the submodules stay empty.
+The four forks are public repositories (`gianlucapargaetzi/cairnml-server`, `cairnml-web`, `cairnml` and `cairnml-agent`), so the submodule step needs no special access.
 
-Each fork has `origin` (our private copy) and `upstream` (CairnML, fetch only). To take CairnML changes: `git -C <fork> fetch upstream --tags`.
+The forks do not share history with ClearML on GitHub. To compare with ClearML, add it as a remote in a fork: `git remote add upstream https://github.com/clearml/<name>.git`.
 
 ## 1. Server
 
