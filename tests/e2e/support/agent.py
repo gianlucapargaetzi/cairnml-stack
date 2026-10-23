@@ -67,6 +67,8 @@ class AgentMachine:
     def start(self) -> None:
         env = cli.environment(self.home)
         env["CLEARML_WORKER_NAME"] = self.worker_name
+        # the test machine has no GPU: the agent adds no --gpus flag (its own image sets the same, for a CPU host)
+        env["CLEARML_DOCKER_SKIP_GPUS_FLAG"] = "1"
         env.update(shared_cache_settings())
         log = open(self.log_path, "ab")
         self._proc = subprocess.Popen(
