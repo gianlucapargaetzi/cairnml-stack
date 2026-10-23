@@ -29,7 +29,7 @@ The old platform (`mlops`) is removed from this branch. It is still in the histo
 
 On the server host: Linux (`bootstrap.sh` uses `getent`), Docker Engine with Compose v2.20 or newer, `git`, `openssl`, `python3` and `curl`.
 
-On the machines of users and agents: Python 3 and `git`; the SDK and agent install from source. Agents also need Docker for jobs that run in containers.
+On the machines of users and agents: Python 3 and `git`; the SDK and agent install from PyPI (`pip install cairnml`, `pip install cairnml-agent`). Agents also need Docker for jobs that run in containers.
 
 The four forks are git submodules at the root of this repository, on their `main` branches. Clone the repository with its submodules:
 
@@ -114,14 +114,15 @@ Object storage (RustFS, with the buckets `dataset`, `model`, `artifact` and `deb
 
 ## 2. Client (a person's machine)
 
-Install the SDK from the fork, in a virtual environment:
+Install the SDK from PyPI, in a virtual environment:
 
 ```bash
-cd cairnml   # from the root of this repository
 python3 -m venv .venv
 . .venv/bin/activate
-pip install -e .
+pip install cairnml
 ```
+
+To work on the SDK itself, install the fork from this repository instead: `pip install -e ./cairnml`.
 
 Sign in and enrol the machine once, naming the server on the command line. Your browser opens the sign-in page, and the sign-in always asks for your credentials:
 
@@ -167,7 +168,7 @@ The run appears in the web app under the project `demo`, with its metrics.
 A dataset is a git repository with a `data/` folder. Git holds the history, DVC holds the files in the `dataset` bucket, and the commit is the version. Install the extra (Python 3.9 or newer, and `git`):
 
 ```bash
-pip install -e "./cairnml[dataset]"
+pip install "cairnml[dataset]"
 ```
 
 Create an empty repository on GitHub, clone it, and inside it:
@@ -208,14 +209,15 @@ To enrol a second laptop, run `cairnml-init --server ...` on it. Each machine ha
 
 An agent is enrolled by an admin, because it runs other people's code.
 
-Install the agent from the fork, in its own virtual environment:
+Install the agent from PyPI, in its own virtual environment:
 
 ```bash
-cd cairnml-agent   # from the root of this repository
 python3 -m venv .venv
 . .venv/bin/activate
-pip install -e .
+pip install cairnml-agent
 ```
+
+To work on the agent itself, install the fork from this repository instead: `pip install -e ./cairnml-agent`.
 
 Enrol it. An admin signs in when the browser opens; a non-admin is refused, and no configuration is written:
 

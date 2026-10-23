@@ -17,7 +17,7 @@ DRY_RUN=${DRY_RUN:-0}
 checks_for() {
   case "$1" in
     cairnml|cairnml-agent) echo test package gitleaks dependency-review codeql ;;
-    cairnml-server)        echo test gitleaks dependency-review codeql ;;
+    cairnml-server)        echo test docker-build gitleaks dependency-review codeql ;;
     cairnml-web)           echo build gitleaks dependency-review codeql ;;
     cairnml-stack)         echo lint pins gitleaks dependency-review codeql ;;
   esac
