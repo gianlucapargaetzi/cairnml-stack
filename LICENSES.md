@@ -8,7 +8,7 @@ This repository is a collection of components. Each keeps the license of the cod
 | Agent | `cairnml-agent/` | Apache License 2.0 |
 | Web app | `cairnml-web/` | Apache License 2.0 |
 | Server | `cairnml-server/` | Server Side Public License v1 (SSPL) |
-| Deployment, tests, docs (this repository) | `deploy/`, `tests/`, `docs/` | not yet chosen |
+| Deployment, tests, docs (this repository) | `deploy/`, `tests/`, `docs/` | Apache License 2.0 (`LICENSE`) |
 
 The text of each license is in the `LICENSE` file of its component. The code is based on ClearML, Copyright 2025 ClearML Inc.; see [NOTICE](NOTICE).
 
