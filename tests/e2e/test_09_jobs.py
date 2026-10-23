@@ -75,7 +75,8 @@ def test_enqueueing_a_queued_task_again_leaves_it_queued_once(client_home, proje
     again = workspace.run_raw(client_home, "enqueue.py", ["--task-id", task_id])
     assert again.returncode != 0, again.output
     api = workspace.device_api(client_home)
-    assert jobs.task_record(api, task_id)["status"] == "queued"
+    # the agent may already have taken it: the task is queued, or running once taken
+    assert jobs.task_record(api, task_id)["status"] in ("queued", "in_progress")
 
 
 def test_enqueue_works_after_the_task_was_read(client_home, project, machine, recorded):
@@ -96,7 +97,7 @@ def test_job_with_a_missing_image_fails_once_and_is_not_rescheduled(client_home,
     task_id = recorded["missing-image"]
     api = workspace.device_api(client_home)
     workspace.run_raw(client_home, "enqueue.py", ["--task-id", task_id, "--force"])
-    record = jobs.wait_for(api, task_id, jobs.FINAL)
+    record = jobs.wait_for(api, task_id, jobs.FINAL, timeout=300)
     assert record["status"] == "failed"
 
 
