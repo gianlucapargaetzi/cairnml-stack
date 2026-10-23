@@ -83,6 +83,7 @@ def test_scalars_page_draws_both_series_of_the_loss(runs, signed_in_page):
     signed_in_page.wait_for_selector("text=loss", timeout=CHECK_TIMEOUT_MS)
     body = signed_in_page.inner_text("body")
     assert "loss" in body
+    signed_in_page.screenshot(path=str(Path(__file__).parent / "reports" / "scalars-page.png"), full_page=True)
     assert "train" in body and "val" in body, "the legend must name both series"
     assert "accuracy" in body and "0.93" in body, "the single value must be in the summary"
     assert signed_in_page.locator("canvas, svg").count() > 0

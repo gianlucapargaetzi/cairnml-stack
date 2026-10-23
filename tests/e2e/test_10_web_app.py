@@ -97,15 +97,15 @@ def test_dashboard_has_no_horizontal_scroll_at_phone_width(browser):
     context.close()
 
 
-def test_manage_workers_and_jobs_page_opens(signed_in):
-    """The Manage workers and jobs page opens.
+def test_manage_workers_and_queues_page_opens(signed_in):
+    """The Manage workers and queues page opens.
 
-    Expect: The page shows the WORKERS and JOBS headings.
+    Expect: The page shows the WORKERS and QUEUES tabs.
     """
     signed_in.click("text=MANAGE WORKERS AND QUEUES")
-    signed_in.wait_for_selector("text=JOBS", timeout=30_000)
+    signed_in.wait_for_selector("text=QUEUES", timeout=30_000)
     body = signed_in.inner_text("body")
-    assert "WORKERS" in body.upper() and "JOBS" in body.upper()
+    assert "WORKERS" in body.upper() and "QUEUES" in body.upper()
 
 
 EFFECTIVE_BACKGROUND = """() => {
