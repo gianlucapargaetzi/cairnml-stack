@@ -1,6 +1,6 @@
 # Tokens, spacing, type and the page shell
 
-Everything here was read from the code (`clearml-web/src/app/webapp-common/styles/`) and checked against the running app in light and dark mode. If a value you need is not here, find it in your twin's stylesheet; do not choose one.
+Everything here was read from the code (`cairnml-web/src/app/webapp-common/styles/`) and checked against the running app in light and dark mode. If a value you need is not here, find it in your twin's stylesheet; do not choose one.
 
 ## 1. Two token systems, one rule
 

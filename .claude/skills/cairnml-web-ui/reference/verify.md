@@ -6,7 +6,7 @@ A page that compiles is not a page that works. You must look at it. This file is
 
 Pages look broken when the API is down or the database is empty: wrong titles ("All Experiments" in place of a project name), missing tabs, empty tables. Before you judge a layout:
 
-1. The stack is up and **not being rebuilt right now**: `curl -s -o /dev/null -w "%{http_code}" http://mlops-clearml:8008/debug.ping` and `...:8080/` both answer 200.
+1. The stack is up and **not being rebuilt right now**: `curl -s -o /dev/null -w "%{http_code}" http://mlops-cairnml:8008/debug.ping` and `...:8080/` both answer 200.
 2. The data you need exists. If the dev stack is empty (it can be reset by someone else), seed it with a small SDK script (`Task.init`, `report_scalar`, `report_histogram`, `report_table`, `report_image`, `upload_artifact`, `Task.clone`) or **mock the API in the browser** (section 4). Never invent screenshots of "what it should look like".
 3. Wait for loading to finish: 6 seconds after `goto`, then check that the spinner is gone.
 
@@ -14,9 +14,9 @@ Pages look broken when the API is down or the database is empty: wrong titles ("
 
 | Loop | When | How |
 |---|---|---|
-| **Build check** (seconds) | After every edit | `cd clearml-web && pnpm run build`. Catches template and type errors. A budget warning on `table.component.scss` is old and ignorable. |
+| **Build check** (seconds) | After every edit | `cd cairnml-web && pnpm run build`. Catches template and type errors. A budget warning on `table.component.scss` is old and ignorable. |
 | **See it in the running stack** (about 5 minutes) | To look at the page | Rebuild the server image, which contains the built web app: `docker compose -f deploy/compose.yaml build apiserver`, then `docker compose -f deploy/compose.yaml up -d --force-recreate --no-deps apiserver webserver`. **Always `--no-deps`**: without it the database and search containers are recreated too. The recreate drops the browser session: sign in again. Do not take screenshots while the build's last step runs; the API is briefly down. |
-| Hot reload (optional) | Many small visual iterations | `pnpm start` on `http://localhost:4200`; needs the stack's sign-in addresses set for localhost: read `clearml-web/docs/dev-proxy.md` first. Do not change the deployed stack's settings without asking. |
+| Hot reload (optional) | Many small visual iterations | `pnpm start` on `http://localhost:4200`; needs the stack's sign-in addresses set for localhost: read `cairnml-web/docs/dev-proxy.md` first. Do not change the deployed stack's settings without asking. |
 
 Run the image build in the background and keep working on the next view or the report while it runs.
 
@@ -28,7 +28,7 @@ Run the image build in the background and keep working on the next view or the r
 
 ```js
 // one page, light, full height
-await page.goto('http://mlops-clearml:8080/<path>');
+await page.goto('http://mlops-cairnml:8080/<path>');
 await page.waitForTimeout(6000);
 await page.screenshot({path: '.playwright-mcp/<name>-light.png', fullPage: true});
 ```

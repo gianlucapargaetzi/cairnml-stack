@@ -20,7 +20,7 @@ Today the training pipeline logs a folder path and a timestamp. It cannot show w
 ## Non-goals
 
 - Access control between users. The GitHub App gives the tool access to the dataset repositories, and that is all.
-- Changes to the ClearML web UI for datasets.
+- Changes to the CairnML web UI for datasets.
 - Hyperdatasets (the `datachunks` and `hyper_dataset` features). They are a separate system and are not touched.
 - Automating FiftyOne export. The first adapter for FiftyOne may be written by hand.
 
@@ -36,11 +36,11 @@ These would make the design a failure even if it runs:
 
 ## Constraints
 
-- Server host: Linux, Docker, the ClearML stack from this repository. Object storage is the RustFS service with a `dataset` bucket.
+- Server host: Linux, Docker, the CairnML stack from this repository. Object storage is the RustFS service with a `dataset` bucket.
 - Agents and users reach object storage through presigned S3 URLs, as the architecture doc describes.
-- The owner installs the ClearML GitHub App in each dataset repository, so the tool can reach them.
-- The existing `clearml-data` command goes away. The owner has no ClearML datasets yet, so there is no migration.
-- Training uses the ClearML SDK for task tracking, so run records stay in ClearML.
+- The owner installs the CairnML GitHub App in each dataset repository, so the tool can reach them.
+- The existing `cairnml-data` command goes away. The owner has no CairnML datasets yet, so there is no migration.
+- Training uses the CairnML SDK for task tracking, so run records stay in CairnML.
 
 ## Design
 
@@ -73,7 +73,7 @@ These would make the design a failure even if it runs:
 ### Training runs
 
 - A run names its dataset as `local:<repo>@<commit>` or `external:<name>@<external-datasets-commit>[#<source-revision>]`.
-- The run records in ClearML: the repository, the commit, the content hash for local datasets, and for external datasets the source revision, the adapter name and the adapter's `external-datasets` commit.
+- The run records in CairnML: the repository, the commit, the content hash for local datasets, and for external datasets the source revision, the adapter name and the adapter's `external-datasets` commit.
 - If the commit cannot be resolved, is not pushed, or the adapter rejects the data, the run fails before training starts.
 
 ### Access

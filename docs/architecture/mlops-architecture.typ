@@ -113,7 +113,7 @@
 
   // ============ Agents ============
   node(32.9, 16.1, "Resource usage", "CPU, RAM, GPU, disk", agt)
-  node(27.7, 13.9, "Agent daemon", "clearml-agent daemon --queue", agt)
+  node(27.7, 13.9, "Agent daemon", "cairnml-agent daemon --queue", agt)
   node(32.9, 13.9, "Python runner", "venv per job", agt)
   node(38.1, 13.9, "Container runner", "Docker: host or dind", agt)
 
@@ -186,7 +186,7 @@
   ],
   [
     #text(weight: "bold")[Data and identity]
-    - Artifacts are ClearML artifacts. Datasets are GitHub repositories with their files in DVC: the commit is the version, and a run stores the repository, the commit and a hash of the files, not the files. Outside datasets (Hugging Face and others) are read through adapters kept in an external-datasets repository.
+    - Artifacts are CairnML artifacts. Datasets are GitHub repositories with their files in DVC: the commit is the version, and a run stores the repository, the commit and a hash of the files, not the files. Outside datasets (Hugging Face and others) are read through adapters kept in an external-datasets repository.
     - Source repositories are on GitHub Enterprise. The server reads them with a read-only GitHub App; a job clones its repository with its own token.
     - Clients enroll once through a Keycloak login, then use their device key only. Agents are enrolled by an admin only.
     - Presigned S3 URLs name the object store's public address, so clients must be able to reach it.

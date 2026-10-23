@@ -6,13 +6,13 @@
 # support/stack.py starts it with the variables below set in the environment. Ports are chosen free on 127.0.0.1.
 name: mlops-e2e
 
-x-clearml-build: &clearml_build
+x-cairnml-build: &cairnml_build
   build:
-    context: ../../../clearml-server
+    context: ../../../cairnml-server
     dockerfile: docker/build/Dockerfile
     additional_contexts:
-      clearml_web: ../../../clearml-web
-  image: clearml-server-fork:local
+      cairnml_web: ../../../cairnml-web
+  image: cairnml-server-fork:local
   restart: "no"
   network_mode: host
 
@@ -93,7 +93,7 @@ services:
     network_mode: host
     environment:
       bootstrap.memory_lock: "true"
-      cluster.name: clearml
+      cluster.name: cairnml
       cluster.routing.allocation.node_initial_primaries_recoveries: "500"
       cluster.routing.allocation.disk.watermark.low: 500mb
       cluster.routing.allocation.disk.watermark.high: 500mb
@@ -103,7 +103,7 @@ services:
       http.port: ${E2E_ES_PORT}
       transport.port: ${E2E_ES_TRANSPORT_PORT}
       network.host: 127.0.0.1
-      node.name: clearml
+      node.name: cairnml
       reindex.remote.whitelist: "'*.*'"
       xpack.security.enabled: "false"
       ES_JAVA_OPTS: "-Xms1g -Xmx1g"
@@ -118,7 +118,7 @@ services:
       - ${E2E_STATE}/data/elastic:/usr/share/elasticsearch/data
 
   apiserver:
-    <<: *clearml_build
+    <<: *cairnml_build
     command: [apiserver]
     depends_on:
       - redis
@@ -127,47 +127,47 @@ services:
       - rustfs-init
       - idp
     environment:
-      CLEARML_SECRETS_DIR: /run/secrets-dir
-      CLEARML__apiserver__listen__ip: ${E2E_BIND}
-      CLEARML__apiserver__listen__port: ${E2E_API_PORT}
-      CLEARML_ELASTIC_SERVICE_HOST: 127.0.0.1
-      CLEARML_ELASTIC_SERVICE_PORT: ${E2E_ES_PORT}
-      CLEARML_MONGODB_SERVICE_HOST: 127.0.0.1
-      CLEARML_MONGODB_SERVICE_PORT: ${E2E_MONGO_PORT}
-      CLEARML_REDIS_SERVICE_HOST: 127.0.0.1
-      CLEARML_REDIS_SERVICE_PORT: ${E2E_REDIS_PORT}
-      CLEARML_SERVER_DEPLOYMENT_TYPE: linux
-      CLEARML__apiserver__idp__issuer: http://${E2E_HOST}:${E2E_IDP_PORT}/realms/mlops
-      CLEARML__apiserver__idp__public_url: http://${E2E_HOST}:${E2E_API_PORT}
-      CLEARML__apiserver__idp__web_url: http://${E2E_HOST}:${E2E_WEB_PORT}
-      CLEARML__apiserver__idp__web_client_id: clearml-web
-      CLEARML__apiserver__idp__sdk_client_id: clearml-sdk
-      CLEARML__apiserver__idp__directory_client_id: clearml-server
-      CLEARML__apiserver__idp__sync_enabled: "true"
-      CLEARML__apiserver__idp__admin_role: mlops-admin
+      CAIRNML_SECRETS_DIR: /run/secrets-dir
+      CAIRNML__apiserver__listen__ip: ${E2E_BIND}
+      CAIRNML__apiserver__listen__port: ${E2E_API_PORT}
+      CAIRNML_ELASTIC_SERVICE_HOST: 127.0.0.1
+      CAIRNML_ELASTIC_SERVICE_PORT: ${E2E_ES_PORT}
+      CAIRNML_MONGODB_SERVICE_HOST: 127.0.0.1
+      CAIRNML_MONGODB_SERVICE_PORT: ${E2E_MONGO_PORT}
+      CAIRNML_REDIS_SERVICE_HOST: 127.0.0.1
+      CAIRNML_REDIS_SERVICE_PORT: ${E2E_REDIS_PORT}
+      CAIRNML_SERVER_DEPLOYMENT_TYPE: linux
+      CAIRNML__apiserver__idp__issuer: http://${E2E_HOST}:${E2E_IDP_PORT}/realms/mlops
+      CAIRNML__apiserver__idp__public_url: http://${E2E_HOST}:${E2E_API_PORT}
+      CAIRNML__apiserver__idp__web_url: http://${E2E_HOST}:${E2E_WEB_PORT}
+      CAIRNML__apiserver__idp__web_client_id: cairnml-web
+      CAIRNML__apiserver__idp__sdk_client_id: cairnml-sdk
+      CAIRNML__apiserver__idp__directory_client_id: cairnml-server
+      CAIRNML__apiserver__idp__sync_enabled: "true"
+      CAIRNML__apiserver__idp__admin_role: mlops-admin
       # How long a job token lasts (one hour in production). A test may lower it, for its own run (set_job_token_ttl).
-      CLEARML__apiserver__idp__job_token_ttl_sec: ${E2E_JOB_TOKEN_TTL_SEC:-3600}
-      CLEARML__apiserver__auth__cookies__secure: "false"
-      CLEARML__apiserver__idp__github_app_id: ""
-      CLEARML__apiserver__idp__github_api_url: https://api.github.com
-      CLEARML__services__async_urls_delete__enabled: "true"
-      CLEARML__apiserver__storage__endpoint: http://127.0.0.1:${E2E_STORAGE_PORT}
-      CLEARML__apiserver__storage__public_endpoint: http://${E2E_HOST}:${E2E_STORAGE_PORT}
-      CLEARML__apiserver__storage__access_key: ${E2E_S3_ACCESS_KEY}
+      CAIRNML__apiserver__idp__job_token_ttl_sec: ${E2E_JOB_TOKEN_TTL_SEC:-3600}
+      CAIRNML__apiserver__auth__cookies__secure: "false"
+      CAIRNML__apiserver__idp__github_app_id: ""
+      CAIRNML__apiserver__idp__github_api_url: https://api.github.com
+      CAIRNML__services__async_urls_delete__enabled: "true"
+      CAIRNML__apiserver__storage__endpoint: http://127.0.0.1:${E2E_STORAGE_PORT}
+      CAIRNML__apiserver__storage__public_endpoint: http://${E2E_HOST}:${E2E_STORAGE_PORT}
+      CAIRNML__apiserver__storage__access_key: ${E2E_S3_ACCESS_KEY}
       # Timers of the test stack only (see docs/e2e_testing/E2E.md, speed section, items 3 and 4): a stopped agent is lost after about 6 s,
-      # and the directory is read every 5 s. The production defaults are in clearml-server's config.
-      CLEARML__services__scheduler__sync_interval_sec: "2"
-      CLEARML__services__scheduler__sweep_interval_sec: "1"
-      CLEARML__apiserver__idp__sync_interval_sec: "5"
+      # and the directory is read every 5 s. The production defaults are in cairnml-server's config.
+      CAIRNML__services__scheduler__sync_interval_sec: "2"
+      CAIRNML__services__scheduler__sweep_interval_sec: "1"
+      CAIRNML__apiserver__idp__sync_interval_sec: "5"
       # The suite's reset (system.e2e_reset) is off by default in the server; the suite's own stack turns it on.
-      CLEARML__apiserver__e2e__reset_enabled: "true"
-      CLEARML__apiserver__e2e__name_prefix: "e2e"
+      CAIRNML__apiserver__e2e__reset_enabled: "true"
+      CAIRNML__apiserver__e2e__name_prefix: "e2e"
     volumes:
-      - ${E2E_STATE}/data/logs:/var/log/clearml
+      - ${E2E_STATE}/data/logs:/var/log/cairnml
       - ${E2E_STATE}/secrets:/run/secrets-dir:ro
 
   async-delete:
-    image: clearml-server-fork:local
+    image: cairnml-server-fork:local
     pull_policy: never
     restart: "no"
     network_mode: host
@@ -177,22 +177,22 @@ services:
       - mongo
       - rustfs-init
     environment:
-      CLEARML_SECRETS_DIR: /run/secrets-dir
-      CLEARML_MONGODB_SERVICE_HOST: 127.0.0.1
-      CLEARML_MONGODB_SERVICE_PORT: ${E2E_MONGO_PORT}
-      CLEARML_REDIS_SERVICE_HOST: 127.0.0.1
-      CLEARML_REDIS_SERVICE_PORT: ${E2E_REDIS_PORT}
-      CLEARML_SERVER_DEPLOYMENT_TYPE: linux
-      CLEARML__apiserver__storage__endpoint: http://127.0.0.1:${E2E_STORAGE_PORT}
-      CLEARML__apiserver__storage__public_endpoint: http://${E2E_HOST}:${E2E_STORAGE_PORT}
-      CLEARML__apiserver__storage__access_key: ${E2E_S3_ACCESS_KEY}
-      CLEARML__services__async_urls_delete__enabled: "true"
+      CAIRNML_SECRETS_DIR: /run/secrets-dir
+      CAIRNML_MONGODB_SERVICE_HOST: 127.0.0.1
+      CAIRNML_MONGODB_SERVICE_PORT: ${E2E_MONGO_PORT}
+      CAIRNML_REDIS_SERVICE_HOST: 127.0.0.1
+      CAIRNML_REDIS_SERVICE_PORT: ${E2E_REDIS_PORT}
+      CAIRNML_SERVER_DEPLOYMENT_TYPE: linux
+      CAIRNML__apiserver__storage__endpoint: http://127.0.0.1:${E2E_STORAGE_PORT}
+      CAIRNML__apiserver__storage__public_endpoint: http://${E2E_HOST}:${E2E_STORAGE_PORT}
+      CAIRNML__apiserver__storage__access_key: ${E2E_S3_ACCESS_KEY}
+      CAIRNML__services__async_urls_delete__enabled: "true"
     volumes:
-      - ${E2E_STATE}/data/logs:/var/log/clearml
+      - ${E2E_STATE}/data/logs:/var/log/cairnml
       - ${E2E_STATE}/secrets:/run/secrets-dir:ro
 
   webserver:
-    image: clearml-server-fork:local
+    image: cairnml-server-fork:local
     pull_policy: never
     restart: "no"
     network_mode: host
@@ -206,4 +206,4 @@ services:
       # to use the web server's own /api route (see docs/e2e_testing/E2E.md, "Addresses").
       - ${E2E_STATE}/configs:/mnt/external_files/configs:ro
       # The image's nginx template listens on port 80; this copy listens on the port the suite chose.
-      - ${E2E_STATE}/nginx/clearml.conf.template:/etc/nginx/clearml.conf.template:ro
+      - ${E2E_STATE}/nginx/cairnml.conf.template:/etc/nginx/cairnml.conf.template:ro

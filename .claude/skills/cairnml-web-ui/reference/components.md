@@ -4,7 +4,7 @@
 
 **Rule: find your job in the left column. If a component is named, use it. If none is named, search `webapp-common/shared/` for it before you write markup.** `grep -rlE "<sm-NAME(\$|[[:space:]>])" --include=*.html .` shows every use (tags often continue on the next line, so a plain `<sm-NAME ` search misses most).
 
-All paths under `clearml-web/src/app/webapp-common/` unless noted.
+All paths under `cairnml-web/src/app/webapp-common/` unless noted.
 
 ## Lists and tables
 

@@ -8,7 +8,7 @@ from support import settings
 from support.stack import BIND, HOST
 
 REAL_STACK_PORTS = {8008, 8080, 8180, 9000, 9001}
-REAL_STACK_NAMES = ("mlops-clearml", "mlops-idp", "mlops-nas")
+REAL_STACK_NAMES = ("mlops-cairnml", "mlops-idp", "mlops-nas")
 
 
 def _port(url: str) -> int:
@@ -37,6 +37,6 @@ def test_the_api_is_served_by_this_suites_compose_project():
     assert len(apiservers) == 1, names
     env = subprocess.run(["docker", "inspect", apiservers[0], "--format", "{{range .Config.Env}}{{println .}}{{end}}"],
                          capture_output=True, text=True, timeout=60).stdout.splitlines()
-    assert f"CLEARML__apiserver__listen__port={_port(settings.API_URL)}" in env
-    assert f"CLEARML__apiserver__listen__ip={BIND}" in env
+    assert f"CAIRNML__apiserver__listen__port={_port(settings.API_URL)}" in env
+    assert f"CAIRNML__apiserver__listen__ip={BIND}" in env
     assert settings.API_URL.startswith(f"http://{HOST}:")

@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from common import array_digest, file_digest, folder_digest, frame_digest, image_digest  # noqa: E402
 from common import json_digest, pickled_digest, report  # noqa: E402
 
-from clearml import Task  # noqa: E402
+from cairnml import Task  # noqa: E402
 
 
 def digest_of(kind: str, artifact) -> str:

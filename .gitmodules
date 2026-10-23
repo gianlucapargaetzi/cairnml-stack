@@ -1,16 +1,16 @@
-[submodule "clearml"]
-	path = clearml
-	url = git@github.com:gianlucapargaetzi/clearml.git
+[submodule "cairnml"]
+	path = cairnml
+	url = git@github.com:gianlucapargaetzi/cairnml.git
 	branch = main
-[submodule "clearml-server"]
-	path = clearml-server
-	url = git@github.com:gianlucapargaetzi/clearml-server.git
+[submodule "cairnml-server"]
+	path = cairnml-server
+	url = git@github.com:gianlucapargaetzi/cairnml-server.git
 	branch = main
-[submodule "clearml-agent"]
-	path = clearml-agent
-	url = git@github.com:gianlucapargaetzi/clearml-agent.git
+[submodule "cairnml-agent"]
+	path = cairnml-agent
+	url = git@github.com:gianlucapargaetzi/cairnml-agent.git
 	branch = main
-[submodule "clearml-web"]
-	path = clearml-web
-	url = git@github.com:gianlucapargaetzi/clearml-web.git
+[submodule "cairnml-web"]
+	path = cairnml-web
+	url = git@github.com:gianlucapargaetzi/cairnml-web.git
 	branch = main

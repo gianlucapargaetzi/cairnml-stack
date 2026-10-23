@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Fails if a ClearML server secret, a private key or an .env file is committed to one of the ClearML
+# Fails if a CairnML server secret, a private key or an .env file is committed to one of the CairnML
 # repositories. It never prints a secret value: findings name the file and the secret's name only.
 #
-# Usage: check-clearml-secrets.sh [repo ...]
-# Defaults: the four forks (submodules at the root of this repository), and the secrets in deploy/secrets/clearml.
+# Usage: check-cairnml-secrets.sh [repo ...]
+# Defaults: the four forks (submodules at the root of this repository), and the secrets in deploy/secrets/cairnml.
 set -uo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
-secrets_dir="${CLEARML_SECRETS_DIR:-$root/deploy/secrets/clearml}"
-forks=(clearml-server clearml clearml-agent clearml-web)
+secrets_dir="${CAIRNML_SECRETS_DIR:-$root/deploy/secrets/cairnml}"
+forks=(cairnml-server cairnml cairnml-agent cairnml-web)
 repos=("$@")
 if [ "${#repos[@]}" -eq 0 ]; then
   for fork in "${forks[@]}"; do repos+=("$root/$fork"); done

@@ -1,6 +1,6 @@
 """docs/e2e_testing/E2E.md, UI checks: the web app as a person sees it, in a headless browser.
 
-Every test signs in through the real sign-in page (the same form clearml-init uses), in a fresh browser context,
+Every test signs in through the real sign-in page (the same form cairnml-init uses), in a fresh browser context,
 so no test depends on another test's cookies. Pages are checked for their text and their layout; screenshots are
 not compared pixel by pixel.
 """
@@ -53,7 +53,7 @@ def test_stale_cookie_goes_to_the_sign_in_page(browser):
     Expect: The dashboard address leads to the sign-in form, and no half-loaded page is shown.
     """
     context = browser.new_context()
-    context.add_cookies([{"name": "clearml_session", "value": "stale-0000", "url": settings.WEB_URL}])
+    context.add_cookies([{"name": "cairnml_session", "value": "stale-0000", "url": settings.WEB_URL}])
     page = context.new_page()
     page.goto(settings.WEB_URL + "/dashboard")
     page.wait_for_url(re.compile(r"(realms/mlops|login)"), timeout=60_000)

@@ -19,17 +19,17 @@ Run one module with `pytest tests/e2e/<file>`, one test with `pytest tests/e2e -
 
 ## test_02_enrolment.py: enrolling a machine
 
-Section 1 of E2E.md. Every enrolment goes through `clearml-init` and the real sign-in page.
+Section 1 of E2E.md. Every enrolment goes through `cairnml-init` and the real sign-in page.
 
 | Test | Checks |
 |---|---|
 | `test_init_enrols_the_machine_and_writes_its_key` | The device key is written with mode 0600; the configuration names the device and the server. |
-| `test_whoami_names_the_admin_and_the_device` | `clearml-whoami` prints the signed-in user and the device id. |
-| `test_whoami_uses_the_device_key_without_a_browser` | `clearml-whoami` never opens a sign-in page (the browser command is set to fail). |
-| `test_init_again_without_force_is_refused` | An enrolled machine refuses a second `clearml-init`; the key is unchanged. |
+| `test_whoami_names_the_admin_and_the_device` | `cairnml-whoami` prints the signed-in user and the device id. |
+| `test_whoami_uses_the_device_key_without_a_browser` | `cairnml-whoami` never opens a sign-in page (the browser command is set to fail). |
+| `test_init_again_without_force_is_refused` | An enrolled machine refuses a second `cairnml-init`; the key is unchanged. |
 | `test_init_with_force_revokes_the_old_device` | `--force` revokes the previous device; its old key gets no token, the new key does. |
-| `test_logout_revokes_the_device_and_removes_its_key` | `clearml-logout` revokes the device on the server and removes the key. |
-| `test_whoami_after_logout_says_not_enrolled` | After logout, `clearml-whoami` says the machine is not enrolled. |
+| `test_logout_revokes_the_device_and_removes_its_key` | `cairnml-logout` revokes the device on the server and removes the key. |
+| `test_whoami_after_logout_says_not_enrolled` | After logout, `cairnml-whoami` says the machine is not enrolled. |
 | `test_logout_on_a_machine_that_is_not_enrolled_does_nothing` | Logout on an unenrolled machine exits cleanly and says so. |
 | `test_init_with_an_unreachable_server_writes_nothing` | An unreachable server is reported as such, and no key is written. |
 | `test_init_accepts_the_web_address_and_finds_the_api` | The web address is accepted and the API address derived from it. **Skip** on ports other than 8080/8008 (the derivation is fixed to them). |
@@ -80,7 +80,7 @@ Section 2 of E2E.md. One task uploads every kind of artifact; each check reads i
 | `test_artifacts_without_metadata_have_none` | An artifact without metadata has none. |
 | `test_large_file_uploads_and_downloads_intact` (slow) | A 20 MB file, above the 8 MB multipart threshold, comes back intact. |
 | `test_download_link_serves_the_stored_bytes_from_object_storage` | `datachunks.prepare_download` gives a link on the storage service; the bytes behind it have the uploaded sha256. |
-| `test_a_member_who_is_not_the_owner_cannot_delete_the_run` | Fails on defect: a plain user may delete another user's run; 403 is expected (clearml-server #3). |
+| `test_a_member_who_is_not_the_owner_cannot_delete_the_run` | Fails on defect: a plain user may delete another user's run; 403 is expected (cairnml-server #3). |
 | `test_a_downloaded_artifact_is_identical_on_a_second_download` | Two downloads give the same bytes and the same recorded hash. |
 
 ## test_06_git.py: git-managed and unmanaged code
@@ -120,13 +120,13 @@ Section 5 of E2E.md. The agent is the daemon on the default queue, in its own ho
 
 | Test | Checks |
 |---|---|
-| `test_admin_enrols_the_agent_machine_with_its_own_key` | `clearml-agent init` (as admin) writes an agent key with mode 0600 and a device id. |
+| `test_admin_enrols_the_agent_machine_with_its_own_key` | `cairnml-agent init` (as admin) writes an agent key with mode 0600 and a device id. |
 | `test_agent_device_is_kind_agent` | The device is listed as kind `agent`, not revoked. |
 | `test_member_cannot_enrol_an_agent` | A plain user is refused ("only an admin may enrol an agent"); no key is written. |
 | `test_agent_registers_as_a_worker_listening_to_its_queue` | The worker is in the server's worker list, and its queues include the default queue. |
 | `test_agent_reports_its_usage` | Usage is reported at each sync: CPU percent, RAM in use, disk in use percent, all in range. |
 | `test_agent_without_its_key_does_not_register` | An agent whose key is removed never registers, and its log names the key. |
-| `test_agent_without_its_key_says_to_enrol_it` | The log says to run `clearml-agent init`, not a raw `Errno 2`. |
+| `test_agent_without_its_key_says_to_enrol_it` | The log says to run `cairnml-agent init`, not a raw `Errno 2`. |
 
 ## test_09_jobs.py: queue and execution
 
@@ -135,7 +135,7 @@ Section 6 of E2E.md. A job waits in the default queue until the agent takes it.
 | Test | Checks |
 |---|---|
 | `test_enqueueing_a_queued_task_again_leaves_it_queued_once` | Enqueueing a queued task again is accepted and leaves it queued, once. |
-| `test_enqueue_works_after_the_task_was_read` | Enqueue after a service call is refused ("upgrade clearml-server"). |
+| `test_enqueue_works_after_the_task_was_read` | Enqueue after a service call is refused ("upgrade cairnml-server"). |
 | `test_job_with_a_missing_image_fails_once_and_is_not_rescheduled` | An image that cannot be pulled ends the job `failed`, with no retry: only lost attempts are retried. |
 | `test_job_runs_to_completion_with_its_scalars_and_artifact` | The job completes, with its scalars and its artifact. |
 | `test_failing_job_is_failed_with_its_traceback_and_the_agent_is_free` | A job raising after two scalars ends `failed`, with the traceback in its log. |

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Removes the mlops setup from this machine:
-#   1. the local sign-in keys and the ClearML config that point at our server (revokes this machine's access),
+#   1. the local sign-in keys and the CairnML config that point at our server (revokes this machine's access),
 #   2. the containers, volumes and network of the stack (deploy/compose.yaml),
 #   3. the data of the stack: users, databases, logs, and the Keycloak data,
 #   4. the images built for the stack,
@@ -82,10 +82,10 @@ say "mlops teardown"
 say "deploy folder: $DEPLOY_DIR"
 say ""
 say "This removes:"
-say "  - the sign-in keys and the ClearML config on this machine (~/.clearml, ~/clearml.conf if it names our server)"
+say "  - the sign-in keys and the CairnML config on this machine (~/.cairnml, ~/cairnml.conf if it names our server)"
 say "  - the containers, volumes and network of the stack (deploy/compose.yaml)"
-say "  - the data of the stack: deploy/data/clearml (users, MongoDB, Redis, Elasticsearch, logs), deploy/data/idp (Keycloak), deploy/data/postgres"
-say "  - the images clearml-server-fork:local and the Keycloak image"
+say "  - the data of the stack: deploy/data/cairnml (users, MongoDB, Redis, Elasticsearch, logs), deploy/data/idp (Keycloak), deploy/data/postgres"
+say "  - the images cairnml-server-fork:local and the Keycloak image"
 [ "$INCLUDE_NAS" -eq 1 ] && say "  - deploy/data/nas: artifacts and datasets (--include-nas)"
 [ "$INCLUDE_SECRETS" -eq 1 ] && say "  - deploy/secrets and deploy/.env (--include-secrets)"
 [ "$PRUNE_DOCKER" -eq 1 ] && say "  - every unused Docker image, network and volume on this machine, including other projects (--prune-docker)"
@@ -106,23 +106,23 @@ command -v docker >/dev/null || { echo "docker is required" >&2; exit 1; }
 
 # ---------------------------------------------------------------- 1. this machine's access
 say "1. Revoking access on this machine"
-if [ -f "$HOME/.clearml/device.key" ]; then
-  run rm -f "$HOME/.clearml/device.key"
+if [ -f "$HOME/.cairnml/device.key" ]; then
+  run rm -f "$HOME/.cairnml/device.key"
   say "  the server keeps this device's record until step 3 removes its data"
 fi
-if [ -f "$HOME/.clearml/.session.json" ]; then
-  run rm -f "$HOME/.clearml/.session.json"
+if [ -f "$HOME/.cairnml/.session.json" ]; then
+  run rm -f "$HOME/.cairnml/.session.json"
 fi
-if [ -f "$HOME/clearml.conf" ] && grep -q "mlops-clearml" "$HOME/clearml.conf"; then
-  run rm -f "$HOME/clearml.conf"
-  say "  ~/clearml.conf names the mlops-clearml server"
+if [ -f "$HOME/cairnml.conf" ] && grep -q "mlops-cairnml" "$HOME/cairnml.conf"; then
+  run rm -f "$HOME/cairnml.conf"
+  say "  ~/cairnml.conf names the mlops-cairnml server"
 fi
 
 # ---------------------------------------------------------------- 2. containers and networks
 # deploy/.env is read by compose from this folder, because compose.yaml is here.
 say "2. Stopping and removing the containers"
 run docker compose -f compose.yaml down -v --remove-orphans
-for image in clearml-server-fork:local; do
+for image in cairnml-server-fork:local; do
   if [ "$DRY_RUN" -eq 1 ] || docker image inspect "$image" >/dev/null 2>&1; then
     run docker image rm -f "$image"
   fi
@@ -130,7 +130,7 @@ done
 
 # ---------------------------------------------------------------- 3. data
 say "3. Removing the data (users, databases, logs)"
-wipe_dir "$DEPLOY_DIR/data/clearml"
+wipe_dir "$DEPLOY_DIR/data/cairnml"
 wipe_dir "$DEPLOY_DIR/data/idp"
 wipe_dir "$DEPLOY_DIR/data/postgres"
 if [ "$INCLUDE_NAS" -eq 1 ]; then

@@ -2,7 +2,7 @@
 
 Every page in the app is one of these shapes or a combination of two. Pick the shape first; it decides the shell, where the actions sit and which components belong. Each entry names the **twin files** to copy from and the **live URL** to open and look at before you build (ids in `<...>` are yours).
 
-All paths are under `clearml-web/src/app/`.
+All paths are under `cairnml-web/src/app/`.
 
 ## How to choose
 

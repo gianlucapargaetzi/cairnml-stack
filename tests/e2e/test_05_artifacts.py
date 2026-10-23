@@ -113,7 +113,7 @@ def test_download_link_serves_the_stored_bytes_from_object_storage(client_home, 
 def test_a_member_who_is_not_the_owner_cannot_delete_the_run(client_home, member_account, project, tmp_path):
     """Object access follows the owner: another plain user may not change the admin's run.
 
-    Expect: the other user's delete is refused with 401 or 403. Known open: clearml-server #3 (the policy is not built yet).
+    Expect: the other user's delete is refused with 401 or 403. Known open: cairnml-server #3 (the policy is not built yet).
     """
     from support import client
     from support.api import Api, ApiError

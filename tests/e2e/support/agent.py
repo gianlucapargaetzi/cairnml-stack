@@ -23,12 +23,12 @@ def shared_cache_settings() -> dict:
         return {}
     cache = Path(shared) / "agent-cache"
     return {
-        "CLEARML_AGENT__agent__venvs_dir": str(cache / "venvs-builds"),
-        "CLEARML_AGENT__agent__venvs_cache__path": str(cache / "venvs-cache"),
-        "CLEARML_AGENT__agent__vcs_cache__path": str(cache / "vcs-cache"),
-        "CLEARML_AGENT__agent__pip_download_cache__path": str(cache / "pip-download-cache"),
-        "CLEARML_AGENT__agent__docker_pip_cache": str(cache / "pip-cache"),
-        "CLEARML_AGENT__agent__docker_apt_cache": str(cache / "apt-cache"),
+        "CAIRNML_AGENT__agent__venvs_dir": str(cache / "venvs-builds"),
+        "CAIRNML_AGENT__agent__venvs_cache__path": str(cache / "venvs-cache"),
+        "CAIRNML_AGENT__agent__vcs_cache__path": str(cache / "vcs-cache"),
+        "CAIRNML_AGENT__agent__pip_download_cache__path": str(cache / "pip-download-cache"),
+        "CAIRNML_AGENT__agent__docker_pip_cache": str(cache / "pip-cache"),
+        "CAIRNML_AGENT__agent__docker_apt_cache": str(cache / "apt-cache"),
     }
 
 
@@ -38,14 +38,14 @@ LOST_WITHIN_SEC = 30
 
 
 def init(home: Path, account):
-    """clearml-agent init, signed in as account (user, password). Only an admin may enrol an agent.
+    """cairnml-agent init, signed in as account (user, password). Only an admin may enrol an agent.
 
     The command asks its questions on stdin: the web address, the web-app address, the API address, then the defaults
     (no output storage, no git login, no extra package index).
     """
     user, password = account
     answers = f"{settings.WEB_URL}\n{settings.WEB_URL}\n{settings.API_URL}\n" + "\n" * 8
-    return cli.run("clearml-agent", home, login_user=user, login_password=password, args=["init"],
+    return cli.run("cairnml-agent", home, login_user=user, login_password=password, args=["init"],
                    stdin_text=answers, timeout=300)
 
 
@@ -66,13 +66,13 @@ class AgentMachine:
 
     def start(self) -> None:
         env = cli.environment(self.home)
-        env["CLEARML_WORKER_NAME"] = self.worker_name
+        env["CAIRNML_WORKER_NAME"] = self.worker_name
         # the test machine has no GPU: the agent adds no --gpus flag (its own image sets the same, for a CPU host)
-        env["CLEARML_DOCKER_SKIP_GPUS_FLAG"] = "1"
+        env["CAIRNML_DOCKER_SKIP_GPUS_FLAG"] = "1"
         env.update(shared_cache_settings())
         log = open(self.log_path, "ab")
         self._proc = subprocess.Popen(
-            [str(cli.VENV_BIN / "clearml-agent"), "daemon", "--queue", "default", "--docker", "python:3.12-slim",
+            [str(cli.VENV_BIN / "cairnml-agent"), "daemon", "--queue", "default", "--docker", "python:3.12-slim",
              "--polling-interval", str(POLLING_INTERVAL_SEC)],
             env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
         )

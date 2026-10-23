@@ -1,5 +1,5 @@
 # The suite's runner, built inside dind by inside.sh from a staged build context:
-#   runner.Dockerfile, requirements.txt, src/clearml, src/clearml-agent
+#   runner.Dockerfile, requirements.txt, src/cairnml, src/cairnml-agent
 # It holds the test venv (the suite, the SDK and the agent from the submodules), Chromium for the browser tests, the
 # Docker CLI and Compose (they talk to the daemon of dind through its socket), and git for the git tests.
 FROM python:3.12-slim
@@ -19,9 +19,9 @@ RUN pip install -r /tmp/requirements.txt \
     && rm -rf /var/lib/apt/lists/* /tmp/requirements.txt
 
 # The SDK and the agent are installed from the submodules, editable, as the host's venv has them.
-COPY src/clearml /src/clearml
-COPY src/clearml-agent /src/clearml-agent
-RUN pip install -e "/src/clearml[dataset]" -e /src/clearml-agent
+COPY src/cairnml /src/cairnml
+COPY src/cairnml-agent /src/cairnml-agent
+RUN pip install -e "/src/cairnml[dataset]" -e /src/cairnml-agent
 
 # git reads the mounted repository, whose files belong to another user
 RUN git config --system --add safe.directory '*'

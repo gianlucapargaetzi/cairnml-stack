@@ -1,21 +1,21 @@
-# The whole stack: the sign-in service (Keycloak) and the ClearML server built from our forks.
+# The whole stack: the sign-in service (Keycloak) and the CairnML server built from our forks.
 #
 # Started by scripts/bootstrap.sh. Compose reads deploy/.env from this folder, so the variables
 # there apply to every service. By hand, from deploy/:
 #   docker compose up -d --build
 #
-# The forks are the submodules at the root of this repository (clearml-server, clearml-web).
+# The forks are the submodules at the root of this repository (cairnml-server, cairnml-web).
 # The service names are the ones the fork's web server expects (it finds the API server by
 # name) and the names used in the realm (mlops-idp), so they stay as they are.
 name: mlops
 
-x-clearml-build: &clearml_build
+x-cairnml-build: &cairnml_build
   build:
-    context: ../clearml-server
+    context: ../cairnml-server
     dockerfile: docker/build/Dockerfile
     additional_contexts:
-      clearml_web: ../clearml-web
-  image: clearml-server-fork:local
+      cairnml_web: ../cairnml-web
+  image: cairnml-server-fork:local
   restart: unless-stopped
 
 services:
@@ -80,45 +80,45 @@ services:
       MLOPS_S3_SECRET_KEY_FILE: /run/secrets-dir/s3_secret_key
     volumes:
       - ./storage/init.py:/init.py:ro
-      - ./secrets/clearml:/run/secrets-dir:ro
+      - ./secrets/cairnml:/run/secrets-dir:ro
     restart: "no"
     networks:
       - mlops
 
   mongo:
     image: mongo:8.0.15
-    container_name: clearml-mongo
+    container_name: cairnml-mongo
     restart: unless-stopped
     command: --setParameter internalQueryMaxBlockingSortMemoryUsageBytes=196100200
     volumes:
-      - ./data/clearml/mongo/db:/data/db
-      - ./data/clearml/mongo/configdb:/data/configdb
+      - ./data/cairnml/mongo/db:/data/db
+      - ./data/cairnml/mongo/configdb:/data/configdb
     networks:
       - backend
 
   redis:
     image: redis:8.2.3
-    container_name: clearml-redis
+    container_name: cairnml-redis
     restart: unless-stopped
     volumes:
-      - ./data/clearml/redis:/data
+      - ./data/cairnml/redis:/data
     networks:
       - backend
 
   elasticsearch:
     image: elasticsearch:8.19.9
-    container_name: clearml-elastic
+    container_name: cairnml-elastic
     restart: unless-stopped
     environment:
       bootstrap.memory_lock: "true"
-      cluster.name: clearml
+      cluster.name: cairnml
       cluster.routing.allocation.node_initial_primaries_recoveries: "500"
       cluster.routing.allocation.disk.watermark.low: 500mb
       cluster.routing.allocation.disk.watermark.high: 500mb
       cluster.routing.allocation.disk.watermark.flood_stage: 500mb
       discovery.type: "single-node"
       http.compression_level: "7"
-      node.name: clearml
+      node.name: cairnml
       reindex.remote.whitelist: "'*.*'"
       xpack.security.enabled: "false"
     ulimits:
@@ -129,13 +129,13 @@ services:
         soft: 65536
         hard: 65536
     volumes:
-      - ./data/clearml/elastic:/usr/share/elasticsearch/data
+      - ./data/cairnml/elastic:/usr/share/elasticsearch/data
     networks:
       - backend
 
   apiserver:
-    <<: *clearml_build
-    container_name: clearml-apiserver
+    <<: *cairnml_build
+    container_name: cairnml-apiserver
     command:
       - apiserver
     depends_on:
@@ -145,42 +145,42 @@ services:
       - rustfs-init
       - mlops-idp
     environment:
-      CLEARML_SECRETS_DIR: /run/secrets-dir
-      CLEARML_ELASTIC_SERVICE_HOST: elasticsearch
-      CLEARML_ELASTIC_SERVICE_PORT: 9200
-      CLEARML_MONGODB_SERVICE_HOST: mongo
-      CLEARML_MONGODB_SERVICE_PORT: 27017
-      CLEARML_REDIS_SERVICE_HOST: redis
-      CLEARML_REDIS_SERVICE_PORT: 6379
-      CLEARML_SERVER_DEPLOYMENT_TYPE: linux
-      CLEARML__apiserver__idp__issuer: http://mlops-idp:8180/realms/mlops
-      CLEARML__apiserver__idp__public_url: http://mlops-clearml:8008
-      CLEARML__apiserver__idp__web_url: http://mlops-clearml:8080
-      CLEARML__apiserver__idp__web_client_id: clearml-web
-      CLEARML__apiserver__idp__sdk_client_id: clearml-sdk
-      CLEARML__apiserver__idp__directory_client_id: clearml-server
-      CLEARML__apiserver__idp__sync_enabled: "true"
+      CAIRNML_SECRETS_DIR: /run/secrets-dir
+      CAIRNML_ELASTIC_SERVICE_HOST: elasticsearch
+      CAIRNML_ELASTIC_SERVICE_PORT: 9200
+      CAIRNML_MONGODB_SERVICE_HOST: mongo
+      CAIRNML_MONGODB_SERVICE_PORT: 27017
+      CAIRNML_REDIS_SERVICE_HOST: redis
+      CAIRNML_REDIS_SERVICE_PORT: 6379
+      CAIRNML_SERVER_DEPLOYMENT_TYPE: linux
+      CAIRNML__apiserver__idp__issuer: http://mlops-idp:8180/realms/mlops
+      CAIRNML__apiserver__idp__public_url: http://mlops-cairnml:8008
+      CAIRNML__apiserver__idp__web_url: http://mlops-cairnml:8080
+      CAIRNML__apiserver__idp__web_client_id: cairnml-web
+      CAIRNML__apiserver__idp__sdk_client_id: cairnml-sdk
+      CAIRNML__apiserver__idp__directory_client_id: cairnml-server
+      CAIRNML__apiserver__idp__sync_enabled: "true"
       # The realm's admin role is mlops-admin (bootstrap.sh gives the admin login that role).
-      CLEARML__apiserver__idp__admin_role: mlops-admin
-      # Set CLEARML_COOKIE_SECURE=true when the addresses above are https; the server refuses to start otherwise.
-      CLEARML__apiserver__auth__cookies__secure: ${CLEARML_COOKIE_SECURE:-false}
-      CLEARML__apiserver__idp__github_app_id: ${GITHUB_APP_ID:-}
-      CLEARML__apiserver__idp__github_api_url: ${GITHUB_API_URL:-https://api.github.com}
+      CAIRNML__apiserver__idp__admin_role: mlops-admin
+      # Set CAIRNML_COOKIE_SECURE=true when the addresses above are https; the server refuses to start otherwise.
+      CAIRNML__apiserver__auth__cookies__secure: ${CAIRNML_COOKIE_SECURE:-false}
+      CAIRNML__apiserver__idp__github_app_id: ${GITHUB_APP_ID:-}
+      CAIRNML__apiserver__idp__github_api_url: ${GITHUB_API_URL:-https://api.github.com}
       # The dataset registry (owner/name of its repository) and the owners whose dataset repositories may be registered
       # in it, e.g. MLOPS_DATASET_REGISTRY=acme/external-datasets and MLOPS_DATASET_OWNERS='["acme"]' in deploy/.env.
       # The registry is also the list of dataset repositories a job may clone: nothing else lists them.
-      CLEARML__apiserver__dataset_registry__repository: ${MLOPS_DATASET_REGISTRY:-}
-      CLEARML__apiserver__dataset_registry__allowed_owners: ${MLOPS_DATASET_OWNERS:-[]}
-      CLEARML__services__async_urls_delete__enabled: "true"
+      CAIRNML__apiserver__dataset_registry__repository: ${MLOPS_DATASET_REGISTRY:-}
+      CAIRNML__apiserver__dataset_registry__allowed_owners: ${MLOPS_DATASET_OWNERS:-[]}
+      CAIRNML__services__async_urls_delete__enabled: "true"
       # Object storage: internal address for the server's own calls, public address that presigned
       # URLs name. Clients must be able to reach the public one.
-      CLEARML__apiserver__storage__endpoint: http://rustfs:9000
-      CLEARML__apiserver__storage__public_endpoint: ${MLOPS_STORAGE_PUBLIC_URL:-http://localhost:9000}
-      CLEARML__apiserver__storage__access_key: ${MLOPS_S3_ACCESS_KEY:-mlops-server}
+      CAIRNML__apiserver__storage__endpoint: http://rustfs:9000
+      CAIRNML__apiserver__storage__public_endpoint: ${MLOPS_STORAGE_PUBLIC_URL:-http://localhost:9000}
+      CAIRNML__apiserver__storage__access_key: ${MLOPS_S3_ACCESS_KEY:-mlops-server}
     volumes:
-      - ./data/clearml/logs:/var/log/clearml
+      - ./data/cairnml/logs:/var/log/cairnml
       # Read-only: token_secret, session_secret, idp_directory_secret, github_app_key.
-      - ./secrets/clearml:/run/secrets-dir:ro
+      - ./secrets/cairnml:/run/secrets-dir:ro
     ports:
       - "8008:8008"
     networks:
@@ -191,10 +191,10 @@ services:
 
   async-delete:
     # Removes objects of deleted tasks and models from storage. Uses the image the API server builds.
-    image: clearml-server-fork:local
+    image: cairnml-server-fork:local
     pull_policy: never
     restart: unless-stopped
-    container_name: clearml-async-delete
+    container_name: cairnml-async-delete
     command:
       - async_delete
     depends_on:
@@ -202,29 +202,29 @@ services:
       - mongo
       - rustfs-init
     environment:
-      CLEARML_SECRETS_DIR: /run/secrets-dir
-      CLEARML_MONGODB_SERVICE_HOST: mongo
-      CLEARML_MONGODB_SERVICE_PORT: 27017
-      CLEARML_REDIS_SERVICE_HOST: redis
-      CLEARML_REDIS_SERVICE_PORT: 6379
-      CLEARML_SERVER_DEPLOYMENT_TYPE: linux
-      CLEARML__apiserver__storage__endpoint: http://rustfs:9000
-      CLEARML__apiserver__storage__public_endpoint: ${MLOPS_STORAGE_PUBLIC_URL:-http://localhost:9000}
-      CLEARML__apiserver__storage__access_key: ${MLOPS_S3_ACCESS_KEY:-mlops-server}
-      CLEARML__services__async_urls_delete__enabled: "true"
+      CAIRNML_SECRETS_DIR: /run/secrets-dir
+      CAIRNML_MONGODB_SERVICE_HOST: mongo
+      CAIRNML_MONGODB_SERVICE_PORT: 27017
+      CAIRNML_REDIS_SERVICE_HOST: redis
+      CAIRNML_REDIS_SERVICE_PORT: 6379
+      CAIRNML_SERVER_DEPLOYMENT_TYPE: linux
+      CAIRNML__apiserver__storage__endpoint: http://rustfs:9000
+      CAIRNML__apiserver__storage__public_endpoint: ${MLOPS_STORAGE_PUBLIC_URL:-http://localhost:9000}
+      CAIRNML__apiserver__storage__access_key: ${MLOPS_S3_ACCESS_KEY:-mlops-server}
+      CAIRNML__services__async_urls_delete__enabled: "true"
     volumes:
-      - ./data/clearml/logs:/var/log/clearml
-      - ./secrets/clearml:/run/secrets-dir:ro
+      - ./data/cairnml/logs:/var/log/cairnml
+      - ./secrets/cairnml:/run/secrets-dir:ro
     networks:
       - backend
       - mlops
 
   webserver:
     # Uses the image the API server builds; building it again here would race with it.
-    image: clearml-server-fork:local
+    image: cairnml-server-fork:local
     pull_policy: never
     restart: unless-stopped
-    container_name: clearml-webserver
+    container_name: cairnml-webserver
     command:
       - webserver
     depends_on:

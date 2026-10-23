@@ -8,8 +8,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from common import file_digest, report  # noqa: E402
 
-from clearml import Task  # noqa: E402
-from clearml.datasets import Dataset  # noqa: E402
+from cairnml import Task  # noqa: E402
+from cairnml.datasets import Dataset  # noqa: E402
 
 
 def main() -> None:

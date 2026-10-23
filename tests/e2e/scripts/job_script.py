@@ -19,7 +19,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from clearml import Task
+from cairnml import Task
 
 # A small image that is on the host already, so a job does not depend on a registry pull.
 BASE_IMAGE = "python:3.12-slim"
@@ -102,7 +102,7 @@ def main() -> None:
         for entry in json.loads(Path(args.batch).read_text()):
             record(entry["argv"], parser)
         return
-    if not os.environ.get("CLEARML_WORKER_ID"):
+    if not os.environ.get("CAIRNML_WORKER_ID"):
         # on the client the script only records the job (item 14 of docs/e2e_testing/E2E.md, speed section)
         record(sys.argv[1:], parser)
         return

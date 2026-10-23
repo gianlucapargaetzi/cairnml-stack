@@ -13,8 +13,8 @@
   },
   "clients": [
     {
-      "clientId": "clearml-web",
-      "name": "ClearML web app",
+      "clientId": "cairnml-web",
+      "name": "CairnML web app",
       "enabled": true,
       "publicClient": true,
       "standardFlowEnabled": true,
@@ -23,19 +23,19 @@
       "serviceAccountsEnabled": false,
       "fullScopeAllowed": true,
       "redirectUris": [
-        "http://mlops-clearml:8008/v2.8/login.idp_callback"
+        "http://mlops-cairnml:8008/v2.8/login.idp_callback"
       ],
       "webOrigins": [
-        "http://mlops-clearml:8080"
+        "http://mlops-cairnml:8080"
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://mlops-clearml:8080/*"
+        "post.logout.redirect.uris": "http://mlops-cairnml:8080/*"
       }
     },
     {
-      "clientId": "clearml-sdk",
-      "name": "ClearML SDK and agent (browser sign-in)",
+      "clientId": "cairnml-sdk",
+      "name": "CairnML SDK and agent (browser sign-in)",
       "enabled": true,
       "publicClient": true,
       "standardFlowEnabled": true,
@@ -52,8 +52,8 @@
       }
     },
     {
-      "clientId": "clearml-server",
-      "name": "ClearML server (user directory sync, read-only)",
+      "clientId": "cairnml-server",
+      "name": "CairnML server (user directory sync, read-only)",
       "enabled": true,
       "publicClient": false,
       "standardFlowEnabled": false,

@@ -1,6 +1,6 @@
-# MLOps Flow
+# CairnML
 
-Our experiment tracking, remote jobs and dataset setup, on a modified fork of [ClearML](https://clear.ml). MLOps Flow is not ClearML and is not endorsed by ClearML, Inc.; see [DISCLAIMER.md](DISCLAIMER.md).
+Our experiment tracking, remote jobs and dataset setup, on a modified fork of [ClearML](https://clear.ml). CairnML is not ClearML and is not endorsed by ClearML, Inc.; see [DISCLAIMER.md](DISCLAIMER.md), [NOTICE](NOTICE) and [LICENSES.md](LICENSES.md).
 
 - **Track** a training script with a few lines of Python: metrics, parameters, logs and artifacts are recorded on our server.
 - **Explore** runs in the web app.
@@ -8,19 +8,19 @@ Our experiment tracking, remote jobs and dataset setup, on a modified fork of [C
 - **Version** datasets with git and DVC. A dataset is a git repository, its commit is its version, and every run records the commit it used.
 - **Sign in** with our identity provider (Keycloak). Each machine has its own key; nobody copies access keys.
 
-This repository holds the setup: the sign-in service, the ClearML server, and the scripts to start them. The ClearML code itself is in four forks, included as submodules (below).
+This repository holds the setup: the sign-in service, the CairnML server, and the scripts to start them. The CairnML code itself is in four forks, included as submodules (below).
 
 ## What is where
 
 | Path | What it is |
 |---|---|
-| `deploy/compose.yaml` | The whole stack: Keycloak (sign-in), and the ClearML server built from our forks |
-| `deploy/idp/realm-mlops.json` | The realm, with the ClearML clients |
+| `deploy/compose.yaml` | The whole stack: Keycloak (sign-in), and the CairnML server built from our forks |
+| `deploy/idp/realm-mlops.json` | The realm, with the CairnML clients |
 | `deploy/scripts/bootstrap.sh` | Sets up the stack on a host |
 | `deploy/scripts/teardown.sh` | Removes the stack and this machine's keys (`--dry-run` first) |
-| `deploy/scripts/check-clearml-secrets.sh` | Fails if a secret is committed to a ClearML repository |
-| `clearml-server`, `clearml-web`, `clearml`, `clearml-agent` | Our forks, as submodules |
-| `clearml/docs/datasets.md` | How datasets work: `clearml-dataset`, `Dataset.get`, outside datasets, the cache |
+| `deploy/scripts/check-cairnml-secrets.sh` | Fails if a secret is committed to a CairnML repository |
+| `cairnml-server`, `cairnml-web`, `cairnml`, `cairnml-agent` | Our forks, as submodules |
+| `cairnml/docs/datasets.md` | How datasets work: `cairnml-dataset`, `Dataset.get`, outside datasets, the cache |
 | `external-datasets` (its own repository, not a submodule) | One pin file and one adapter per outside dataset (Hugging Face, git, local folders), with the tests that keep its `main` working |
 
 The old platform (`mlops`) is removed from this branch. It is still in the history of `main` until the cut-over.
@@ -39,9 +39,9 @@ git clone --recurse-submodules git@github.com:gianlucapargaetzi/mlops-framework.
 git submodule update --init
 ```
 
-The four forks are private repositories, so the submodule step needs access to them (`gianlucapargaetzi/clearml-server`, `clearml-web`, `clearml` and `clearml-agent`). Without that access the clone still works, but the submodules stay empty.
+The four forks are private repositories, so the submodule step needs access to them (`gianlucapargaetzi/cairnml-server`, `cairnml-web`, `cairnml` and `cairnml-agent`). Without that access the clone still works, but the submodules stay empty.
 
-Each fork has `origin` (our private copy) and `upstream` (ClearML, fetch only). To take ClearML changes: `git -C <fork> fetch upstream --tags`.
+Each fork has `origin` (our private copy) and `upstream` (CairnML, fetch only). To take CairnML changes: `git -C <fork> fetch upstream --tags`.
 
 ## 1. Server
 
@@ -50,7 +50,7 @@ Each fork has `origin` (our private copy) and `upstream` (ClearML, fetch only). 
 The sign-in service and the server are reached by name, and the name must be the same on every machine. Add this line to `/etc/hosts` on the server host, and on every other machine that uses the server, with the server's address in place of `127.0.0.1` on the other machines:
 
 ```
-127.0.0.1 mlops-idp mlops-clearml
+127.0.0.1 mlops-idp mlops-cairnml
 ```
 
 `bootstrap.sh` refuses to run until both names resolve.
@@ -62,22 +62,22 @@ cd deploy
 ./scripts/bootstrap.sh
 ```
 
-The first run takes a while: it builds the ClearML images from the forks. It does the following, and prints nothing secret:
+The first run takes a while: it builds the CairnML images from the forks. It does the following, and prints nothing secret:
 
 1. Starts Keycloak with the `mlops` realm, and sets the admin login from `deploy/.env` (created on the first run with a generated password).
-2. Writes the ClearML secrets to `deploy/secrets/clearml/` (once; they are kept on later runs): the token and session keys. If `deploy/secrets/github-app.pem` exists, it is copied there as the GitHub key.
-3. Creates the three ClearML clients in Keycloak (`clearml-web`, `clearml-sdk`, `clearml-server`) and updates them to `deploy/idp/realm-mlops.json` on every run. It stores the secret of `clearml-server` (used to read users from Keycloak) in `deploy/secrets/clearml/idp_directory_secret`.
-4. Starts the ClearML server (`deploy/compose.yaml`).
+2. Writes the CairnML secrets to `deploy/secrets/cairnml/` (once; they are kept on later runs): the token and session keys. If `deploy/secrets/github-app.pem` exists, it is copied there as the GitHub key.
+3. Creates the three CairnML clients in Keycloak (`cairnml-web`, `cairnml-sdk`, `cairnml-server`) and updates them to `deploy/idp/realm-mlops.json` on every run. It stores the secret of `cairnml-server` (used to read users from Keycloak) in `deploy/secrets/cairnml/idp_directory_secret`.
+4. Starts the CairnML server (`deploy/compose.yaml`).
 
 Check that the server answers:
 
 ```bash
-curl -X POST http://mlops-clearml:8008/v2.8/login.supported_modes -H 'Content-Type: application/json' -d '{}'
+curl -X POST http://mlops-cairnml:8008/v2.8/login.supported_modes -H 'Content-Type: application/json' -d '{}'
 ```
 
 ### First sign-in
 
-Open `http://mlops-clearml:8080`. You are sent to the sign-in page of Keycloak. Sign in as the admin user named by `KC_ADMIN` in `deploy/.env`, with the password from the same file. Your ClearML account is created at that first sign-in.
+Open `http://mlops-cairnml:8080`. You are sent to the sign-in page of Keycloak. Sign in as the admin user named by `KC_ADMIN` in `deploy/.env`, with the password from the same file. Your CairnML account is created at that first sign-in.
 
 Admins are the users with the `mlops-admin` role in Keycloak. Give other people the role, or leave them as plain users. Keycloak's admin console is at `http://mlops-idp:8180`.
 
@@ -98,15 +98,15 @@ MLOPS_DATASET_REGISTRY=acme/external-datasets
 MLOPS_DATASET_OWNERS='["acme"]'
 ```
 
-A dataset enters the registry with `clearml-dataset register`; no server setting changes. The server reads the registry's default branch, so a new entry works about a minute after its pull request merges. A person uses their own git login.
+A dataset enters the registry with `cairnml-dataset register`; no server setting changes. The server reads the registry's default branch, so a new entry works about a minute after its pull request merges. A person uses their own git login.
 
 ### Addresses and https
 
-The addresses are set in `deploy/compose.yaml` (`CLEARML__apiserver__idp__*`): the web app at `http://mlops-clearml:8080`, the API at `http://mlops-clearml:8008`. To serve over https, change those addresses to https, and set `CLEARML_COOKIE_SECURE=true` in `deploy/.env`. The server refuses to start with https addresses and an insecure session cookie.
+The addresses are set in `deploy/compose.yaml` (`CAIRNML__apiserver__idp__*`): the web app at `http://mlops-cairnml:8080`, the API at `http://mlops-cairnml:8008`. To serve over https, change those addresses to https, and set `CAIRNML_COOKIE_SECURE=true` in `deploy/.env`. The server refuses to start with https addresses and an insecure session cookie.
 
 ### Keep the data
 
-The server's data is in `deploy/data/` and its keys in `deploy/secrets/`. Both are git-ignored. Back up both folders; losing `deploy/secrets/clearml/token_secret` signs everyone out, and losing the database loses the runs.
+The server's data is in `deploy/data/` and its keys in `deploy/secrets/`. Both are git-ignored. Back up both folders; losing `deploy/secrets/cairnml/token_secret` signs everyone out, and losing the database loses the runs.
 
 ### Object storage and the NAS
 
@@ -117,7 +117,7 @@ Object storage (RustFS, with the buckets `dataset`, `model`, `artifact` and `deb
 Install the SDK from the fork, in a virtual environment:
 
 ```bash
-cd clearml   # from the root of this repository
+cd cairnml   # from the root of this repository
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -e .
@@ -126,32 +126,32 @@ pip install -e .
 Sign in and enrol the machine once, naming the server on the command line. Your browser opens the sign-in page, and the sign-in always asks for your credentials:
 
 ```bash
-clearml-init --server http://mlops-clearml:8008
-clearml-whoami
+cairnml-init --server http://mlops-cairnml:8008
+cairnml-whoami
 ```
 
-`clearml-whoami` shows the user and the device this machine signs in as. It uses the device key, and needs no browser. The key is in `~/.clearml/device.key` (readable by you only); the configuration is `~/clearml.conf`. No access key is copied.
+`cairnml-whoami` shows the user and the device this machine signs in as. It uses the device key, and needs no browser. The key is in `~/.cairnml/device.key` (readable by you only); the configuration is `~/cairnml.conf`. No access key is copied.
 
 To enrol again, for example as another person, use `--force`. The previous device is revoked first:
 
 ```bash
-clearml-init --server http://mlops-clearml:8008 --force
+cairnml-init --server http://mlops-cairnml:8008 --force
 ```
 
 To sign this machine out, revoke it and remove its key:
 
 ```bash
-clearml-logout
+cairnml-logout
 ```
 
-If the device cannot be revoked (for example, the server is unreachable), `clearml-logout` removes nothing, and you can run it again later.
+If the device cannot be revoked (for example, the server is unreachable), `cairnml-logout` removes nothing, and you can run it again later.
 
-The machine must be able to resolve `mlops-clearml` and `mlops-idp` to the server, as in "Host names" above.
+The machine must be able to resolve `mlops-cairnml` and `mlops-idp` to the server, as in "Host names" above.
 
 Check it with a short run:
 
 ```python
-from clearml import Task
+from cairnml import Task
 
 task = Task.init(project_name="demo", task_name="first run")
 logger = task.get_logger()
@@ -167,27 +167,27 @@ The run appears in the web app under the project `demo`, with its metrics.
 A dataset is a git repository with a `data/` folder. Git holds the history, DVC holds the files in the `dataset` bucket, and the commit is the version. Install the extra (Python 3.9 or newer, and `git`):
 
 ```bash
-pip install -e "./clearml[dataset]"
+pip install -e "./cairnml[dataset]"
 ```
 
 Create an empty repository on GitHub, clone it, and inside it:
 
 ```bash
-clearml-dataset init                  # git tracking, file storage, dataset.yaml
+cairnml-dataset init                  # git tracking, file storage, dataset.yaml
 cp -r /path/to/measurements data/     # your files
-clearml-dataset status                # branch, and what is new, changed or deleted
-clearml-dataset add                   # records data/ as it is now, deleted files included
-clearml-dataset commit -m "March measurements"   # checks the data and commits it with its footprint
-clearml-dataset push                  # the files first, then the commit (through a pull request)
-clearml-dataset register              # once: adds the dataset to the registry
+cairnml-dataset status                # branch, and what is new, changed or deleted
+cairnml-dataset add                   # records data/ as it is now, deleted files included
+cairnml-dataset commit -m "March measurements"   # checks the data and commits it with its footprint
+cairnml-dataset push                  # the files first, then the commit (through a pull request)
+cairnml-dataset register              # once: adds the dataset to the registry
 ```
 
-A dataset must be readable in the standard format: `dataset.yaml` says `format: native` (the standard sample table is in `data/`) or names an adapter (`clearml-dataset init --adapter <name>`). `commit` refuses data that is neither, and writes `dataset.lock.json`, a checksum record that a GitHub Action in the dataset repository verifies from git alone. See `clearml/docs/datasets.md`.
+A dataset must be readable in the standard format: `dataset.yaml` says `format: native` (the standard sample table is in `data/`) or names an adapter (`cairnml-dataset init --adapter <name>`). `commit` refuses data that is neither, and writes `dataset.lock.json`, a checksum record that a GitHub Action in the dataset repository verifies from git alone. See `cairnml/docs/datasets.md`.
 
 A script uses a version by its commit. The run records the repository, the commit and a hash of the files, and the files are kept in a per-user cache, so a second run does not download them again:
 
 ```python
-from clearml.datasets import Dataset
+from cairnml.datasets import Dataset
 
 data = Dataset.get("https://github.com/acme/cars-data.git", "3f2a9c1")   # a commit, not a branch, to rerun it later
 print(data.path)
@@ -200,9 +200,9 @@ data = Dataset.get_external("coco-det")            # the latest main of external
 data = Dataset.get_external("coco-det", "a1b2c3d") # a fixed commit, to rerun an earlier run exactly
 ```
 
-The cache is `~/.clearml/cache/datasets`, limited to 50 GB by default (`clearml-dataset cache info`, `cache limit 20GB`, `cache clean`). See `clearml/docs/datasets.md` for the details, including how to write an adapter.
+The cache is `~/.cairnml/cache/datasets`, limited to 50 GB by default (`cairnml-dataset cache info`, `cache limit 20GB`, `cache clean`). See `cairnml/docs/datasets.md` for the details, including how to write an adapter.
 
-To enrol a second laptop, run `clearml-init --server ...` on it. Each machine has its own key. A lost machine is revoked by its owner or an admin with the `devices.revoke` call of the API, and its key stops working at once. There is no page for this in the web app yet.
+To enrol a second laptop, run `cairnml-init --server ...` on it. Each machine has its own key. A lost machine is revoked by its owner or an admin with the `devices.revoke` call of the API, and its key stops working at once. There is no page for this in the web app yet.
 
 ## 3. Agent (a machine that runs jobs)
 
@@ -211,7 +211,7 @@ An agent is enrolled by an admin, because it runs other people's code.
 Install the agent from the fork, in its own virtual environment:
 
 ```bash
-cd clearml-agent   # from the root of this repository
+cd cairnml-agent   # from the root of this repository
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -e .
@@ -220,16 +220,16 @@ pip install -e .
 Enrol it. An admin signs in when the browser opens; a non-admin is refused, and no configuration is written:
 
 ```bash
-clearml-agent init
+cairnml-agent init
 ```
 
 Then start the agent on a queue. It takes one job at a time from the queue and runs it:
 
 ```bash
-clearml-agent daemon --queue default
+cairnml-agent daemon --queue default
 ```
 
-Add `--docker` to run each job in a container, and `--gpus 0` to give the agent chosen GPUs. A machine with several GPUs can run one agent per GPU, each on its own queue. Run `clearml-agent daemon --help` for the rest, including services mode.
+Add `--docker` to run each job in a container, and `--gpus 0` to give the agent chosen GPUs. A machine with several GPUs can run one agent per GPU, each on its own queue. Run `cairnml-agent daemon --help` for the rest, including services mode.
 
 Each job runs with its own token, issued to this agent when the job starts. The agent renews it while the job runs, and the job never gets the agent's own token. The repository is cloned with a short-lived GitHub token for that one repository.
 
@@ -240,7 +240,7 @@ The agent can also run as a container, in `deploy/agent/`. The agent container r
 ```bash
 docker compose build agent
 docker compose up -d dind
-docker compose run --rm agent clearml-agent init
+docker compose run --rm agent cairnml-agent init
 docker compose up -d agent
 ```
 
@@ -253,7 +253,7 @@ A job waits in a queue until an agent that listens to it takes the job. The `def
 Put a task in a queue from a script, or from the web app (enqueue on the task's page):
 
 ```python
-from clearml import Task
+from cairnml import Task
 
 task = Task.init(project_name="demo", task_name="training")
 Task.enqueue(task, queue_name="default")       # run the recorded task on an agent
@@ -264,7 +264,7 @@ An agent takes one job at a time, so a job waits while its agent is busy. A mach
 
 ## 4. Web app
 
-Open `http://mlops-clearml:8080`. To run the web app from its source for development, see `clearml-web/docs/dev-proxy.md`.
+Open `http://mlops-cairnml:8080`. To run the web app from its source for development, see `cairnml-web/docs/dev-proxy.md`.
 
 The dashboard lists the projects at the top and the recent experiments at the bottom. Double-click a project to open its dashboard: the project's tasks as folders at the top, and its recent experiments at the bottom. Double-click a task folder to list its experiments, numbered in the order they were created. "All experiments" lists every experiment in the project.
 
@@ -278,7 +278,7 @@ In the SDK and the API, the record of an experiment is still called a `Task`.
 
 ## 5. Checks
 
-- `deploy/scripts/check-clearml-secrets.sh` fails if a secret, a private key or an `.env` file is committed to one of the ClearML repositories.
+- `deploy/scripts/check-cairnml-secrets.sh` fails if a secret, a private key or an `.env` file is committed to one of the CairnML repositories.
 
 ## 6. Troubleshooting
 
@@ -287,13 +287,13 @@ In the SDK and the API, the record of an experiment is still called a `Task`.
 | `bootstrap.sh` asks you to add a host line | Add the line from "Host names", then run it again |
 | The server does not answer after bootstrap | Elasticsearch takes a minute to start. Check `docker compose -f deploy/compose.yaml logs apiserver` |
 | Sign-in loops, or the web app shows a sign-in error | The addresses in `deploy/compose.yaml` must match the address you use in the browser |
-| `clearml-init` says the machine is enrolled | The key file `~/.clearml/device.key` exists. Remove it only to enrol again, and revoke the old device in the web app |
-| `clearml-agent init` is refused | Only an admin may enrol an agent. Ask an admin to run it |
+| `cairnml-init` says the machine is enrolled | The key file `~/.cairnml/device.key` exists. Remove it only to enrol again, and revoke the old device in the web app |
+| `cairnml-agent init` is refused | Only an admin may enrol an agent. Ask an admin to run it |
 | A job is refused when it is enqueued | The repository's commit is not on GitHub, or the GitHub App is not installed on it. The message says which |
-| A job stays queued | No agent listens to its queue. Start `clearml-agent daemon --queue <name>`, and look for the worker on the Workers page |
-| `Dataset.get` says a commit is not on the repository, or its files are not in storage | Push it: `clearml-dataset push`. A commit that exists only on one machine cannot be used by another |
-| `clearml-dataset commit` says the data is not native and names no adapter | `dataset.yaml` must say `format: native` (with `samples.parquet` and `manifest.json` in `data/`) or `adapter: <name>`. Run `clearml-dataset check` to see what is wrong |
-| `push` says the footprint does not hold | The data or `dataset.yaml` changed after the check. Run `clearml-dataset commit` again |
+| A job stays queued | No agent listens to its queue. Start `cairnml-agent daemon --queue <name>`, and look for the worker on the Workers page |
+| `Dataset.get` says a commit is not on the repository, or its files are not in storage | Push it: `cairnml-dataset push`. A commit that exists only on one machine cannot be used by another |
+| `cairnml-dataset commit` says the data is not native and names no adapter | `dataset.yaml` must say `format: native` (with `samples.parquet` and `manifest.json` in `data/`) or `adapter: <name>`. Run `cairnml-dataset check` to see what is wrong |
+| `push` says the footprint does not hold | The data or `dataset.yaml` changed after the check. Run `cairnml-dataset commit` again |
 | An adapter stops a run with a message that names it | The source changed its layout. Add an adapter for the new revisions and list them under `overrides` in the dataset's pin file in `external-datasets` |
 
 ## 7. Status
@@ -309,15 +309,15 @@ whole workflow against it (see [docs/e2e_testing/E2E.md](docs/e2e_testing/E2E.md
 
 | Fork | Command | Notes |
 |---|---|---|
-| `clearml` (SDK) | `cd clearml && python -m pytest tests` | Runs without services. Last run: 77 passed. The dataset tests start git and DVC and take about a minute. |
-| `clearml-agent` | `cd clearml-agent && python -m pytest tests --ignore=tests/requirements` | Needs the fork installed (`pip install -e .`). Last run: 7138 passed, 6 failed in `tests/package/test_task_script.py` (a missing file), which is not yet explained. `tests/requirements` does not import. |
-| `clearml-server` | run in the server image, with MongoDB, Redis and Elasticsearch running (see below) | Without the services, 198 tests fail with "connection refused" on `127.0.0.1:27017`. |
-| `clearml-web` | `cd clearml-web && npm ci && npm test` | Karma, which needs Chrome. Not run in the last check. |
+| `cairnml` (SDK) | `cd cairnml && python -m pytest tests` | Runs without services. Last run: 77 passed. The dataset tests start git and DVC and take about a minute. |
+| `cairnml-agent` | `cd cairnml-agent && python -m pytest tests --ignore=tests/requirements` | Needs the fork installed (`pip install -e .`). Last run: 7138 passed, 6 failed in `tests/package/test_task_script.py` (a missing file), which is not yet explained. `tests/requirements` does not import. |
+| `cairnml-server` | run in the server image, with MongoDB, Redis and Elasticsearch running (see below) | Without the services, 198 tests fail with "connection refused" on `127.0.0.1:27017`. |
+| `cairnml-web` | `cd cairnml-web && npm ci && npm test` | Karma, which needs Chrome. Not run in the last check. |
 
 To run the server's unit tests, start the stack's services and point the image at them. The simplest way is the
 end-to-end stack's own compose project (its services are on a private network), or any MongoDB, Redis and Elasticsearch
-reachable from the container. Mount `clearml-server/apiserver/tests` into the image and run pytest from `/opt/clearml`,
-after creating `/var/log/clearml` (the logging configuration writes there).
+reachable from the container. Mount `cairnml-server/apiserver/tests` into the image and run pytest from `/opt/cairnml`,
+after creating `/var/log/cairnml` (the logging configuration writes there).
 
 ### End-to-end tests
 
@@ -326,7 +326,7 @@ Prerequisites, and the full list of what the suite checks, are in [docs/e2e_test
 ```bash
 uv venv .venv --python 3.12
 uv pip install -r tests/e2e/requirements.txt
-uv pip install -e ./clearml -e ./clearml-agent
+uv pip install -e ./cairnml -e ./cairnml-agent
 playwright install chromium
 
 .venv/bin/pytest tests/e2e                 # everything: starts its own stack, about 70 minutes

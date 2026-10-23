@@ -1,13 +1,13 @@
 ---
-name: clearml-web-ui
-description: Use BEFORE building, changing or restyling any page, tab, panel, card, table, chart, dialog, empty state or layout in the clearml-web Angular UI (the web app of this repo). Triggers on requests like "make a UI page for X", "add a tab / dashboard / panel for Y", "show this data in the UI", "fix this layout", "this page looks unfinished". Assembles pages only from the app's existing components, layouts, shared styles and theme tokens, so new UI looks as if it had always been part of the app. Forces a search for the closest existing page, a design that pairs a table with a visual, and visual verification in light and dark mode.
+name: cairnml-web-ui
+description: Use BEFORE building, changing or restyling any page, tab, panel, card, table, chart, dialog, empty state or layout in the cairnml-web Angular UI (the web app of this repo). Triggers on requests like "make a UI page for X", "add a tab / dashboard / panel for Y", "show this data in the UI", "fix this layout", "this page looks unfinished". Assembles pages only from the app's existing components, layouts, shared styles and theme tokens, so new UI looks as if it had always been part of the app. Forces a search for the closest existing page, a design that pairs a table with a visual, and visual verification in light and dark mode.
 ---
 
-# clearml-web UI
+# cairnml-web UI
 
 You are **not designing** in this codebase. You are **assembling** pages from parts that already exist. A new page must be indistinguishable in padding, surfaces, type, colour, controls and behaviour from the pages around it, even though its content is different. Consistency is the quality bar; novelty is a defect.
 
-Where this skill and `clearml-web/CLAUDE.md` disagree, this skill wins. (`CLAUDE.md` section 5 tells you to use the `$blue-*` scale for surfaces. The code does not: 232 of 348 stylesheets use `var(--color-*)` tokens and 3 use `$blue-*`. Use the tokens.)
+Where this skill and `cairnml-web/CLAUDE.md` disagree, this skill wins. (`CLAUDE.md` section 5 tells you to use the `$blue-*` scale for surfaces. The code does not: 232 of 348 stylesheets use `var(--color-*)` tokens and 3 use `$blue-*`. Use the tokens.)
 
 The workflow below tells you when to read each reference file. Reading them is part of the work: do not build from memory of this document alone.
 
@@ -151,7 +151,7 @@ The case you type is the case that shows. Buttons, tabs, section titles and colu
 - Typed one button label in sentence case ("Show jobs") among uppercase buttons.
 - Assumed the page would look right in dark mode without opening it.
 - Trusted screenshots taken while the API was restarting: the pages looked broken only because the data was missing. Check the data first.
-- Trusted `clearml-web/CLAUDE.md` for colours (`$blue-*`) when the code uses `var(--color-*)`.
+- Trusted `cairnml-web/CLAUDE.md` for colours (`$blue-*`) when the code uses `var(--color-*)`.
 - Built a page as `display: grid` without `grid-template-columns: minmax(0, 1fr)`. A chart and a table made the column wider than its pane and pushed the close button off-screen. Only the overflow check in `reference/verify.md` caught it.
 - Put a table in a bordered box with `overflow: hidden`, which silently clips columns. Use `overflow-x: auto`.
 - Gave a chart panel no empty state: a machine without history showed a blank axis spanning a day.

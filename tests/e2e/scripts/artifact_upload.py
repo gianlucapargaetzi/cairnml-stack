@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from common import array_digest, deterministic_bytes, file_digest, folder_digest, frame_digest  # noqa: E402
 from common import image_digest, json_digest, pickled_digest, report  # noqa: E402
 
-from clearml import Task  # noqa: E402
+from cairnml import Task  # noqa: E402
 
 
 def main() -> None:

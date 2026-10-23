@@ -1,5 +1,5 @@
 """Job tokens: a job that runs longer than its token lasts keeps its access to the server, because the agent renews the
-token while the job runs (clearml-agent issue #3).
+token while the job runs (cairnml-agent issue #3).
 
 The token lifetime is lowered for this module only: the API is restarted with a short lifetime, and back to the default
 when the module ends. The data and the other services are kept.
@@ -64,6 +64,6 @@ def test_a_job_longer_than_its_token_lifetime_completes_and_its_token_is_renewed
     )
     assert "result" in [a["key"] for a in record["execution"]["artifacts"]]
     # the agent writes its own log of the job next to the job's temporary files; the renewals are logged there
-    agent_logs = list(Path(tempfile.gettempdir()).glob(f"clearml-jobs-*/{long_job}.log"))
+    agent_logs = list(Path(tempfile.gettempdir()).glob(f"cairnml-jobs-*/{long_job}.log"))
     agent_log = agent_logs[0].read_text(errors="replace") if agent_logs else ""
     assert f"Job token renewed for task {long_job}" in agent_log, agent_log[-3000:]

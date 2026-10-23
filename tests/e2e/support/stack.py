@@ -6,7 +6,7 @@ The stack is a separate compose project (tests/e2e/stack/compose.yaml) with:
 - its own ports, on the loopback address, so nothing needs /etc/hosts and nothing is shared with the stack under
   deploy/.
 
-Only the Docker daemon and the image cache are shared with the rest of the machine. The clearml-server image is
+Only the Docker daemon and the image cache are shared with the rest of the machine. The cairnml-server image is
 the one the deploy/ stack builds; the suite does not change it.
 
 Reuse (MLOPS_E2E_REUSE_STACK=1, see docs/e2e_testing/E2E.md, speed section item 1): the stack keeps its state, ports and accounts in
@@ -39,8 +39,8 @@ REPO = Path(__file__).resolve().parents[3]
 COMPOSE_FILE = Path(__file__).resolve().parents[1] / "stack" / "compose.yaml"
 REALM_TEMPLATE = REPO / "deploy" / "idp" / "realm-mlops.json"
 STORAGE_SCRIPT = REPO / "deploy" / "storage" / "init.py"
-NGINX_TEMPLATE = REPO / "clearml-server" / "docker" / "build" / "internal_files" / "clearml.conf.template"
-SOURCE_REPOS = (REPO / "clearml-server", REPO / "clearml-web")
+NGINX_TEMPLATE = REPO / "cairnml-server" / "docker" / "build" / "internal_files" / "cairnml.conf.template"
+SOURCE_REPOS = (REPO / "cairnml-server", REPO / "cairnml-web")
 ADMIN_NAME = "e2e-admin"
 
 # A reused stack lives here: its state folder, its ports and accounts (stack.json), and the lock for starting it.
@@ -205,7 +205,7 @@ class IsolatedStack:
         shutil.copy(STORAGE_SCRIPT, self.state / "init.py")
         self._write_nginx_template()
         self._write_realm()
-        # No configuration.json: the web app finds its API on its own origin (clearml-web, app.constants.ts), so the
+        # No configuration.json: the web app finds its API on its own origin (cairnml-web, app.constants.ts), so the
         # UI tests check that default. The folder stays, as the web server mounts it.
         (self.state / "configs").mkdir(exist_ok=True)
 
@@ -216,13 +216,13 @@ class IsolatedStack:
         text = text.replace("listen       [::]:80 default_server;", "")
         folder = self.state / "nginx"
         folder.mkdir(exist_ok=True)
-        (folder / "clearml.conf.template").write_text(text)
+        (folder / "cairnml.conf.template").write_text(text)
 
     def _write_realm(self) -> None:
         """The committed realm, with this stack's addresses in place of the deploy/ names."""
         text = REALM_TEMPLATE.read_text()
-        text = text.replace("http://mlops-clearml:8008", self.api_url)
-        text = text.replace("http://mlops-clearml:8080", self.web_url)
+        text = text.replace("http://mlops-cairnml:8008", self.api_url)
+        text = text.replace("http://mlops-cairnml:8080", self.web_url)
         json.loads(text)  # the result must still be a realm
         (self.state / "realm-mlops.json").write_text(text)
 
@@ -263,7 +263,7 @@ class IsolatedStack:
         result = self.compose("up", "-d", "--no-deps", "apiserver", timeout=300)
         if result.returncode != 0:
             raise StackError(f"cannot restart the API with a job token lifetime of {seconds} s:\n{result.stderr[-3000:]}")
-        self._wait(self._api_answers, 120, "the ClearML API after the restart")
+        self._wait(self._api_answers, 120, "the CairnML API after the restart")
 
     def _chown_data(self) -> None:
         """The containers run as their own users; the folders must be theirs. Done in a container, as bootstrap does."""
@@ -309,8 +309,8 @@ class IsolatedStack:
             self._identity()
             result = self.compose("up", "-d", "--build")
             if result.returncode != 0:
-                raise StackError(f"cannot start the ClearML server:\n{result.stderr[-3000:]}")
-            self._wait(self._api_answers, 600, "the ClearML API")
+                raise StackError(f"cannot start the CairnML server:\n{result.stderr[-3000:]}")
+            self._wait(self._api_answers, 600, "the CairnML API")
             self._wait(lambda: requests.get(self.web_url + "/", timeout=10).status_code == 200, 300, "the web app")
             if self.reuse:
                 self._save(self.fingerprint)
@@ -325,7 +325,7 @@ class IsolatedStack:
 
         kc = Keycloak()
         kc.create_user(ADMIN_NAME, self.admin_password, admin=True)
-        clients = kc._admin("GET", "/clients", params={"clientId": "clearml-server"}).json()
+        clients = kc._admin("GET", "/clients", params={"clientId": "cairnml-server"}).json()
         client_uuid = clients[0]["id"]
         # The server reads users (for the directory sync) as its service account: it needs view-users, as bootstrap.sh
         # grants it. Without it the sync never sees a disabled account.

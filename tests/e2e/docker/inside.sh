@@ -3,10 +3,10 @@
 # daemon, then runs the suite in a runner container of this daemon.
 #
 # The runner shares the network namespace of dind, as the stack does: the stack is reached at 127.0.0.1, and a job
-# container reaches the server through the loopback rule of the agent (clearml-agent, worker.py).
+# container reaches the server through the loopback rule of the agent (cairnml-agent, worker.py).
 #
 #   inside.sh                  the suite; the arguments go to pytest
-#   inside.sh --stop-stack     stop the ClearML stack, keep the environment
+#   inside.sh --stop-stack     stop the CairnML stack, keep the environment
 set -e
 
 STAGE=/tmp/runner-build
@@ -18,10 +18,10 @@ mkdir -p /e2e-state/tmp /e2e-state/stack /e2e-cache
 rm -rf "$STAGE"
 mkdir -p "$STAGE/src"
 cp /workspace/tests/e2e/docker/runner.Dockerfile /workspace/tests/e2e/docker/requirements.txt "$STAGE/"
-cp -r /workspace/clearml "$STAGE/src/clearml"
-cp -r /workspace/clearml-agent "$STAGE/src/clearml-agent"
+cp -r /workspace/cairnml "$STAGE/src/cairnml"
+cp -r /workspace/cairnml-agent "$STAGE/src/cairnml-agent"
 # build output is not source: a stale build/ folder would be packed into the wheel instead of the sources
-rm -rf "$STAGE/src/clearml/build" "$STAGE/src/clearml/dist" "$STAGE/src/clearml-agent/build" "$STAGE/src/clearml-agent/dist"
+rm -rf "$STAGE/src/cairnml/build" "$STAGE/src/cairnml/dist" "$STAGE/src/cairnml-agent/build" "$STAGE/src/cairnml-agent/dist"
 docker build -q -t "$IMAGE" -f "$STAGE/runner.Dockerfile" "$STAGE" >/dev/null
 
 RUN="docker run --rm -i --network host \

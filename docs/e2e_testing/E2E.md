@@ -18,7 +18,7 @@ tests/e2e/docker/run.sh -k artifacts           # one area (module or test name)
 tests/e2e/docker/run.sh test_09_jobs.py -v     # one module
 tests/e2e/docker/run.sh -n 4 -m "not restart"  # in parallel, then the restart test on its own:
 tests/e2e/docker/run.sh -m restart
-tests/e2e/docker/run.sh --stop-stack           # stop the ClearML stack, keep the environment
+tests/e2e/docker/run.sh --stop-stack           # stop the CairnML stack, keep the environment
 tests/e2e/docker/run.sh --down                 # remove the environment: containers, images and volumes
 ```
 
@@ -42,14 +42,14 @@ file does, and it requires an admin.
 
 `.venv/bin/pytest tests/e2e` still runs the suite on the host's Docker daemon, with the stack on the host's loopback
 interface. It needs Docker with Compose v2, the two forks as submodules, Python 3.12 with the suite's requirements and the
-two SDK forks (`uv pip install -r tests/e2e/requirements.txt`, then `uv pip install -e ./clearml -e ./clearml-agent`),
+two SDK forks (`uv pip install -r tests/e2e/requirements.txt`, then `uv pip install -e ./cairnml -e ./cairnml-agent`),
 Chromium for Playwright, and nine free ports in 18000 to 18999. It has not been run since the isolated environment was
 built, and the isolated environment is the one to use. Its job containers run on the host's daemon (see Limits).
 
 ## The isolated environment
 
 The host runs one container, `dind`: a Docker daemon of its own. Everything the suite uses runs inside it: the test
-runner, the ClearML stack, the managed agent, and the agent's job containers. The host's Docker daemon starts `dind` and
+runner, the CairnML stack, the managed agent, and the agent's job containers. The host's Docker daemon starts `dind` and
 nothing else, and nothing inside it is published to the host.
 
 | Where | What |
@@ -57,12 +57,12 @@ nothing else, and nothing inside it is published to the host.
 | host | `docker compose -f tests/e2e/docker/compose.yaml up dind`, then `inside.sh` runs in it. Nothing else. |
 | `dind` (privileged) | Its daemon runs every container below. Its filesystem holds `/workspace` (the repository, mounted from the host), `/e2e-state` and `/e2e-cache` (volumes), and the images it pulls and builds. |
 | runner (in `dind`) | Built by `inside.sh` from `runner.Dockerfile`: the test venv (the suite, the SDK and the agent from the submodules, editable), Chromium, the Docker CLI and Compose, git. It runs `pytest`, the managed agent and the browser. |
-| stack (in `dind`) | The ClearML stack from `stack/compose.yaml`, started by the suite with the Compose plugin of the runner, against the daemon of `dind`. |
+| stack (in `dind`) | The CairnML stack from `stack/compose.yaml`, started by the suite with the Compose plugin of the runner, against the daemon of `dind`. |
 | job containers (in `dind`) | Started by the agent, through the same daemon. |
 
 **Networking.** The runner starts with `--network host`: it shares the network namespace of `dind`, as the stack does. So
 the stack is reached at `127.0.0.1`, the browser and the SDK use the same addresses, and a job container reaches the
-server through the loopback rule of the agent (`clearml-agent/clearml_agent/commands/worker.py`, host networking for a
+server through the loopback rule of the agent (`cairnml-agent/cairnml_agent/commands/worker.py`, host networking for a
 loopback server).
 
 **Paths.** The runner mounts the daemon's socket, so its `docker` and `docker compose` commands go to the daemon of `dind`.
@@ -110,16 +110,16 @@ The clients (the SDK, the CLI, the agent) take the API address as a command-line
 settings, so nothing depends on a fixed address. Two things in this build assume the default ports, and the suite works
 around them:
 
-- The web app takes its API address from its own page address with port `8008` (`clearml-web`, `guessAPIServerURL`).
+- The web app takes its API address from its own page address with port `8008` (`cairnml-web`, `guessAPIServerURL`).
   The suite writes `{"apiBaseUrl": "/api"}` to the web server's `configuration.json`, which the image reads from
-  `/mnt/external_files/configs/`. Filed as `clearml-web` issue #3.
-- `clearml-init --server <web address>` derives the API address from the web address for ports 8080 and 8008 only. The
+  `/mnt/external_files/configs/`. Filed as `cairnml-web` issue #3.
+- `cairnml-init --server <web address>` derives the API address from the web address for ports 8080 and 8008 only. The
   test for that is skipped on other ports (`test_02_enrolment.py::test_init_accepts_the_web_address_and_finds_the_api`).
 
 ## Limits
 
 - **Job containers.** In the isolated environment they run on the daemon of `dind`. On the host they run on the host's
-  Docker daemon, where the agent stops "orphan" job containers at start-up by label (`clearml.job`), for any agent on that
+  Docker daemon, where the agent stops "orphan" job containers at start-up by label (`cairnml.job`), for any agent on that
   machine. A real agent and the suite's agent on one host would stop each other's orphans, so run the host suite on a
   machine without a live agent of the deploy stack.
 - **Agents** are processes with their own `HOME`, device key and worker name; their jobs run in containers.
@@ -141,8 +141,8 @@ around them:
 | `support/browser.py`, `support/web.py` | Fill the sign-in form in headless Chromium, as a person would, and sign in to the web app in a fresh context. |
 | `support/keycloak.py` | Creates, disables and removes the test accounts through Keycloak's admin API. |
 | `support/api.py` | REST calls as a device: signs the assertion with the device key and exchanges it for a token. |
-| `support/client.py` | A person's machine: `client.init()` runs `clearml-init`, and `whoami`, `logout` and the key helpers. |
-| `support/agent.py` | A machine that runs jobs: `agent.init()` runs `clearml-agent init`, and `AgentMachine` runs the managed daemon as a process, with the timers and the shared cache folders of the isolated environment. |
+| `support/client.py` | A person's machine: `client.init()` runs `cairnml-init`, and `whoami`, `logout` and the key helpers. |
+| `support/agent.py` | A machine that runs jobs: `agent.init()` runs `cairnml-agent init`, and `AgentMachine` runs the managed daemon as a process, with the timers and the shared cache folders of the isolated environment. |
 | `support/git.py` | Local git repositories: a bare remote and a checkout of it. |
 | `support/workspace.py`, `support/jobs.py` | Running the example scripts and reading their JSON result (the last JSON line); enqueueing and following jobs. |
 | `support/report.py` | The report: one row per test, with its description, expectation, outcome and duration. |
@@ -167,14 +167,14 @@ after the fix, because of it.
 
 | # | Issue | What happens | Tests |
 |---|---|---|---|
-| Policy | [clearml-server #3](https://github.com/gianlucapargaetzi/clearml-server/issues/3) | A plain user can delete another user's run. Expected 403 until user access management exists (decided). | `test_05_artifacts.py::test_a_member_who_is_not_the_owner_cannot_delete_the_run` |
+| Policy | [cairnml-server #3](https://github.com/gianlucapargaetzi/cairnml-server/issues/3) | A plain user can delete another user's run. Expected 403 until user access management exists (decided). | `test_05_artifacts.py::test_a_member_who_is_not_the_owner_cannot_delete_the_run` |
 
 Defects that were fixed are not listed. `Task.set_parameters` replaces the whole parameter set, as its docstring says; the
 example script writes the group first, and `test_set_parameters_replaces_the_whole_set_and_set_parameter_adds` documents it.
 
 ### Not caught by a test
 
-- **Fixed-port derivation in `clearml-init`.** Skipped on other ports, so it is not run here.
+- **Fixed-port derivation in `cairnml-init`.** Skipped on other ports, so it is not run here.
 
 ## Status of the last full run
 
@@ -186,7 +186,7 @@ Latest full run, in the isolated environment, from a stack that was stopped firs
 The 6 that failed, by cause:
 
 - **Known defects, failing as designed:**
-  - `test_a_member_who_is_not_the_owner_cannot_delete_the_run`: the owner policy is not built (clearml-server #3).
+  - `test_a_member_who_is_not_the_owner_cannot_delete_the_run`: the owner policy is not built (cairnml-server #3).
 - **Open, explained (see Open results):** the git job clone, and the live jobs list.
 
 The 3 skipped: `test_init_accepts_the_web_address_and_finds_the_api` (the suite runs on ports other than the defaults), and
@@ -199,7 +199,7 @@ this run; it failed in an earlier one, and it passes alone too, so its failure w
 ## Open results
 
 - **Git job clone** (`test_06_git.py::test_job_clones_the_recorded_commit_and_reports_it`): fixed in the suite. The clone
-  runs inside the job container (docker mode maps the cache to `/root/.clearml` there), which cannot see a local path
+  runs inside the job container (docker mode maps the cache to `/root/.cairnml` there), which cannot see a local path
   under `/e2e-state`. The test now serves its remote with `git daemon` on the loopback address (`support/git.py`,
   `served`), which the job container reaches with host networking. Passes in a targeted run.
 - **Live jobs list** (`test_12_web_runs.py::test_jobs_list_shows_a_running_job_without_a_reload`): fixed in the suite, in
@@ -249,7 +249,7 @@ ceilings and intervals, not measured; the report now records each test's duratio
   another status, or when its console shows the container cannot reach the server before the body starts. Every failure
   names the status, the agent's reason and the last console line. The unreachable path is checked with a fake API only;
   no test yet produces an unreachable server.
-- **Long jobs and the job token.** Tracked in clearml-agent issue #3, including the tests the renewal needs.
+- **Long jobs and the job token.** Tracked in cairnml-agent issue #3, including the tests the renewal needs.
 - **The two open results above**, both suite fixes (see Open results).
 
 ## Clean-up of a real stack

@@ -7,7 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from common import file_digest, report  # noqa: E402
 
-from clearml import Model  # noqa: E402
+from cairnml import Model  # noqa: E402
 
 
 def main() -> None:

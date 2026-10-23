@@ -1,6 +1,6 @@
 """Section 1 of docs/e2e_testing/E2E.md: enrolling a machine, checking it, re-enrolling and signing out.
 
-Every enrolment here goes through clearml-init and the real sign-in page (headless browser).
+Every enrolment here goes through cairnml-init and the real sign-in page (headless browser).
 """
 
 import os
@@ -28,7 +28,7 @@ def test_init_enrols_the_machine_and_writes_its_key(client_home):
     assert key.is_file(), "the device key was not written"
     assert stat.S_IMODE(os.stat(key).st_mode) == 0o600, "the device key must be readable by its owner only"
     assert client.device_id_of(client_home).startswith("dev_"), "the configuration does not name the device"
-    conf = (client_home / "clearml.conf").read_text()
+    conf = (client_home / "cairnml.conf").read_text()
     assert settings.API_URL in conf, "the configuration does not name the server"
 
 
@@ -48,7 +48,7 @@ def test_whoami_uses_the_device_key_without_a_browser(client_home):
 
     Expect: The command exits 0 and prints no sign-in prompt, with no browser available to it.
     """
-    result = cli.run("clearml-whoami", client_home, extra_env={"BROWSER": "/bin/false"})
+    result = cli.run("cairnml-whoami", client_home, extra_env={"BROWSER": "/bin/false"})
     assert result.returncode == 0, result.output
     assert "sign" not in result.stdout.lower()
 
@@ -152,7 +152,7 @@ def test_init_accepts_the_web_address_and_finds_the_api(fresh_home, admin_accoun
         pytest.skip("the API address is derived from the web address for ports 8080/8008 only; this stack uses others")
     result = client.init(fresh_home, admin_account, server=settings.WEB_URL, name="e2e-web-address")
     assert result.returncode == 0, result.output
-    assert settings.API_URL in (fresh_home / "clearml.conf").read_text()
+    assert settings.API_URL in (fresh_home / "cairnml.conf").read_text()
     assert client.logout(fresh_home).returncode == 0
 
 

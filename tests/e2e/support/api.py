@@ -1,4 +1,4 @@
-"""Plain REST calls to the ClearML API, as an enrolled device.
+"""Plain REST calls to the CairnML API, as an enrolled device.
 
 The device signs a short assertion with its key; the server exchanges it for a token (devices.exchange).
 This is what the SDK does, written out here so the tests can also send requests the SDK would never send

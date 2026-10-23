@@ -2,7 +2,7 @@
 
 The suite runs against its own stack (support/stack.py): a separate compose project, with its own state, accounts and
 ports. Nothing here touches deploy/ or the stack it runs. Every session gets its own HOME, so the machine's real
-~/.clearml is never touched, and the test devices are enrolled through the real sign-in page.
+~/.cairnml is never touched, and the test devices are enrolled through the real sign-in page.
 
 Set MLOPS_E2E_KEEP_STACK=1 to leave the stack running after the session, for debugging.
 Set MLOPS_E2E_REUSE_STACK=1 to keep the stack running for the next session (see docs/e2e_testing/E2E.md, speed section, item 1). A reused
@@ -77,7 +77,7 @@ def isolated_stack(request):
 def _health_problems() -> list:
     problems = []
     checks = {
-        "ClearML API": (f"{settings.API_URL}/v2.8/login.supported_modes", "post"),
+        "CairnML API": (f"{settings.API_URL}/v2.8/login.supported_modes", "post"),
         "web app": (settings.WEB_URL + "/", "get"),
         "sign-in service": (f"{settings.ISSUER}/.well-known/openid-configuration", "get"),
         "object storage": (settings.STORAGE_URL + "/health", "get"),

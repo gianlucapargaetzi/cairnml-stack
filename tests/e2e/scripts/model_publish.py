@@ -7,7 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from common import deterministic_bytes, file_digest, report  # noqa: E402
 
-from clearml import OutputModel, Task  # noqa: E402
+from cairnml import OutputModel, Task  # noqa: E402
 
 
 def main() -> None:

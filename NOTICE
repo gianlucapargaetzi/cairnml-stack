@@ -1,0 +1,9 @@
+CairnML
+Modifications Copyright 2026 Gianluca Pargaetzi
+
+CairnML is based on ClearML (https://github.com/allegroai/clearml and the repositories clearml-agent,
+clearml-server and clearml-web), Copyright 2025 ClearML Inc. The SDK, agent and web app are licensed under
+the Apache License 2.0; the server is licensed under the Server Side Public License v1. See LICENSES.md.
+
+It is an unofficial, modified version. It is not created, sponsored, endorsed or supported by ClearML, Inc.
+"ClearML" is a trademark of ClearML, Inc.
