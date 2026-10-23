@@ -14,7 +14,7 @@ import pytest
 
 from support import workspace
 from support import agent
-from support.agent import LOST_WITHIN_SEC, AgentMachine, worker_record
+from support.agent import AgentMachine, worker_record
 from support.workspace import new_name
 
 pytestmark = [pytest.mark.agent, pytest.mark.xdist_group("agent")]
@@ -139,30 +139,6 @@ def test_agent_without_its_key_says_to_enrol_it(keyless):
     Expect: the agent's log names the command to run, clearml-agent init.
     """
     assert "clearml-agent init" in keyless.log(), keyless.log()[-2000:]
-
-
-def test_stopped_agent_is_lost_by_the_sweep_and_comes_back_without_enrolling(client_home, machine):
-    """The sweep on the scheduler's timer marks a stopped agent lost, with no placement pass needed. When the agent
-    starts again it is active, on the same device.
-
-    Expect: after the agent stops, its worker is lost within about 30 s; after it starts again, it is active, with the
-    same device id and key.
-    """
-    device_before = machine.device_id
-    key_before = machine.key_path.read_bytes()
-    api = workspace.device_api(client_home)
-    machine.stop()
-
-    lost = machine.wait_until(lambda: (worker_record(api, machine.worker_name) or {}).get("state") == "lost",
-                              timeout=LOST_WITHIN_SEC)
-    assert lost, "the scheduler's sweep must mark the stopped agent lost"
-
-    machine.start()
-    back = machine.wait_until(lambda: (worker_record(api, machine.worker_name) or {}).get("state") == "active",
-                              timeout=60)
-    assert back, "the agent must come back online by itself"
-    assert machine.device_id == device_before, "coming back must not enrol the machine again"
-    assert machine.key_path.read_bytes() == key_before
 
 
 def _host_memory_gb() -> float:

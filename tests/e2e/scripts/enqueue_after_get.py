@@ -9,7 +9,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 from common import report  # noqa: E402
 
 from clearml import Task  # noqa: E402
-from clearml.backend_interface.task.requirements import build_requirements  # noqa: E402
 
 
 def main() -> None:
@@ -18,8 +17,7 @@ def main() -> None:
     args = parser.parse_args()
 
     Task.get_task(task_id=args.task_id)
-    requirements = build_requirements(cpus=1, ram_gb=1.0, gpus=0, disk_gb=1.0)
-    result = Task.enqueue(args.task_id, force=True, requirements=requirements)
+    result = Task.enqueue(args.task_id, force=True)
     report({"queued": result["data"]["queued"]})
 
 

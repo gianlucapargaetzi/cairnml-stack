@@ -1,8 +1,7 @@
-"""Section 6 of docs/e2e_testing/E2E.md: queueing, placement, running, monitoring, ending and recovering jobs.
+"""Section 6 of docs/e2e_testing/E2E.md: queueing, running, ending and monitoring jobs.
 
-A job is a recorded task put in the queue with what it needs. The scheduler places it on the agent that fits, the
-agent claims it and runs it in a container. Two groups of tests: scheduling (what the queue does with a job) and
-execution (the job's own run). A test that fails because of a known defect fails, and its docstring names the defect.
+A job is a recorded task put in the default queue. The agent listening to that queue takes it and runs it in a
+container. A test that fails because of a known defect fails, and its docstring names the defect.
 """
 
 import json
@@ -14,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from support import cli, jobs, workspace
-from support.agent import LOST_WITHIN_SEC, worker_record
+from support.agent import worker_record
 from support.workspace import new_name
 
 pytestmark = [pytest.mark.agent, pytest.mark.xdist_group("agent")]
@@ -35,14 +34,11 @@ def machine(job_agent):
 
 # The job records of this module, by label: each one's arguments (the scalars default to 2).
 JOB_SPECS = {
-    "unfit": [], "fits": [], "claimed": [], "twice": [], "after-get": [],
+    "twice": [], "after-get": [],
     "missing-image": ["--base-image", MISSING_IMAGE],
-    "holder": ["--scalars", "1", "--sleep", "15"],
-    "low-priority": [], "high-priority": [],
     "completes": ["--scalars", "5"],
     "fails": ["--scalars", "5", "--fail-after", "2"],
     "aborted": ["--scalars", "1", "--sleep", "600"],
-    "lost": ["--scalars", "1", "--sleep", "300"],
     "release": ["--scalars", "1"],
 }
 DEFAULT_ARGS = ["--scalars", "2"]
@@ -67,87 +63,19 @@ def recorded(client_home, project, tmp_path_factory):
     return {label: report["task_id"] for label, report in zip(labels, reports)}
 
 
-def events_of(api, task_id):
-    events = api.authed("scheduler.get_events", {"limit": 500})["events"]
-    return [e for e in events if e.get("task") == task_id]
-
-
-def wait_for_event(api, task_id, kind, timeout=EVENT_TIMEOUT):
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        found = [e for e in events_of(api, task_id) if e["kind"] == kind]
-        if found:
-            return found
-        time.sleep(1)
-    return []
-
-
-def wait_for_pending(api, task_id, timeout=10):
-    """The pending entry of a job, once the scheduler has looked at it."""
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        entry = next((j for j in api.authed("scheduler.get_jobs", {"state": "pending"})["jobs"]
-                      if j.get("task") == task_id), None)
-        if entry:
-            return entry
-        time.sleep(1)
-    return None
-
-
 # --- scheduling -------------------------------------------------------------------------------------------------
-
-def test_job_that_no_machine_fits_stays_queued_with_the_reason(client_home, project, machine, recorded):
-    """The Jobs view (scheduler.get_jobs, state pending) says why a waiting job waits.
-
-    Expect: a job that needs a GPU the machine does not have stays queued, is listed as pending with a reason, and is
-    never placed.
-    """
-    task_id = recorded["unfit"]
-    jobs.enqueue(client_home, task_id, gpus=50)
-    api = workspace.device_api(client_home)
-    entry = wait_for_pending(api, task_id)
-    assert entry is not None, "a job that does not fit must be listed as pending"
-    assert jobs.task_record(api, task_id)["status"] == "queued"
-    assert entry.get("reason"), "a pending job must say why it waits"
-    assert not any(e["kind"] == "placed" for e in events_of(api, task_id))
-
-
-def test_job_that_fits_is_placed_on_the_agent(client_home, project, machine, recorded):
-    """A job that fits is placed on the agent.
-
-    Expect: a job whose needs the agent meets is placed on that agent by the scheduler."""
-    task_id = recorded["fits"]
-    jobs.enqueue(client_home, task_id, cpus=1, ram_gb=1, gpus=0, disk_gb=1)
-    api = workspace.device_api(client_home)
-    placed = wait_for_event(api, task_id, "placed")
-    assert placed, "the scheduler must place a job that fits"
-    assert placed[0]["worker"] == machine.worker_name
-
-
-def test_job_placed_on_the_agent_is_claimed_by_it(client_home, project, machine, recorded):
-    """The agent claims the job it was offered.
-
-    Expect: the agent the job was placed on claims the offer, so the job is handed to it and not to another."""
-    task_id = recorded["claimed"]
-    jobs.enqueue(client_home, task_id, cpus=1, ram_gb=1, gpus=0, disk_gb=1)
-    api = workspace.device_api(client_home)
-    claimed = wait_for_event(api, task_id, "claimed")
-    assert claimed and claimed[0]["worker"] == machine.worker_name
-
 
 def test_enqueueing_a_queued_task_again_leaves_it_queued_once(client_home, project, machine, recorded):
     """Enqueueing a task that is already queued is accepted and changes nothing: it is still queued, once.
 
-    Expect: a second enqueue succeeds, the task stays queued, and it appears once in the pending list.
+    Expect: a second enqueue succeeds, and the task stays queued.
     """
     task_id = recorded["twice"]
-    jobs.enqueue(client_home, task_id, gpus=50)
-    again = workspace.run_raw(client_home, "enqueue.py", ["--task-id", task_id, "--gpus", "50"])
+    jobs.enqueue(client_home, task_id)
+    again = workspace.run_raw(client_home, "enqueue.py", ["--task-id", task_id])
     assert again.returncode == 0, again.output
     api = workspace.device_api(client_home)
     assert jobs.task_record(api, task_id)["status"] == "queued"
-    pending = [j for j in api.authed("scheduler.get_jobs", {"state": "pending"})["jobs"] if j.get("task") == task_id]
-    assert len(pending) == 1
 
 
 def test_enqueue_works_after_the_task_was_read(client_home, project, machine, recorded):
@@ -170,39 +98,6 @@ def test_job_with_a_missing_image_fails_once_and_is_not_rescheduled(client_home,
     workspace.run_raw(client_home, "enqueue.py", ["--task-id", task_id, "--force"])
     record = jobs.wait_for(api, task_id, jobs.FINAL)
     assert record["status"] == "failed"
-    assert not [e for e in events_of(api, task_id) if e["kind"] == "retried"]
-
-
-def _schedulable(api, worker_name):
-    """What the agent can hand to jobs: its capacity less what it keeps for the host."""
-    record = worker_record(api, worker_name)
-    capacity, reserved = record["capacity"], record["reserved"]
-    return {"cpus": int(capacity["cpus"] - reserved["cpus"]),
-            "ram_gb": round((capacity["ram_gb"] - reserved["ram_gb"]) * 0.9, 1),
-            "disk_gb": round((capacity["disk_gb"] - reserved["disk_gb"]) * 0.5, 1)}
-
-
-def test_higher_priority_job_is_placed_before_a_lower_one(client_home, project, machine, recorded):
-    """Deterministic: a first job takes the whole schedulable capacity, so the two that follow cannot both fit.
-    When the first job ends (it releases the capacity), the scheduler must place the higher priority one first.
-
-    Expect: when capacity frees up, the job with the higher priority is placed before the one with the lower priority.
-    """
-    api = workspace.device_api(client_home)
-    free = _schedulable(api, machine.worker_name)
-    # the holder's body runs for 15 s on the agent: long enough for the two below to be queued while it holds the machine
-    holder = recorded["holder"]
-    jobs.enqueue(client_home, holder, **free)
-    assert wait_for_event(api, holder, "placed"), "the holder must take the whole machine"
-
-    low = recorded["low-priority"]
-    high = recorded["high-priority"]
-    jobs.enqueue(client_home, low, priority=10, **free)
-    jobs.enqueue(client_home, high, priority=90, **free)
-    high_placed = wait_for_event(api, high, "placed")
-    low_placed = wait_for_event(api, low, "placed")
-    assert high_placed and low_placed
-    assert high_placed[0]["time"] <= low_placed[0]["time"], "the higher priority job must be placed first"
 
 
 # --- execution ----------------------------------------------------------------------------------
@@ -253,34 +148,6 @@ def test_aborted_job_stops_within_thirty_seconds(client_home, project, machine, 
     record = jobs.wait_for(api, task_id, ("aborted", "stopped"))
     assert time.monotonic() - stopped_at <= 30
     assert record["status"] in ("aborted", "stopped")
-
-
-def test_lost_agent_during_a_job_retries_the_job_once(client_home, project, machine, recorded):
-    """The agent that runs the job is lost while the job runs. The scheduler retries the job once.
-
-    The job runs on the session's agent (the only one this module starts), so the test knows which agent to lose. The
-    agent is started again afterwards, for the tests that follow. The lost worker is found by the scheduler's own
-    sweep (docs/e2e_testing/E2E.md, speed section, item 3): no other job is needed to make a placement pass run.
-
-    Expect: once the agent stops syncing, its worker is marked lost and the job is queued again (one retry), and the
-    job runs again when the agent is back.
-    """
-    api = workspace.device_api(client_home)
-    task_id = recorded["lost"]
-    jobs.enqueue(client_home, task_id)
-    jobs.wait_for_start(api, task_id)
-    placed = wait_for_event(api, task_id, "placed")
-    assert placed and placed[0]["worker"] == machine.worker_name, "the job must run on the agent the test loses"
-    try:
-        machine.stop()
-        lost = machine.wait_until(lambda: (worker_record(api, machine.worker_name) or {}).get("state") == "lost",
-                                  timeout=LOST_WITHIN_SEC)
-        assert lost, "the stopped agent must be marked lost by the scheduler's sweep"
-        assert wait_for_event(api, task_id, "retried"), "the lost attempt must be retried once"
-    finally:
-        machine.start()
-        assert machine.wait_until(lambda: (worker_record(api, machine.worker_name) or {}).get("state") == "active",
-                                  timeout=EVENT_TIMEOUT), "the agent must come back for the tests that follow"
 
 
 def test_agent_reports_no_running_job_once_a_job_completes(client_home, project, machine, recorded):

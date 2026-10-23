@@ -16,7 +16,7 @@ from cryptography.hazmat.primitives import serialization
 from . import settings
 
 API_VERSION = "2.8"
-# Resource-aware scheduling endpoints (scheduler.*, enqueue) exist from this version.
+# The monitor's usage endpoint (scheduler.get_usage_history) exists from this version.
 SCHEDULER_VERSION = "2.36"
 
 
