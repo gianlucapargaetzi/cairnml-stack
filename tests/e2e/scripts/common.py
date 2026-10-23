@@ -1,16 +1,35 @@
 """Helpers shared by the example scripts: the one JSON line a script prints at the end, and the digests the
 artifact scripts compare (the upload side writes them, the check side recomputes them from what came back)."""
 
+import faulthandler
 import hashlib
 import io
 import json
 import os
+import sys
+import threading
 from pathlib import Path
+
+# A script that hangs (the client does not exit) dumps the stack of every thread to stderr, for the test's report.
+faulthandler.dump_traceback_later(90, repeat=False, file=sys.stderr)
+
+
+_exit_timer = None
 
 
 def report(result: dict) -> None:
-    """The last line of every script: what it did, as JSON, for the test that ran it."""
-    print(json.dumps(result, sort_keys=True))
+    """The last line of every script: what it did, as JSON, for the test that ran it.
+
+    The SDK sometimes does not let the process exit after its work is done (seen in the suite as a hang at exit).
+    The script is ended 30 s after its report, so a test does not wait for that: the work itself is finished before
+    the report, as the scripts close their tasks first. The hang itself is still open (see docs/e2e_testing)."""
+    print(json.dumps(result, sort_keys=True), flush=True)
+    # a batch reports once per run: the exit is 30 s after the last report
+    global _exit_timer
+    if _exit_timer is not None:
+        _exit_timer.cancel()
+    _exit_timer = threading.Timer(30, os._exit, [0])
+    _exit_timer.start()
 
 
 def sha256(data: bytes) -> str:

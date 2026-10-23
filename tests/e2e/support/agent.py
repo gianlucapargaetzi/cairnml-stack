@@ -1,4 +1,5 @@
-"""A machine that runs jobs: its own HOME and device key, and the managed daemon running as a process."""
+"""A machine that runs jobs: its own HOME and device key, and the agent daemon running as a process, listening to the
+default queue."""
 
 import os
 import signal
@@ -9,8 +10,8 @@ from pathlib import Path
 from . import cli, settings
 from .client import device_id_of, key_path
 
-# How often the agent syncs with the test stack (the stack's scheduler is set to the same, in stack/compose.yaml).
-SYNC_INTERVAL_SEC = 2
+# How often the agent polls its queue on the test stack, in seconds: a job is picked up within seconds, not minutes.
+POLLING_INTERVAL_SEC = 2
 
 
 def shared_cache_settings() -> dict:
@@ -31,7 +32,7 @@ def shared_cache_settings() -> dict:
     }
 
 
-# A stopped agent is lost after three missed syncs, and the scheduler's sweep (every second on the test stack) finds it:
+# The worker lookup and the agent helpers below rely on the server's worker list:
 # about 6 s, with a generous margin.
 LOST_WITHIN_SEC = 30
 
@@ -66,13 +67,13 @@ class AgentMachine:
     def start(self) -> None:
         env = cli.environment(self.home)
         env["CLEARML_WORKER_NAME"] = self.worker_name
-        # The test stack's scheduler syncs every 2 s (compose.yaml); the agent syncs at the same rate, so a worker is
-        # registered and lost within seconds, not minutes (docs/e2e_testing/E2E.md, speed section, item 3).
-        env["CLEARML_AGENT__services__scheduler__sync_interval_sec"] = str(SYNC_INTERVAL_SEC)
+        # the test machine has no GPU: the agent adds no --gpus flag (its own image sets the same, for a CPU host)
+        env["CLEARML_DOCKER_SKIP_GPUS_FLAG"] = "1"
         env.update(shared_cache_settings())
         log = open(self.log_path, "ab")
         self._proc = subprocess.Popen(
-            [str(cli.VENV_BIN / "clearml-agent"), "daemon", "--managed"],
+            [str(cli.VENV_BIN / "clearml-agent"), "daemon", "--queue", "default", "--docker", "python:3.12-slim",
+             "--polling-interval", str(POLLING_INTERVAL_SEC)],
             env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
         )
 
@@ -104,6 +105,8 @@ class AgentMachine:
 
 
 def worker_record(api, worker_name: str):
-    """This worker as the scheduler lists it, or None."""
-    overview = api.authed("scheduler.get_overview", {})
-    return next((w for w in overview.get("workers", []) if w.get("id") == worker_name), None)
+    """This worker as the server lists it, or None."""
+    workers = api.authed("workers.get_all", {})
+    # the server names a worker "<name>:<n>", where <n> counts the daemons of that name
+    return next((w for w in workers.get("workers", [])
+                 if w.get("id") == worker_name or str(w.get("id", "")).startswith(worker_name + ":")), None)

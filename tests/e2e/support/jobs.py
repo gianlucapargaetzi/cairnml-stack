@@ -19,10 +19,8 @@ class JobEnded(AssertionError):
     made no progress before the timeout. The message names the status, the agent's reason and the step it reached."""
 
 
-def enqueue(home: Path, task_id: str, *, cpus=1, ram_gb=1.0, gpus=0, gpu_memory_gb=0.0, disk_gb=1.0,
-            priority=50, force=True) -> dict:
-    args = ["--task-id", task_id, "--cpus", str(cpus), "--ram-gb", str(ram_gb), "--gpus", str(gpus),
-            "--gpu-memory-gb", str(gpu_memory_gb), "--disk-gb", str(disk_gb), "--priority", str(priority)]
+def enqueue(home: Path, task_id: str, *, queue="default", force=True) -> dict:
+    args = ["--task-id", task_id, "--queue", queue]
     if force:
         args.append("--force")
     return workspace.run_json(home, "enqueue.py", args, timeout=300)
