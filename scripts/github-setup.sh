@@ -96,6 +96,27 @@ put_ruleset() {  # repo, name, json
   fi
 }
 
+# A deployment environment holds a publishing credential or a trusted-publisher identity. It can be used only from the
+# named refs (main, or v* tags), and a publish to a real registry waits for the owner's approval.
+environment() {  # repo, name, refs (main|tags), reviewer (yes|no)
+  local repo=$1 name=$2 refs=$3 reviewer=$4 reviewers='[]' policy_name policy_type body
+  if [ "$refs" = tags ]; then policy_name='v*'; policy_type=tag; else policy_name=main; policy_type=branch; fi
+  if [ "$reviewer" = yes ]; then
+    local owner_id; owner_id=$([ "$DRY_RUN" = 1 ] && echo OWNER_ID || gh api "users/$OWNER" --jq .id)
+    reviewers="[{\"type\":\"User\",\"id\":$owner_id}]"
+  fi
+  body="{\"reviewers\":$reviewers,\"deployment_branch_policy\":{\"protected_branches\":false,\"custom_branch_policies\":true}}"
+  if [ "$DRY_RUN" = 1 ]; then echo "environment $name on $repo ($refs, reviewer=$reviewer): $body"; return; fi
+  echo "$body" | gh api -X PUT "repos/$OWNER/$repo/environments/$name" --input - --silent
+  local have; have=$(gh api "repos/$OWNER/$repo/environments/$name/deployment-branch-policies" --jq '.branch_policies[].name')
+  for existing in $have; do
+    [ "$existing" = "$policy_name" ] || gh api -X DELETE "repos/$OWNER/$repo/environments/$name/deployment-branch-policies/$(gh api "repos/$OWNER/$repo/environments/$name/deployment-branch-policies" --jq ".branch_policies[]|select(.name==\"$existing\")|.id")" --silent
+  done
+  if ! grep -qxF "$policy_name" <<<"$have"; then
+    gh api -X POST "repos/$OWNER/$repo/environments/$name/deployment-branch-policies" -f "name=$policy_name" -f "type=$policy_type" --silent
+  fi
+}
+
 apply() {
   local repo=$1
   echo "== $repo"
@@ -108,7 +129,8 @@ apply() {
   api -X PUT "repos/$OWNER/$repo/actions/permissions" -F enabled=true -f allowed_actions=selected
   api -X PUT "repos/$OWNER/$repo/actions/permissions/selected-actions" \
     -F github_owned_allowed=true -F verified_allowed=false \
-    -f 'patterns_allowed[]=pypa/gh-action-pypi-publish@*' -f 'patterns_allowed[]=pnpm/action-setup@*' -f 'patterns_allowed[]=github/codeql-action/*@*'
+    -f 'patterns_allowed[]=pypa/gh-action-pypi-publish@*' -f 'patterns_allowed[]=pnpm/action-setup@*' -f 'patterns_allowed[]=github/codeql-action/*@*' \
+    -f 'patterns_allowed[]=docker/*@*' -f 'patterns_allowed[]=aquasecurity/trivy-action@*'
   api -X PUT "repos/$OWNER/$repo/actions/permissions/workflow" -f default_workflow_permissions=read -F can_approve_pull_request_reviews=false
   api -X PUT "repos/$OWNER/$repo/actions/permissions/fork-pr-contributor-approval" -f approval_policy=all_external_contributors
   api -X PATCH "repos/$OWNER/$repo" \
@@ -119,6 +141,10 @@ apply() {
   put_ruleset "$repo" "Protect main" "$(main_ruleset "$repo")"
   put_ruleset "$repo" "Branch names" "$(branch_names_ruleset)"
   put_ruleset "$repo" "Release tags" "$(release_tags_ruleset)"
+  case $repo in
+    cairnml|cairnml-agent) environment "$repo" testpypi main no; environment "$repo" pypi tags yes ;;
+    cairnml-server)        environment "$repo" dockerhub tags yes ;;
+  esac
 }
 
 for repo in "${@:-${ALL[@]}}"; do apply "$repo"; done
