@@ -95,8 +95,8 @@ Section 4 of E2E.md. The repositories are local (a bare remote and a checkout); 
 | `test_checkout_without_a_remote_records_commit_but_no_url` | A checkout with no remote records its commit and no URL. |
 | `test_job_clones_the_recorded_commit_and_reports_it` | A job clones the recorded commit and reports it. |
 | `test_repository_on_github_is_refused_at_enqueue_without_the_app` | Enqueueing a github.com repository is refused with a message that names GitHub. |
-| `test_private_repository_is_refused_at_clone_time` | **Skip** unless `MLOPS_E2E_GITHUB_PRIVATE_REPO` is set. A job whose repository the App cannot read fails at clone, with no token in its message. |
-| `test_a_client_device_cannot_get_a_repository_token` | **Skip** unless `MLOPS_E2E_GITHUB_REPO` is set. A person's machine gets no repository token. |
+| `test_private_repository_is_refused_at_clone_time` | **Skip** unless `CAIRNML_E2E_GITHUB_PRIVATE_REPO` is set. A job whose repository the App cannot read fails at clone, with no token in its message. |
+| `test_a_client_device_cannot_get_a_repository_token` | **Skip** unless `CAIRNML_E2E_GITHUB_REPO` is set. A person's machine gets no repository token. |
 
 ## test_07_datasets_models.py: datasets and models
 

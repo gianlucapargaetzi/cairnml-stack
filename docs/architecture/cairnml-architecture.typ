@@ -1,5 +1,5 @@
-// MLOps framework: system architecture (5 physical machines)
-// Compile: typst compile mlops-architecture.typ
+// CairnML: system architecture (5 physical machines)
+// Compile: typst compile cairnml-architecture.typ
 // Needs the @preview/cetz package (fetched automatically on first compile).
 //
 // Layout is absolute: every box is placed by its centre (x, y) on a grid.
@@ -68,7 +68,7 @@
 )
 
 #align(center)[
-  #text(size: 16pt, weight: "bold")[MLOps Framework: System Architecture]
+  #text(size: 16pt, weight: "bold")[CairnML: System Architecture]
   #linebreak()
   #text(size: 9pt, fill: rgb("#6b7280"))[Five physical machines. Datasets and artifacts live in object storage; the server stores their metadata and references, never the files in its databases.]
 ]
@@ -109,7 +109,7 @@
   node(9.9, 13.9, "Job queues", "agents take the next job", srv)
   node(15.1, 11.7, "Database", "MongoDB · Redis · Elasticsearch", srv)
   node(20.3, 11.7, "Auth middleware", "token check, admin role", srv)
-  node(20.3, 16.1, "Identity Provider", "Keycloak: OIDC, mlops realm", srv)
+  node(20.3, 16.1, "Identity Provider", "Keycloak: OIDC, cairnml realm", srv)
 
   // ============ Agents ============
   node(32.9, 16.1, "Resource usage", "CPU, RAM, GPU, disk", agt)

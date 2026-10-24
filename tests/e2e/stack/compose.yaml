@@ -4,7 +4,7 @@
 # agent all use. Nothing here depends on this machine's own network address, and nothing is shared with deploy/.
 #
 # support/stack.py starts it with the variables below set in the environment. Ports are chosen free on 127.0.0.1.
-name: mlops-e2e
+name: cairnml-e2e
 
 x-cairnml-build: &cairnml_build
   build:
@@ -32,7 +32,7 @@ services:
       KC_HOSTNAME_STRICT: "false"
       KC_HTTP_ENABLED: "true"
     volumes:
-      - ${E2E_STATE}/realm-mlops.json:/opt/keycloak/data/import/realm-mlops.json:ro
+      - ${E2E_STATE}/realm-cairnml.json:/opt/keycloak/data/import/realm-cairnml.json:ro
       - ${E2E_STATE}/data/idp:/opt/keycloak/data/h2
 
   rustfs:
@@ -60,11 +60,11 @@ services:
     network_mode: host
     command: ["python", "/init.py"]
     environment:
-      MLOPS_STORAGE_ENDPOINT: http://127.0.0.1:${E2E_STORAGE_PORT}
+      CAIRNML_STORAGE_ENDPOINT: http://127.0.0.1:${E2E_STORAGE_PORT}
       RUSTFS_ROOT_USER: ${E2E_RUSTFS_USER}
       RUSTFS_ROOT_PASSWORD: ${E2E_RUSTFS_PASSWORD}
-      MLOPS_S3_ACCESS_KEY: ${E2E_S3_ACCESS_KEY}
-      MLOPS_S3_SECRET_KEY_FILE: /run/secrets-dir/s3_secret_key
+      CAIRNML_S3_ACCESS_KEY: ${E2E_S3_ACCESS_KEY}
+      CAIRNML_S3_SECRET_KEY_FILE: /run/secrets-dir/s3_secret_key
     volumes:
       - ${E2E_STATE}/init.py:/init.py:ro
       - ${E2E_STATE}/secrets:/run/secrets-dir:ro
@@ -137,14 +137,14 @@ services:
       CAIRNML_REDIS_SERVICE_HOST: 127.0.0.1
       CAIRNML_REDIS_SERVICE_PORT: ${E2E_REDIS_PORT}
       CAIRNML_SERVER_DEPLOYMENT_TYPE: linux
-      CAIRNML__apiserver__idp__issuer: http://${E2E_HOST}:${E2E_IDP_PORT}/realms/mlops
+      CAIRNML__apiserver__idp__issuer: http://${E2E_HOST}:${E2E_IDP_PORT}/realms/cairnml
       CAIRNML__apiserver__idp__public_url: http://${E2E_HOST}:${E2E_API_PORT}
       CAIRNML__apiserver__idp__web_url: http://${E2E_HOST}:${E2E_WEB_PORT}
       CAIRNML__apiserver__idp__web_client_id: cairnml-web
       CAIRNML__apiserver__idp__sdk_client_id: cairnml-sdk
       CAIRNML__apiserver__idp__directory_client_id: cairnml-server
       CAIRNML__apiserver__idp__sync_enabled: "true"
-      CAIRNML__apiserver__idp__admin_role: mlops-admin
+      CAIRNML__apiserver__idp__admin_role: cairnml-admin
       # How long a job token lasts (one hour in production). A test may lower it, for its own run (set_job_token_ttl).
       CAIRNML__apiserver__idp__job_token_ttl_sec: ${E2E_JOB_TOKEN_TTL_SEC:-3600}
       CAIRNML__apiserver__auth__cookies__secure: "false"

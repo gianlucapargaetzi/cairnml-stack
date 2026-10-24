@@ -9,7 +9,7 @@ The stack is a separate compose project (tests/e2e/stack/compose.yaml) with:
 Only the Docker daemon and the image cache are shared with the rest of the machine. The cairnml-server image is
 the one the deploy/ stack builds; the suite does not change it.
 
-Reuse (MLOPS_E2E_REUSE_STACK=1, see docs/e2e_testing/E2E.md, speed section item 1): the stack keeps its state, ports and accounts in
+Reuse (CAIRNML_E2E_REUSE_STACK=1, see docs/e2e_testing/E2E.md, speed section item 1): the stack keeps its state, ports and accounts in
 REUSE_DIR and is left running at the end of the session. The next session finds it healthy and starts at once. It is
 rebuilt and restarted only when the server or web sources, or the compose file, have changed since it was started.
 Stop it with `python -m support.stack --stop` (run in tests/e2e).
@@ -34,17 +34,17 @@ import requests
 
 from . import settings
 
-PROJECT_PREFIX = "mlops-e2e"
+PROJECT_PREFIX = "cairnml-e2e"
 REPO = Path(__file__).resolve().parents[3]
 COMPOSE_FILE = Path(__file__).resolve().parents[1] / "stack" / "compose.yaml"
-REALM_TEMPLATE = REPO / "deploy" / "idp" / "realm-mlops.json"
+REALM_TEMPLATE = REPO / "deploy" / "idp" / "realm-cairnml.json"
 STORAGE_SCRIPT = REPO / "deploy" / "storage" / "init.py"
 NGINX_TEMPLATE = REPO / "cairnml-server" / "docker" / "build" / "internal_files" / "cairnml.conf.template"
 SOURCE_REPOS = (REPO / "cairnml-server", REPO / "cairnml-web")
 ADMIN_NAME = "e2e-admin"
 
 # A reused stack lives here: its state folder, its ports and accounts (stack.json), and the lock for starting it.
-REUSE_DIR = Path(os.environ.get("MLOPS_E2E_STATE_DIR") or settings.REAL_HOME / ".cache" / "mlops-e2e-stack")
+REUSE_DIR = Path(os.environ.get("CAIRNML_E2E_STATE_DIR") or settings.REAL_HOME / ".cache" / "cairnml-e2e-stack")
 REUSE_FILE = REUSE_DIR / "stack.json"
 START_LOCK = REUSE_DIR / "start.lock"
 
@@ -63,12 +63,12 @@ LOOPBACK = "127.0.0.1"
 # Where the stack is reached from the suite, the browser and the agent (HOST), and where its services listen (BIND).
 # On the host both are the loopback address. In the isolated environment (tests/e2e/docker) the stack runs in the nested
 # daemon, so HOST is that container's name and BIND is every address of it.
-HOST = os.environ.get("MLOPS_E2E_HOST") or LOOPBACK
-BIND = os.environ.get("MLOPS_E2E_BIND") or LOOPBACK
+HOST = os.environ.get("CAIRNML_E2E_HOST") or LOOPBACK
+BIND = os.environ.get("CAIRNML_E2E_BIND") or LOOPBACK
 
 
 def reuse_requested() -> bool:
-    return os.environ.get("MLOPS_E2E_REUSE_STACK", "").lower() in ("1", "true", "yes")
+    return os.environ.get("CAIRNML_E2E_REUSE_STACK", "").lower() in ("1", "true", "yes")
 
 
 def _port_free(host: str, port: int) -> bool:
@@ -126,7 +126,7 @@ class IsolatedStack:
                 REUSE_DIR.mkdir(parents=True, exist_ok=True)
                 self.state = REUSE_DIR / "state"
             else:
-                self.state = Path(tempfile.mkdtemp(prefix="mlops-e2e-stack-"))
+                self.state = Path(tempfile.mkdtemp(prefix="cairnml-e2e-stack-"))
             api, web, idp, idp_mgmt, storage, mongo, redis, es, es_transport = pick_ports(BIND)
             self.ports = {"api": api, "web": web, "idp": idp, "idp_mgmt": idp_mgmt, "storage": storage,
                           "mongo": mongo, "redis": redis, "es": es, "es_transport": es_transport}
@@ -221,10 +221,10 @@ class IsolatedStack:
     def _write_realm(self) -> None:
         """The committed realm, with this stack's addresses in place of the deploy/ names."""
         text = REALM_TEMPLATE.read_text()
-        text = text.replace("http://mlops-cairnml:8008", self.api_url)
-        text = text.replace("http://mlops-cairnml:8080", self.web_url)
+        text = text.replace("http://cairnml:8008", self.api_url)
+        text = text.replace("http://cairnml:8080", self.web_url)
         json.loads(text)  # the result must still be a realm
-        (self.state / "realm-mlops.json").write_text(text)
+        (self.state / "realm-cairnml.json").write_text(text)
 
     def _env(self) -> dict:
         return {
@@ -278,7 +278,7 @@ class IsolatedStack:
         checks = (
             lambda: requests.post(f"{self.api_url}/v2.8/login.supported_modes", json={}, timeout=3).status_code == 200,
             lambda: requests.get(self.web_url + "/", timeout=3).status_code == 200,
-            lambda: requests.get(f"{self.idp_url}/realms/mlops/.well-known/openid-configuration",
+            lambda: requests.get(f"{self.idp_url}/realms/cairnml/.well-known/openid-configuration",
                                  timeout=3).status_code == 200,
             lambda: requests.get(self.storage_url + "/health", timeout=3).status_code == 200,
         )
@@ -304,7 +304,7 @@ class IsolatedStack:
             result = self.compose("up", "-d", "idp")
             if result.returncode != 0:
                 raise StackError(f"cannot start the sign-in service:\n{result.stderr[-3000:]}")
-            self._wait(lambda: requests.get(f"{self.idp_url}/realms/mlops/.well-known/openid-configuration",
+            self._wait(lambda: requests.get(f"{self.idp_url}/realms/cairnml/.well-known/openid-configuration",
                                             timeout=10).status_code == 200, 240, "the sign-in service")
             self._identity()
             result = self.compose("up", "-d", "--build")
@@ -320,7 +320,7 @@ class IsolatedStack:
         return bool(saved) and saved.get("state") == str(self.state)
 
     def _identity(self) -> None:
-        """The admin account (a realm user with the mlops-admin role) and the secret the server reads users with."""
+        """The admin account (a realm user with the cairnml-admin role) and the secret the server reads users with."""
         from .keycloak import Keycloak
 
         kc = Keycloak()

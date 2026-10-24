@@ -2,7 +2,7 @@
 
 Repositories here are local: a bare remote on this machine, and a checkout of it. The GitHub-only rules (tokens
 for a repository on github.com, a private repository refused) need a GitHub App and a reachable repository; they are
-the github-marked tests, which need MLOPS_E2E_GITHUB_REPO (and MLOPS_E2E_GITHUB_PRIVATE_REPO for one of them).
+the github-marked tests, which need CAIRNML_E2E_GITHUB_REPO (and CAIRNML_E2E_GITHUB_PRIVATE_REPO for one of them).
 """
 
 import os
@@ -160,9 +160,9 @@ def test_private_repository_is_refused_at_clone_time(client_home, project, tmp_p
 
     Expect: The job fails at its clone with a message, and no token appears in the message.
     """
-    repo = os.environ.get("MLOPS_E2E_GITHUB_PRIVATE_REPO")
+    repo = os.environ.get("CAIRNML_E2E_GITHUB_PRIVATE_REPO")
     if not repo:
-        pytest.skip("set MLOPS_E2E_GITHUB_PRIVATE_REPO to a repository this App cannot read")
+        pytest.skip("set CAIRNML_E2E_GITHUB_PRIVATE_REPO to a repository this App cannot read")
     checkout = _github_checkout(tmp_path, repo)
     run = run_json(client_home, str(checkout / "job_script.py"),
                    ["--project", project, "--name", new_name("private-repo"), "--git", "--scalars", "1"])
@@ -179,9 +179,9 @@ def test_a_client_device_cannot_get_a_repository_token(client_home, project, tmp
 
     Expect: The request for a repository token is refused with 401 or 403.
     """
-    repo = os.environ.get("MLOPS_E2E_GITHUB_REPO")
+    repo = os.environ.get("CAIRNML_E2E_GITHUB_REPO")
     if not repo:
-        pytest.skip("set MLOPS_E2E_GITHUB_REPO to a repository the App can read")
+        pytest.skip("set CAIRNML_E2E_GITHUB_REPO to a repository the App can read")
     checkout = _github_checkout(tmp_path, repo)
     run = run_json(client_home, str(checkout / "job_script.py"),
                    ["--project", project, "--name", new_name("token-refused"), "--scalars", "1"])

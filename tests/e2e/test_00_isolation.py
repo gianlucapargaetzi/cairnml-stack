@@ -8,7 +8,7 @@ from support import settings
 from support.stack import BIND, HOST
 
 REAL_STACK_PORTS = {8008, 8080, 8180, 9000, 9001}
-REAL_STACK_NAMES = ("mlops-cairnml", "mlops-idp", "mlops-nas")
+REAL_STACK_NAMES = ("cairnml", "cairnml-idp", "cairnml-nas")
 
 
 def _port(url: str) -> int:

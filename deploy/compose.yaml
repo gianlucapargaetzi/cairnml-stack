@@ -5,9 +5,8 @@
 #   docker compose up -d --build
 #
 # The forks are the submodules at the root of this repository (cairnml-server, cairnml-web).
-# The service names are the ones the fork's web server expects (it finds the API server by
-# name) and the names used in the realm (mlops-idp), so they stay as they are.
-name: mlops
+# The service names are the ones the fork's web server expects (it finds the API server by name).
+name: cairnml
 
 x-cairnml-build: &cairnml_build
   build:
@@ -19,31 +18,38 @@ x-cairnml-build: &cairnml_build
   restart: unless-stopped
 
 services:
-  mlops-idp:
+  cairnml-idp:
     image: quay.io/keycloak/keycloak:26.0
-    container_name: mlops-idp
+    container_name: cairnml-idp
     restart: unless-stopped
     command: ["start-dev", "--import-realm"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_ADMIN:-kcadmin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD:?set KC_ADMIN_PASSWORD in deploy/.env}
-      KC_HOSTNAME: http://mlops-idp:8180
+      KC_HOSTNAME: http://cairnml-idp:8180
       KC_HTTP_PORT: "8180"
       KC_HOSTNAME_STRICT: "false"
       KC_HTTP_ENABLED: "true"
     volumes:
-      - ./idp/realm-mlops.json:/opt/keycloak/data/import/realm-mlops.json:ro
+      - ./idp/realm-cairnml.json:/opt/keycloak/data/import/realm-cairnml.json:ro
       - ./data/idp:/opt/keycloak/data/h2
     ports:
       - "8180:8180"
+    healthcheck:
+      # Ready when the realm has been imported: its discovery document answers. The image has no curl.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8180 && printf 'GET /realms/cairnml/.well-known/openid-configuration HTTP/1.0\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -q ' 200 '"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
     networks:
-      - mlops
+      - cairnml
 
   rustfs:
     # Object storage for artifacts, datasets, models and debug data. Pinned by digest: the
     # version the presigned-URL behaviour was checked against.
     image: rustfs/rustfs@sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c
-    container_name: mlops-rustfs
+    container_name: cairnml-rustfs
     restart: unless-stopped
     environment:
       RUSTFS_ACCESS_KEY: ${RUSTFS_ROOT_USER:-rustfsadmin}
@@ -54,7 +60,7 @@ services:
     ports:
       # The S3 API is published so clients can PUT and GET through the presigned URLs.
       # The console stays on loopback.
-      - "${MLOPS_STORAGE_PORT:-9000}:9000"
+      - "${CAIRNML_STORAGE_PORT:-9000}:9000"
       - "127.0.0.1:9001:9001"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:9000/health"]
@@ -62,28 +68,28 @@ services:
       timeout: 5s
       retries: 20
     networks:
-      - mlops
+      - cairnml
 
   rustfs-init:
     # Creates the four buckets and the server's restricted service user. Re-running is safe.
     image: python:3.12-slim
-    container_name: mlops-rustfs-init
+    container_name: cairnml-rustfs-init
     depends_on:
       rustfs:
         condition: service_healthy
     command: ["python", "/init.py"]
     environment:
-      MLOPS_STORAGE_ENDPOINT: http://rustfs:9000
+      CAIRNML_STORAGE_ENDPOINT: http://rustfs:9000
       RUSTFS_ROOT_USER: ${RUSTFS_ROOT_USER:-rustfsadmin}
       RUSTFS_ROOT_PASSWORD: ${RUSTFS_ROOT_PASSWORD:?set RUSTFS_ROOT_PASSWORD in deploy/.env}
-      MLOPS_S3_ACCESS_KEY: ${MLOPS_S3_ACCESS_KEY:-mlops-server}
-      MLOPS_S3_SECRET_KEY_FILE: /run/secrets-dir/s3_secret_key
+      CAIRNML_S3_ACCESS_KEY: ${CAIRNML_S3_ACCESS_KEY:-cairnml-server}
+      CAIRNML_S3_SECRET_KEY_FILE: /run/secrets-dir/s3_secret_key
     volumes:
       - ./storage/init.py:/init.py:ro
       - ./secrets/cairnml:/run/secrets-dir:ro
     restart: "no"
     networks:
-      - mlops
+      - cairnml
 
   mongo:
     image: mongo:8.0.15
@@ -93,6 +99,12 @@ services:
     volumes:
       - ./data/cairnml/mongo/db:/data/db
       - ./data/cairnml/mongo/configdb:/data/configdb
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
     networks:
       - backend
 
@@ -102,6 +114,11 @@ services:
     restart: unless-stopped
     volumes:
       - ./data/cairnml/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     networks:
       - backend
 
@@ -130,6 +147,12 @@ services:
         hard: 65536
     volumes:
       - ./data/cairnml/elastic:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s' >/dev/null"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 40s
     networks:
       - backend
 
@@ -139,11 +162,11 @@ services:
     command:
       - apiserver
     depends_on:
-      - redis
-      - mongo
-      - elasticsearch
-      - rustfs-init
-      - mlops-idp
+      redis: {condition: service_healthy}
+      mongo: {condition: service_healthy}
+      elasticsearch: {condition: service_healthy}
+      rustfs-init: {condition: service_completed_successfully}
+      cairnml-idp: {condition: service_healthy}
     environment:
       CAIRNML_SECRETS_DIR: /run/secrets-dir
       CAIRNML_ELASTIC_SERVICE_HOST: elasticsearch
@@ -153,40 +176,46 @@ services:
       CAIRNML_REDIS_SERVICE_HOST: redis
       CAIRNML_REDIS_SERVICE_PORT: 6379
       CAIRNML_SERVER_DEPLOYMENT_TYPE: linux
-      CAIRNML__apiserver__idp__issuer: http://mlops-idp:8180/realms/mlops
-      CAIRNML__apiserver__idp__public_url: http://mlops-cairnml:8008
-      CAIRNML__apiserver__idp__web_url: http://mlops-cairnml:8080
+      CAIRNML__apiserver__idp__issuer: http://cairnml-idp:8180/realms/cairnml
+      CAIRNML__apiserver__idp__public_url: http://cairnml:8008
+      CAIRNML__apiserver__idp__web_url: http://cairnml:8080
       CAIRNML__apiserver__idp__web_client_id: cairnml-web
       CAIRNML__apiserver__idp__sdk_client_id: cairnml-sdk
       CAIRNML__apiserver__idp__directory_client_id: cairnml-server
       CAIRNML__apiserver__idp__sync_enabled: "true"
-      # The realm's admin role is mlops-admin (bootstrap.sh gives the admin login that role).
-      CAIRNML__apiserver__idp__admin_role: mlops-admin
+      # The realm's admin role is cairnml-admin (bootstrap.sh gives the admin login that role).
+      CAIRNML__apiserver__idp__admin_role: cairnml-admin
       # Set CAIRNML_COOKIE_SECURE=true when the addresses above are https; the server refuses to start otherwise.
       CAIRNML__apiserver__auth__cookies__secure: ${CAIRNML_COOKIE_SECURE:-false}
       CAIRNML__apiserver__idp__github_app_id: ${GITHUB_APP_ID:-}
       CAIRNML__apiserver__idp__github_api_url: ${GITHUB_API_URL:-https://api.github.com}
       # The dataset registry (owner/name of its repository) and the owners whose dataset repositories may be registered
-      # in it, e.g. MLOPS_DATASET_REGISTRY=acme/external-datasets and MLOPS_DATASET_OWNERS='["acme"]' in deploy/.env.
+      # in it, e.g. CAIRNML_DATASET_REGISTRY=acme/external-datasets and CAIRNML_DATASET_OWNERS='["acme"]' in deploy/.env.
       # The registry is also the list of dataset repositories a job may clone: nothing else lists them.
-      CAIRNML__apiserver__dataset_registry__repository: ${MLOPS_DATASET_REGISTRY:-}
-      CAIRNML__apiserver__dataset_registry__allowed_owners: ${MLOPS_DATASET_OWNERS:-[]}
+      CAIRNML__apiserver__dataset_registry__repository: ${CAIRNML_DATASET_REGISTRY:-}
+      CAIRNML__apiserver__dataset_registry__allowed_owners: ${CAIRNML_DATASET_OWNERS:-[]}
       CAIRNML__services__async_urls_delete__enabled: "true"
       # Object storage: internal address for the server's own calls, public address that presigned
       # URLs name. Clients must be able to reach the public one.
       CAIRNML__apiserver__storage__endpoint: http://rustfs:9000
-      CAIRNML__apiserver__storage__public_endpoint: ${MLOPS_STORAGE_PUBLIC_URL:-http://localhost:9000}
-      CAIRNML__apiserver__storage__access_key: ${MLOPS_S3_ACCESS_KEY:-mlops-server}
+      CAIRNML__apiserver__storage__public_endpoint: ${CAIRNML_STORAGE_PUBLIC_URL:-http://localhost:9000}
+      CAIRNML__apiserver__storage__access_key: ${CAIRNML_S3_ACCESS_KEY:-cairnml-server}
     volumes:
       - ./data/cairnml/logs:/var/log/cairnml
       # Read-only: token_secret, session_secret, idp_directory_secret, github_app_key.
       - ./secrets/cairnml:/run/secrets-dir:ro
     ports:
       - "8008:8008"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8008/debug.ping', timeout=4)"]
+      interval: 10s
+      timeout: 6s
+      retries: 20
+      start_period: 60s
     networks:
       - backend
       - frontend
-      - mlops
+      - cairnml
 
 
   async-delete:
@@ -198,9 +227,9 @@ services:
     command:
       - async_delete
     depends_on:
-      - redis
-      - mongo
-      - rustfs-init
+      redis: {condition: service_healthy}
+      mongo: {condition: service_healthy}
+      rustfs-init: {condition: service_completed_successfully}
     environment:
       CAIRNML_SECRETS_DIR: /run/secrets-dir
       CAIRNML_MONGODB_SERVICE_HOST: mongo
@@ -209,15 +238,15 @@ services:
       CAIRNML_REDIS_SERVICE_PORT: 6379
       CAIRNML_SERVER_DEPLOYMENT_TYPE: linux
       CAIRNML__apiserver__storage__endpoint: http://rustfs:9000
-      CAIRNML__apiserver__storage__public_endpoint: ${MLOPS_STORAGE_PUBLIC_URL:-http://localhost:9000}
-      CAIRNML__apiserver__storage__access_key: ${MLOPS_S3_ACCESS_KEY:-mlops-server}
+      CAIRNML__apiserver__storage__public_endpoint: ${CAIRNML_STORAGE_PUBLIC_URL:-http://localhost:9000}
+      CAIRNML__apiserver__storage__access_key: ${CAIRNML_S3_ACCESS_KEY:-cairnml-server}
       CAIRNML__services__async_urls_delete__enabled: "true"
     volumes:
       - ./data/cairnml/logs:/var/log/cairnml
       - ./secrets/cairnml:/run/secrets-dir:ro
     networks:
       - backend
-      - mlops
+      - cairnml
 
   webserver:
     # Uses the image the API server builds; building it again here would race with it.
@@ -228,9 +257,15 @@ services:
     command:
       - webserver
     depends_on:
-      - apiserver
+      apiserver: {condition: service_healthy}
     ports:
       - "8080:80"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:80/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     networks:
       - backend
       - frontend
@@ -238,5 +273,5 @@ services:
 networks:
   backend:
   frontend:
-  mlops:
-    name: mlops
+  cairnml:
+    name: cairnml

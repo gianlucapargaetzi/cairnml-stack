@@ -12,7 +12,7 @@ command -v curl >/dev/null || { echo "curl is required" >&2; exit 1; }
 
 # The host names must resolve to this machine, so the host sees the same URLs as the containers.
 missing=()
-for host in mlops-idp mlops-cairnml; do
+for host in cairnml-idp cairnml; do
   getent hosts "$host" | grep -q '^127\.0\.0\.1\|^::1' || missing+=("$host")
 done
 if [ "${#missing[@]}" -gt 0 ]; then
@@ -33,9 +33,9 @@ mkdir -p secrets/cairnml
 mkdir -p data/idp
 docker run --rm -v "$PWD/data:/data" alpine:3.20 sh -c 'chown 1000:1000 /data/idp && chmod 700 /data/idp'
 
-docker compose up -d mlops-idp
+docker compose up -d cairnml-idp
 
-# One admin login for both Keycloak's master realm and the mlops realm: KC_ADMIN and KC_ADMIN_PASSWORD
+# One admin login for both Keycloak's master realm and the cairnml realm: KC_ADMIN and KC_ADMIN_PASSWORD
 # from deploy/.env, applied on every run so the password in .env is the one that works. Nothing is printed.
 KC_USER_SETUP='
 set -e
@@ -48,19 +48,19 @@ for _ in $(seq 1 90); do
 done
 [ "$ok" = 1 ] || { echo "keycloak did not become ready" >&2; exit 1; }
 $K set-password -r master --username "$ADMIN_USER" --new-password "$ADMIN_PW" >/dev/null
-if $K get users -r mlops -q username="$ADMIN_USER" --fields username | grep -q "\"username\""; then
-  $K set-password -r mlops --username "$ADMIN_USER" --new-password "$ADMIN_PW" >/dev/null
+if $K get users -r cairnml -q username="$ADMIN_USER" --fields username | grep -q "\"username\""; then
+  $K set-password -r cairnml --username "$ADMIN_USER" --new-password "$ADMIN_PW" >/dev/null
 else
-  $K create users -r mlops -s username="$ADMIN_USER" -s enabled=true -s emailVerified=true \
+  $K create users -r cairnml -s username="$ADMIN_USER" -s enabled=true -s emailVerified=true \
     -s email="$ADMIN_USER@example.test" -s firstName=Admin -s lastName=User >/dev/null
-  $K add-roles -r mlops --uusername "$ADMIN_USER" --rolename mlops-admin
-  $K set-password -r mlops --username "$ADMIN_USER" --new-password "$ADMIN_PW"
+  $K add-roles -r cairnml --uusername "$ADMIN_USER" --rolename cairnml-admin
+  $K set-password -r cairnml --username "$ADMIN_USER" --new-password "$ADMIN_PW"
 fi
 '
 docker compose exec -T \
   -e KC_MASTER_USER="$KC_ADMIN" -e KC_MASTER_PW="$KC_ADMIN_PASSWORD" \
   -e ADMIN_USER="$KC_ADMIN" -e ADMIN_PW="$KC_ADMIN_PASSWORD" \
-  mlops-idp sh -c "$KC_USER_SETUP" >/dev/null
+  cairnml-idp sh -c "$KC_USER_SETUP" >/dev/null
 echo "admin login set from deploy/.env: user $KC_ADMIN, same password for Keycloak and CairnML"
 
 # CairnML secrets, written once and kept. Nothing is printed.
@@ -91,14 +91,14 @@ docker run --rm -v "$PWD/data/rustfs:/data" alpine:3.20 sh -c 'chown -R 10001:10
 clients_dir=$(mktemp -d)
 python3 - "$clients_dir" <<'PY'
 import json, pathlib, sys
-realm = json.load(open("idp/realm-mlops.json"))
+realm = json.load(open("idp/realm-cairnml.json"))
 out = pathlib.Path(sys.argv[1])
 for client in realm["clients"]:
     if client["clientId"].startswith("cairnml-"):
         (out / (client["clientId"] + ".json")).write_text(json.dumps(client))
 PY
-docker compose exec -T mlops-idp rm -rf /tmp/cairnml-clients
-docker compose cp "$clients_dir" mlops-idp:/tmp/cairnml-clients >/dev/null
+docker compose exec -T cairnml-idp rm -rf /tmp/cairnml-clients
+docker compose cp "$clients_dir" cairnml-idp:/tmp/cairnml-clients >/dev/null
 rm -rf "$clients_dir"
 
 CAIRNML_KC_SETUP='
@@ -113,24 +113,24 @@ done
 [ "$ok" = 1 ] || { echo "keycloak did not become ready" >&2; exit 1; }
 for file in /tmp/cairnml-clients/*.json; do
   id=$(basename "$file" .json)
-  existing=$($K get clients -r mlops -q clientId="$id" --fields id \
+  existing=$($K get clients -r cairnml -q clientId="$id" --fields id \
     | sed -n "s/.*\"id\" *: *\"\([^\"]*\)\".*/\1/p" | head -n1)
   if [ -n "$existing" ]; then
-    $K update "clients/$existing" -r mlops -f "$file" >/dev/null
+    $K update "clients/$existing" -r cairnml -f "$file" >/dev/null
   else
-    $K create clients -r mlops -f "$file" >/dev/null
+    $K create clients -r cairnml -f "$file" >/dev/null
   fi
 done
-$K add-roles -r mlops --uusername service-account-cairnml-server \
+$K add-roles -r cairnml --uusername service-account-cairnml-server \
   --cclientid realm-management --rolename view-users >/dev/null 2>&1 || true
-uuid=$($K get clients -r mlops -q clientId=cairnml-server --fields id \
+uuid=$($K get clients -r cairnml -q clientId=cairnml-server --fields id \
   | sed -n "s/.*\"id\" *: *\"\([^\"]*\)\".*/\1/p" | head -n1)
-$K get "clients/$uuid/client-secret" -r mlops --fields value \
+$K get "clients/$uuid/client-secret" -r cairnml --fields value \
   | sed -n "s/.*\"value\" *: *\"\([^\"]*\)\".*/\1/p"
 '
 directory_secret=$(docker compose exec -T \
   -e KC_MASTER_USER="$KC_ADMIN" -e KC_MASTER_PW="$KC_ADMIN_PASSWORD" \
-  mlops-idp sh -c "$CAIRNML_KC_SETUP")
+  cairnml-idp sh -c "$CAIRNML_KC_SETUP")
 if [ ! -s secrets/cairnml/idp_directory_secret ]; then
   if [ -z "$directory_secret" ]; then
     echo "could not read the cairnml-server client secret from Keycloak" >&2
@@ -145,9 +145,9 @@ docker compose up -d --build
 
 echo "waiting for the CairnML server..."
 for _ in $(seq 1 90); do
-  curl -fsS -X POST "http://mlops-cairnml:8008/v2.8/login.supported_modes" \
+  curl -fsS -X POST "http://cairnml:8008/v2.8/login.supported_modes" \
     -H 'Content-Type: application/json' -d '{}' >/dev/null 2>&1 && { echo "CairnML server is up"; break; }
   sleep 2
 done
-echo "CairnML: web http://mlops-cairnml:8080, API http://mlops-cairnml:8008"
+echo "CairnML: web http://cairnml:8080, API http://cairnml:8008"
 echo "next: sign in as $KC_ADMIN, then follow the client and agent steps in README.md"

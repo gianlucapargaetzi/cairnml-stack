@@ -15,15 +15,13 @@ This repository holds the setup: the sign-in service, the CairnML server, and th
 | Path | What it is |
 |---|---|
 | `deploy/compose.yaml` | The whole stack: Keycloak (sign-in), and the CairnML server built from our forks |
-| `deploy/idp/realm-mlops.json` | The realm, with the CairnML clients |
+| `deploy/idp/realm-cairnml.json` | The realm, with the CairnML clients |
 | `deploy/scripts/bootstrap.sh` | Sets up the stack on a host |
 | `deploy/scripts/teardown.sh` | Removes the stack and this machine's keys (`--dry-run` first) |
 | `deploy/scripts/check-cairnml-secrets.sh` | Fails if a secret is committed to a CairnML repository |
 | `cairnml-server`, `cairnml-web`, `cairnml`, `cairnml-agent` | Our forks, as submodules |
 | `cairnml/docs/datasets.md` | How datasets work: `cairnml-dataset`, `Dataset.get`, outside datasets, the cache |
 | `external-datasets` (its own repository, not a submodule) | One pin file and one adapter per outside dataset (Hugging Face, git, local folders), with the tests that keep its `main` working |
-
-The old platform (`mlops`) is removed from this branch. It is still in the history of `main` until the cut-over.
 
 ## Requirements
 
@@ -50,7 +48,7 @@ The forks do not share history with ClearML on GitHub. To compare with ClearML, 
 The sign-in service and the server are reached by name, and the name must be the same on every machine. Add this line to `/etc/hosts` on the server host, and on every other machine that uses the server, with the server's address in place of `127.0.0.1` on the other machines:
 
 ```
-127.0.0.1 mlops-idp mlops-cairnml
+127.0.0.1 cairnml-idp cairnml
 ```
 
 `bootstrap.sh` refuses to run until both names resolve.
@@ -64,22 +62,22 @@ cd deploy
 
 The first run takes a while: it builds the CairnML images from the forks. It does the following, and prints nothing secret:
 
-1. Starts Keycloak with the `mlops` realm, and sets the admin login from `deploy/.env` (created on the first run with a generated password).
+1. Starts Keycloak with the `cairnml` realm, and sets the admin login from `deploy/.env` (created on the first run with a generated password).
 2. Writes the CairnML secrets to `deploy/secrets/cairnml/` (once; they are kept on later runs): the token and session keys. If `deploy/secrets/github-app.pem` exists, it is copied there as the GitHub key.
-3. Creates the three CairnML clients in Keycloak (`cairnml-web`, `cairnml-sdk`, `cairnml-server`) and updates them to `deploy/idp/realm-mlops.json` on every run. It stores the secret of `cairnml-server` (used to read users from Keycloak) in `deploy/secrets/cairnml/idp_directory_secret`.
+3. Creates the three CairnML clients in Keycloak (`cairnml-web`, `cairnml-sdk`, `cairnml-server`) and updates them to `deploy/idp/realm-cairnml.json` on every run. It stores the secret of `cairnml-server` (used to read users from Keycloak) in `deploy/secrets/cairnml/idp_directory_secret`.
 4. Starts the CairnML server (`deploy/compose.yaml`).
 
 Check that the server answers:
 
 ```bash
-curl -X POST http://mlops-cairnml:8008/v2.8/login.supported_modes -H 'Content-Type: application/json' -d '{}'
+curl -X POST http://cairnml:8008/v2.8/login.supported_modes -H 'Content-Type: application/json' -d '{}'
 ```
 
 ### First sign-in
 
-Open `http://mlops-cairnml:8080`. You are sent to the sign-in page of Keycloak. Sign in as the admin user named by `KC_ADMIN` in `deploy/.env`, with the password from the same file. Your CairnML account is created at that first sign-in.
+Open `http://cairnml:8080`. You are sent to the sign-in page of Keycloak. Sign in as the admin user named by `KC_ADMIN` in `deploy/.env`, with the password from the same file. Your CairnML account is created at that first sign-in.
 
-Admins are the users with the `mlops-admin` role in Keycloak. Give other people the role, or leave them as plain users. Keycloak's admin console is at `http://mlops-idp:8180`.
+Admins are the users with the `cairnml-admin` role in Keycloak. Give other people the role, or leave them as plain users. Keycloak's admin console is at `http://cairnml-idp:8180`.
 
 ### Optional: GitHub
 
@@ -94,15 +92,15 @@ Without the App, jobs that clone a repository are refused when they are enqueued
 Jobs that use a dataset clone its repository too. The dataset registry (the `external-datasets` repository) is the only list of dataset repositories: a job gets a read-only token for the registry and for the repositories its entries point to, and for nothing else. Name the registry and the owners whose datasets may be registered in `deploy/.env`, install the App on the registry and on the dataset repositories, and restart the API server as above:
 
 ```bash
-MLOPS_DATASET_REGISTRY=acme/external-datasets
-MLOPS_DATASET_OWNERS='["acme"]'
+CAIRNML_DATASET_REGISTRY=acme/external-datasets
+CAIRNML_DATASET_OWNERS='["acme"]'
 ```
 
 A dataset enters the registry with `cairnml-dataset register`; no server setting changes. The server reads the registry's default branch, so a new entry works about a minute after its pull request merges. A person uses their own git login.
 
 ### Addresses and https
 
-The addresses are set in `deploy/compose.yaml` (`CAIRNML__apiserver__idp__*`): the web app at `http://mlops-cairnml:8080`, the API at `http://mlops-cairnml:8008`. To serve over https, change those addresses to https, and set `CAIRNML_COOKIE_SECURE=true` in `deploy/.env`. The server refuses to start with https addresses and an insecure session cookie.
+The addresses are set in `deploy/compose.yaml` (`CAIRNML__apiserver__idp__*`): the web app at `http://cairnml:8080`, the API at `http://cairnml:8008`. To serve over https, change those addresses to https, and set `CAIRNML_COOKIE_SECURE=true` in `deploy/.env`. The server refuses to start with https addresses and an insecure session cookie.
 
 ### Keep the data
 
@@ -110,7 +108,7 @@ The server's data is in `deploy/data/` and its keys in `deploy/secrets/`. Both a
 
 ### Object storage and the NAS
 
-Object storage (RustFS, with the buckets `dataset`, `model`, `artifact` and `debug`) runs in this stack, on the server host, and keeps its data in `deploy/data/rustfs`. Artifacts, models and debug data move through presigned URLs. The files of datasets move through DVC, with short-lived keys that the server issues for the `dataset` bucket only (`datachunks.dataset_credentials`), so no access key is stored on a machine. Run `deploy/scripts/bootstrap.sh` again after an update: it gives the server's storage user the policy for issuing those keys. The architecture diagram (`docs/architecture/`) shows it on a separate NAS, which is not set up yet. To move it, change the `rustfs` volume in `deploy/compose.yaml` to the NAS path, and set `MLOPS_STORAGE_PUBLIC_URL` in `deploy/.env` to an address that clients can reach.
+Object storage (RustFS, with the buckets `dataset`, `model`, `artifact` and `debug`) runs in this stack, on the server host, and keeps its data in `deploy/data/rustfs`. Artifacts, models and debug data move through presigned URLs. The files of datasets move through DVC, with short-lived keys that the server issues for the `dataset` bucket only (`datachunks.dataset_credentials`), so no access key is stored on a machine. Run `deploy/scripts/bootstrap.sh` again after an update: it gives the server's storage user the policy for issuing those keys. The architecture diagram (`docs/architecture/`) shows it on a separate NAS, which is not set up yet. To move it, change the `rustfs` volume in `deploy/compose.yaml` to the NAS path, and set `CAIRNML_STORAGE_PUBLIC_URL` in `deploy/.env` to an address that clients can reach.
 
 ## 2. Client (a person's machine)
 
@@ -127,7 +125,7 @@ To work on the SDK itself, install the fork from this repository instead: `pip i
 Sign in and enrol the machine once, naming the server on the command line. Your browser opens the sign-in page, and the sign-in always asks for your credentials:
 
 ```bash
-cairnml-init --server http://mlops-cairnml:8008
+cairnml-init --server http://cairnml:8008
 cairnml-whoami
 ```
 
@@ -136,7 +134,7 @@ cairnml-whoami
 To enrol again, for example as another person, use `--force`. The previous device is revoked first:
 
 ```bash
-cairnml-init --server http://mlops-cairnml:8008 --force
+cairnml-init --server http://cairnml:8008 --force
 ```
 
 To sign this machine out, revoke it and remove its key:
@@ -147,7 +145,7 @@ cairnml-logout
 
 If the device cannot be revoked (for example, the server is unreachable), `cairnml-logout` removes nothing, and you can run it again later.
 
-The machine must be able to resolve `mlops-cairnml` and `mlops-idp` to the server, as in "Host names" above.
+The machine must be able to resolve `cairnml` and `cairnml-idp` to the server, as in "Host names" above.
 
 Check it with a short run:
 
@@ -266,7 +264,7 @@ An agent takes one job at a time, so a job waits while its agent is busy. A mach
 
 ## 4. Web app
 
-Open `http://mlops-cairnml:8080`. To run the web app from its source for development, see `cairnml-web/docs/dev-proxy.md`.
+Open `http://cairnml:8080`. To run the web app from its source for development, see `cairnml-web/docs/dev-proxy.md`.
 
 The dashboard lists the projects at the top and the recent experiments at the bottom. Double-click a project to open its dashboard: the project's tasks as folders at the top, and its recent experiments at the bottom. Double-click a task folder to list its experiments, numbered in the order they were created. "All experiments" lists every experiment in the project.
 
@@ -311,15 +309,12 @@ whole workflow against it (see [docs/e2e_testing/E2E.md](docs/e2e_testing/E2E.md
 
 | Fork | Command | Notes |
 |---|---|---|
-| `cairnml` (SDK) | `cd cairnml && python -m pytest tests` | Runs without services. Last run: 77 passed. The dataset tests start git and DVC and take about a minute. |
-| `cairnml-agent` | `cd cairnml-agent && python -m pytest tests --ignore=tests/requirements` | Needs the fork installed (`pip install -e .`). Last run: 7138 passed, 6 failed in `tests/package/test_task_script.py` (a missing file), which is not yet explained. `tests/requirements` does not import. |
-| `cairnml-server` | run in the server image, with MongoDB, Redis and Elasticsearch running (see below) | Without the services, 198 tests fail with "connection refused" on `127.0.0.1:27017`. |
+| `cairnml` (SDK) | `cd cairnml && python -m pytest tests` | Runs without services. The dataset tests start git and DVC, so the run takes a minute or two. |
+| `cairnml-agent` | `cd cairnml-agent && python -m pytest tests --ignore=tests/requirements` | Needs the fork installed (`pip install -e .`). `tests/package` needs a running server and is left out. |
+| `cairnml-server` | `cd cairnml-server && python -m pytest -m "not integration" apiserver/tests` | Needs Redis (`CAIRNML_REDIS_SERVICE_HOST`, `CAIRNML_REDIS_SERVICE_PORT`) and the packages in `apiserver/requirements.lock`. Tests marked `integration` need MongoDB and Elasticsearch or a running API server, and run in the end-to-end suite. |
 | `cairnml-web` | `cd cairnml-web && npm ci && npm test` | Karma, which needs Chrome. Not run in the last check. |
 
-To run the server's unit tests, start the stack's services and point the image at them. The simplest way is the
-end-to-end stack's own compose project (its services are on a private network), or any MongoDB, Redis and Elasticsearch
-reachable from the container. Mount `cairnml-server/apiserver/tests` into the image and run pytest from `/opt/cairnml`,
-after creating `/var/log/cairnml` (the logging configuration writes there).
+The server's `integration` tests (MongoDB, Elasticsearch or a running API server) run in the end-to-end stack's compose project, whose services are on a private network. CI runs every unit test of the five repositories on each pull request.
 
 ### End-to-end tests
 
@@ -331,7 +326,7 @@ uv pip install -r tests/e2e/requirements.txt
 uv pip install -e ./cairnml -e ./cairnml-agent
 playwright install chromium
 
-.venv/bin/pytest tests/e2e                 # everything: starts its own stack, about 70 minutes
+.venv/bin/pytest tests/e2e                 # everything: starts its own stack, an hour or more
 .venv/bin/pytest tests/e2e -m "not slow"   # without the long checks
 .venv/bin/pytest tests/e2e -k artifacts    # one area
 ```

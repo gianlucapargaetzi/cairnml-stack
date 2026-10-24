@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Removes the mlops setup from this machine:
+# Removes the cairnml setup from this machine:
 #   1. the local sign-in keys and the CairnML config that point at our server (revokes this machine's access),
 #   2. the containers, volumes and network of the stack (deploy/compose.yaml),
 #   3. the data of the stack: users, databases, logs, and the Keycloak data,
@@ -78,7 +78,7 @@ wipe_dir() {
 }
 
 # ---------------------------------------------------------------- plan
-say "mlops teardown"
+say "cairnml teardown"
 say "deploy folder: $DEPLOY_DIR"
 say ""
 say "This removes:"
@@ -94,9 +94,9 @@ say "Kept: the source code, the submodules, docs, the /etc/hosts line, and the o
 say ""
 
 if [ "$DRY_RUN" -eq 0 ] && [ "$ASSUME_YES" -eq 0 ]; then
-  say "Type 'delete mlops' to continue:"
+  say "Type 'delete cairnml' to continue:"
   read -r answer
-  if [ "$answer" != "delete mlops" ]; then
+  if [ "$answer" != "delete cairnml" ]; then
     say "not confirmed; nothing removed"
     exit 1
   fi
@@ -113,9 +113,9 @@ fi
 if [ -f "$HOME/.cairnml/.session.json" ]; then
   run rm -f "$HOME/.cairnml/.session.json"
 fi
-if [ -f "$HOME/cairnml.conf" ] && grep -q "mlops-cairnml" "$HOME/cairnml.conf"; then
+if [ -f "$HOME/cairnml.conf" ] && grep -q "cairnml" "$HOME/cairnml.conf"; then
   run rm -f "$HOME/cairnml.conf"
-  say "  ~/cairnml.conf names the mlops-cairnml server"
+  say "  ~/cairnml.conf names the cairnml server"
 fi
 
 # ---------------------------------------------------------------- 2. containers and networks
