@@ -7,7 +7,7 @@
 #   DRY_RUN=1 scripts/github-setup.sh  print what would be sent
 set -euo pipefail
 
-OWNER=gianlucapargaetzi
+OWNER=${OWNER:-gianlucapargaetzi}  # the account whose repositories are set up; set OWNER to use another
 # external-datasets is not here on purpose: the server adds dataset entries to it through a pull request on a
 # register/<name> branch that merges itself (auto-merge, merge commit) once its check passes. Its rules stay as they are.
 ALL=(cairnml cairnml-agent cairnml-server cairnml-web cairnml-stack)

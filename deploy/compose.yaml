@@ -5,8 +5,7 @@
 #   docker compose up -d --build
 #
 # The forks are the submodules at the root of this repository (cairnml-server, cairnml-web).
-# The service names are the ones the fork's web server expects (it finds the API server by
-# name) and the names used in the realm (cairnml-idp), so they stay as they are.
+# The service names are the ones the fork's web server expects (it finds the API server by name).
 name: cairnml
 
 x-cairnml-build: &cairnml_build
@@ -36,6 +35,13 @@ services:
       - ./data/idp:/opt/keycloak/data/h2
     ports:
       - "8180:8180"
+    healthcheck:
+      # Ready when the realm has been imported: its discovery document answers. The image has no curl.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8180 && printf 'GET /realms/cairnml/.well-known/openid-configuration HTTP/1.0\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -q ' 200 '"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
     networks:
       - cairnml
 
@@ -93,6 +99,12 @@ services:
     volumes:
       - ./data/cairnml/mongo/db:/data/db
       - ./data/cairnml/mongo/configdb:/data/configdb
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
     networks:
       - backend
 
@@ -102,6 +114,11 @@ services:
     restart: unless-stopped
     volumes:
       - ./data/cairnml/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     networks:
       - backend
 
@@ -130,6 +147,12 @@ services:
         hard: 65536
     volumes:
       - ./data/cairnml/elastic:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s' >/dev/null"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 40s
     networks:
       - backend
 
@@ -139,11 +162,11 @@ services:
     command:
       - apiserver
     depends_on:
-      - redis
-      - mongo
-      - elasticsearch
-      - rustfs-init
-      - cairnml-idp
+      redis: {condition: service_healthy}
+      mongo: {condition: service_healthy}
+      elasticsearch: {condition: service_healthy}
+      rustfs-init: {condition: service_completed_successfully}
+      cairnml-idp: {condition: service_healthy}
     environment:
       CAIRNML_SECRETS_DIR: /run/secrets-dir
       CAIRNML_ELASTIC_SERVICE_HOST: elasticsearch
@@ -183,6 +206,12 @@ services:
       - ./secrets/cairnml:/run/secrets-dir:ro
     ports:
       - "8008:8008"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8008/debug.ping', timeout=4)"]
+      interval: 10s
+      timeout: 6s
+      retries: 20
+      start_period: 60s
     networks:
       - backend
       - frontend
@@ -198,9 +227,9 @@ services:
     command:
       - async_delete
     depends_on:
-      - redis
-      - mongo
-      - rustfs-init
+      redis: {condition: service_healthy}
+      mongo: {condition: service_healthy}
+      rustfs-init: {condition: service_completed_successfully}
     environment:
       CAIRNML_SECRETS_DIR: /run/secrets-dir
       CAIRNML_MONGODB_SERVICE_HOST: mongo
@@ -228,9 +257,15 @@ services:
     command:
       - webserver
     depends_on:
-      - apiserver
+      apiserver: {condition: service_healthy}
     ports:
       - "8080:80"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:80/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     networks:
       - backend
       - frontend

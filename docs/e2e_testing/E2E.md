@@ -178,6 +178,8 @@ example script writes the group first, and `test_set_parameters_replaces_the_who
 
 ## Status of the last full run
 
+This section is a snapshot from one run. It is not kept up to date: the unit tests run on every pull request, and the full suite is run by hand before a release.
+
 The dataset tests in `test_07_datasets_models.py` were replaced after this run, when datasets moved to git and DVC, and have not been run yet. The numbers below are from before the change.
 
 Latest full run, in the isolated environment, from a stack that was stopped first, with no restarts: 101 tests,

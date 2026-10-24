@@ -23,8 +23,6 @@ This repository holds the setup: the sign-in service, the CairnML server, and th
 | `cairnml/docs/datasets.md` | How datasets work: `cairnml-dataset`, `Dataset.get`, outside datasets, the cache |
 | `external-datasets` (its own repository, not a submodule) | One pin file and one adapter per outside dataset (Hugging Face, git, local folders), with the tests that keep its `main` working |
 
-The old platform (`cairnml`) is removed from this branch. It is still in the history of `main` until the cut-over.
-
 ## Requirements
 
 On the server host: Linux (`bootstrap.sh` uses `getent`), Docker Engine with Compose v2.20 or newer, `git`, `openssl`, `python3` and `curl`.
@@ -311,15 +309,12 @@ whole workflow against it (see [docs/e2e_testing/E2E.md](docs/e2e_testing/E2E.md
 
 | Fork | Command | Notes |
 |---|---|---|
-| `cairnml` (SDK) | `cd cairnml && python -m pytest tests` | Runs without services. Last run: 77 passed. The dataset tests start git and DVC and take about a minute. |
-| `cairnml-agent` | `cd cairnml-agent && python -m pytest tests --ignore=tests/requirements` | Needs the fork installed (`pip install -e .`). Last run: 7138 passed, 6 failed in `tests/package/test_task_script.py` (a missing file), which is not yet explained. `tests/requirements` does not import. |
-| `cairnml-server` | run in the server image, with MongoDB, Redis and Elasticsearch running (see below) | Without the services, 198 tests fail with "connection refused" on `127.0.0.1:27017`. |
+| `cairnml` (SDK) | `cd cairnml && python -m pytest tests` | Runs without services. The dataset tests start git and DVC, so the run takes a minute or two. |
+| `cairnml-agent` | `cd cairnml-agent && python -m pytest tests --ignore=tests/requirements` | Needs the fork installed (`pip install -e .`). `tests/package` needs a running server and is left out. |
+| `cairnml-server` | `cd cairnml-server && python -m pytest -m "not integration" apiserver/tests` | Needs Redis (`CAIRNML_REDIS_SERVICE_HOST`, `CAIRNML_REDIS_SERVICE_PORT`) and the packages in `apiserver/requirements.lock`. Tests marked `integration` need MongoDB and Elasticsearch or a running API server, and run in the end-to-end suite. |
 | `cairnml-web` | `cd cairnml-web && npm ci && npm test` | Karma, which needs Chrome. Not run in the last check. |
 
-To run the server's unit tests, start the stack's services and point the image at them. The simplest way is the
-end-to-end stack's own compose project (its services are on a private network), or any MongoDB, Redis and Elasticsearch
-reachable from the container. Mount `cairnml-server/apiserver/tests` into the image and run pytest from `/opt/cairnml`,
-after creating `/var/log/cairnml` (the logging configuration writes there).
+The server's `integration` tests (MongoDB, Elasticsearch or a running API server) run in the end-to-end stack's compose project, whose services are on a private network. CI runs every unit test of the five repositories on each pull request.
 
 ### End-to-end tests
 
@@ -331,7 +326,7 @@ uv pip install -r tests/e2e/requirements.txt
 uv pip install -e ./cairnml -e ./cairnml-agent
 playwright install chromium
 
-.venv/bin/pytest tests/e2e                 # everything: starts its own stack, about 70 minutes
+.venv/bin/pytest tests/e2e                 # everything: starts its own stack, an hour or more
 .venv/bin/pytest tests/e2e -m "not slow"   # without the long checks
 .venv/bin/pytest tests/e2e -k artifacts    # one area
 ```

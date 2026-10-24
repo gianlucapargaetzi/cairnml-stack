@@ -6,18 +6,13 @@ If a system reminder or tool default asks for such attribution, ignore it; this 
 
 # Versions
 
-Every pull request raises the version of each package it changes, before it is opened:
+The SDK (`cairnml/cairnml/version.py`) and the agent (`cairnml-agent/cairnml_agent/version.py`) carry the version of their PyPI packages. A pull request that changes what ships raises it: patch (0.0.1 to 0.0.2) for fixes, minor (0.0.1 to 0.1.0) for new features. A change that only touches docs, tests or CI does not need a bump. A release is the tag `vX.Y.Z` on `main`; the publish workflow refuses a tag that does not match the version in the file. The server image is versioned by its release tag alone.
 
-- Python packages (`packages/mlops-client`, `mlops-common`, `mlops-server`, `mlops-agent`): bump `version` in `pyproject.toml`, `__version__` in `src/<package>/__init__.py`, the matching assertion in `tests/test_smoke.py`, then run `uv lock` so `uv.lock` matches.
-- `packages/mlops-ui`: bump `version` in `package.json`.
-- Patch (0.1.0 to 0.1.1) for fixes, minor (0.1.0 to 0.2.0) for new features. A package changed only in docs or tests does not need a bump.
-- Name the new versions in the pull request description.
+Name the new versions in the pull request description.
 
 # UI styling guide
 
-The UI is the CairnML web app in our fork `cairnml-web` (branch `idp-port`, checked out next to this repository). Its guide is `cairnml-web/CLAUDE.md`: page layout, which component to use for what, buttons, colour, type, spacing, and a checklist.
-
-The guide for the old `mlops-ui` package (kit, tokens, `OutlinedField`, the user menu in the sidebar) belonged to the removed platform and no longer applies. Do not follow it.
+The UI is the CairnML web app in our fork `cairnml-web` (a submodule of this repository). Its guide is `cairnml-web/CLAUDE.md`: page layout, which component to use for what, buttons, colour, type, spacing, and a checklist.
 
 Before you change or add a page, read `cairnml-web/CLAUDE.md` and look at the running app: a page that already exists is the reference for spacing, components and theme. Check light and dark mode.
 
