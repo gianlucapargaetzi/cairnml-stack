@@ -56,7 +56,7 @@ def test_stale_cookie_goes_to_the_sign_in_page(browser):
     context.add_cookies([{"name": "cairnml_session", "value": "stale-0000", "url": settings.WEB_URL}])
     page = context.new_page()
     page.goto(settings.WEB_URL + "/dashboard")
-    page.wait_for_url(re.compile(r"(realms/mlops|login)"), timeout=60_000)
+    page.wait_for_url(re.compile(r"(realms/cairnml|login)"), timeout=60_000)
     assert page.locator("#username").count() == 1
     context.close()
 

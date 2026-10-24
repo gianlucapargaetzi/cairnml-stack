@@ -30,8 +30,8 @@ tests/e2e/docker/run.sh --down                 # remove the environment: contain
   paragraph of its docstring; a test without one is listed as not written. The runner writes the folder as root, so it
   is root-owned on the host.
 - **Markers** (`tests/e2e/pytest.ini`): `agent`, `docker`, `ui`, `github`, `slow`, `restart`, `xdist_group`.
-- **GitHub tests.** `MLOPS_E2E_GITHUB_REPO=owner/name` names a repository on github.com that the GitHub App can read;
-  `MLOPS_E2E_GITHUB_PRIVATE_REPO=owner/name` names one it cannot. Without them, the `github` tests are skipped with that
+- **GitHub tests.** `CAIRNML_E2E_GITHUB_REPO=owner/name` names a repository on github.com that the GitHub App can read;
+  `CAIRNML_E2E_GITHUB_PRIVATE_REPO=owner/name` names one it cannot. Without them, the `github` tests are skipped with that
   reason.
 
 `system.e2e_reset` removes the projects, tasks and scheduler workers whose name starts with the suite's prefix (`e2e`),
@@ -89,13 +89,13 @@ reachable from anything inside `dind`.
 
 | Part | How it is set up |
 |---|---|
-| Compose project | Named `mlops-e2e-<random>` for each session, so two sessions never share containers or networks. |
-| Address | Inside `dind`, the stack uses the loopback address and host networking. Services that talk to each other use `127.0.0.1`; the addresses that clients see (the issuer, the public URLs, the storage's public endpoint) come from `MLOPS_E2E_HOST`, and the listen address from `MLOPS_E2E_BIND`. |
+| Compose project | Named `cairnml-e2e-<random>` for each session, so two sessions never share containers or networks. |
+| Address | Inside `dind`, the stack uses the loopback address and host networking. Services that talk to each other use `127.0.0.1`; the addresses that clients see (the issuer, the public URLs, the storage's public endpoint) come from `CAIRNML_E2E_HOST`, and the listen address from `CAIRNML_E2E_BIND`. |
 | Ports | Nine random free ports in 18000 to 18999 (the API, the web app, the sign-in service and its management port, object storage, MongoDB, Redis, and Elasticsearch's HTTP and transport ports). The suite chooses them. Nothing uses the ports 8008, 8080, 8180 or 9000 that `deploy/` uses. |
 | State | `/e2e-state/stack` in the isolated environment (the temporary folder on the host run): the data of Keycloak, RustFS, MongoDB, Redis and Elasticsearch, the secrets, and a copy of the realm with this stack's addresses. Removed at the end of a session, unless the stack is reused. |
 | Secrets | Generated for the stack (token, session, S3 key). The directory-sync secret is read from the stack's own Keycloak. |
-| Accounts | The admin (`e2e-admin`) gets a password generated for the stack. It is a realm user with the `mlops-admin` role. The plain user of each session is created and removed by the suite. |
-| Realm | The committed realm (`deploy/idp/realm-mlops.json`) read as a template, with its addresses replaced by this stack's. The suite's directory client gets `view-users`, as `bootstrap.sh` grants it. |
+| Accounts | The admin (`e2e-admin`) gets a password generated for the stack. It is a realm user with the `cairnml-admin` role. The plain user of each session is created and removed by the suite. |
+| Realm | The committed realm (`deploy/idp/realm-cairnml.json`) read as a template, with its addresses replaced by this stack's. The suite's directory client gets `view-users`, as `bootstrap.sh` grants it. |
 | Web app | Its API address is the web server's own `/api` route, set with `configuration.json` (see Addresses). |
 
 Teardown: `docker compose down --volumes`, then the state folder is removed. The state folder's files were written by
@@ -224,7 +224,7 @@ ceilings and intervals, not measured; the report now records each test's duratio
 
 | # | Change | Saves |
 |---|---|---|
-| 1 | The stack is reused between runs (`MLOPS_E2E_REUSE_STACK`). It is rebuilt only when the server or web sources, or the compose file, changed. Starts take a lock. | 3 to 5 min per run after the first |
+| 1 | The stack is reused between runs (`CAIRNML_E2E_REUSE_STACK`). It is rebuilt only when the server or web sources, or the compose file, changed. Starts take a lock. | 3 to 5 min per run after the first |
 | 2 | The reused stack is reset at the start of each run (`system.e2e_reset`, off by default), so no test needs a restart for repeatable state. | the restarts repeatability needed |
 | 3 | A lost worker is found by the scheduler's own sweep (`sweep_interval_sec`), not by a placement pass. The e2e stack syncs every 2 s and sweeps every 1 s. | about 55 s per lost-worker test |
 | 4 | The directory sync runs every 5 s on the e2e stack; the disabled-user test polls every 1 s. | up to about 90 s |

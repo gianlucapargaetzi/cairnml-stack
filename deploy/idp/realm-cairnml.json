@@ -1,12 +1,12 @@
 {
-  "realm": "mlops",
+  "realm": "cairnml",
   "enabled": true,
   "sslRequired": "none",
   "registrationAllowed": false,
   "roles": {
     "realm": [
       {
-        "name": "mlops-admin",
+        "name": "cairnml-admin",
         "description": "May create agent enrollment tokens, projects and revoke machines"
       }
     ]
@@ -23,14 +23,14 @@
       "serviceAccountsEnabled": false,
       "fullScopeAllowed": true,
       "redirectUris": [
-        "http://mlops-cairnml:8008/v2.8/login.idp_callback"
+        "http://cairnml:8008/v2.8/login.idp_callback"
       ],
       "webOrigins": [
-        "http://mlops-cairnml:8080"
+        "http://cairnml:8080"
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://mlops-cairnml:8080/*"
+        "post.logout.redirect.uris": "http://cairnml:8080/*"
       }
     },
     {

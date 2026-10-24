@@ -1,4 +1,4 @@
-"""Creates and removes the test accounts in the mlops realm, through Keycloak's admin REST API."""
+"""Creates and removes the test accounts in the cairnml realm, through Keycloak's admin REST API."""
 
 import requests
 
@@ -40,7 +40,7 @@ class Keycloak:
         return found[0]["id"] if found else None
 
     def create_user(self, username, password, *, admin=False):
-        """Creates an enabled user with a password that does not expire; admin adds the mlops-admin role."""
+        """Creates an enabled user with a password that does not expire; admin adds the cairnml-admin role."""
         self.delete_user(username)
         body = {
             "username": username,
@@ -55,7 +55,7 @@ class Keycloak:
         reply.raise_for_status()
         user_id = self.user_id(username)
         if admin:
-            role = self._admin("GET", "/roles/mlops-admin").json()
+            role = self._admin("GET", "/roles/cairnml-admin").json()
             self._admin("POST", f"/users/{user_id}/role-mappings/realm", json=[role]).raise_for_status()
         return user_id
 

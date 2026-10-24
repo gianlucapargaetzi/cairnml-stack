@@ -17,8 +17,8 @@ POLLING_INTERVAL_SEC = 2
 def shared_cache_settings() -> dict:
     """In the isolated environment (tests/e2e/docker) the agent's job containers are started by the nested daemon, which
     can only mount folders on the shared volume, at the same path as here. So the agent's caches and build folders are
-    moved there. On the host (no MLOPS_E2E_SHARED_ROOT) the agent keeps its defaults."""
-    shared = os.environ.get("MLOPS_E2E_SHARED_ROOT")
+    moved there. On the host (no CAIRNML_E2E_SHARED_ROOT) the agent keeps its defaults."""
+    shared = os.environ.get("CAIRNML_E2E_SHARED_ROOT")
     if not shared:
         return {}
     cache = Path(shared) / "agent-cache"

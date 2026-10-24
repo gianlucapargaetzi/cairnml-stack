@@ -6,7 +6,7 @@ A page that compiles is not a page that works. You must look at it. This file is
 
 Pages look broken when the API is down or the database is empty: wrong titles ("All Experiments" in place of a project name), missing tabs, empty tables. Before you judge a layout:
 
-1. The stack is up and **not being rebuilt right now**: `curl -s -o /dev/null -w "%{http_code}" http://mlops-cairnml:8008/debug.ping` and `...:8080/` both answer 200.
+1. The stack is up and **not being rebuilt right now**: `curl -s -o /dev/null -w "%{http_code}" http://cairnml:8008/debug.ping` and `...:8080/` both answer 200.
 2. The data you need exists. If the dev stack is empty (it can be reset by someone else), seed it with a small SDK script (`Task.init`, `report_scalar`, `report_histogram`, `report_table`, `report_image`, `upload_artifact`, `Task.clone`) or **mock the API in the browser** (section 4). Never invent screenshots of "what it should look like".
 3. Wait for loading to finish: 6 seconds after `goto`, then check that the spinner is gone.
 
@@ -28,7 +28,7 @@ Run the image build in the background and keep working on the next view or the r
 
 ```js
 // one page, light, full height
-await page.goto('http://mlops-cairnml:8080/<path>');
+await page.goto('http://cairnml:8080/<path>');
 await page.waitForTimeout(6000);
 await page.screenshot({path: '.playwright-mcp/<name>-light.png', fullPage: true});
 ```

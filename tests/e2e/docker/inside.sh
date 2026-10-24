@@ -10,7 +10,7 @@
 set -e
 
 STAGE=/tmp/runner-build
-IMAGE=mlops-e2e-runner
+IMAGE=cairnml-e2e-runner
 
 # the folders the runner's environment points at: TMPDIR (Playwright and the suite write there), the stack's state
 mkdir -p /e2e-state/tmp /e2e-state/stack /e2e-cache
@@ -30,11 +30,11 @@ RUN="docker run --rm -i --network host \
   -v /e2e-state:/e2e-state \
   -v /e2e-cache:/root/.cache \
   -e TMPDIR=/e2e-state/tmp \
-  -e MLOPS_E2E_STATE_DIR=/e2e-state/stack \
-  -e MLOPS_E2E_SHARED_ROOT=/e2e-state \
-  -e MLOPS_E2E_REUSE_STACK=1 \
-  -e MLOPS_E2E_HOST=127.0.0.1 \
-  -e MLOPS_E2E_BIND=127.0.0.1 \
+  -e CAIRNML_E2E_STATE_DIR=/e2e-state/stack \
+  -e CAIRNML_E2E_SHARED_ROOT=/e2e-state \
+  -e CAIRNML_E2E_REUSE_STACK=1 \
+  -e CAIRNML_E2E_HOST=127.0.0.1 \
+  -e CAIRNML_E2E_BIND=127.0.0.1 \
   -w /workspace/tests/e2e"
 
 case "$1" in

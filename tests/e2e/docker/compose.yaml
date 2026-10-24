@@ -4,7 +4,7 @@
 #
 # The repository is mounted at /workspace, and the shared folders at /e2e-state and /e2e-cache, at the same paths as
 # inside the runner: a folder the suite or the agent creates is then the same folder for the nested daemon.
-name: mlops-e2e-env
+name: cairnml-e2e-env
 
 services:
   dind:

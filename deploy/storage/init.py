@@ -19,15 +19,15 @@ import urllib.request
 from datetime import UTC, datetime
 from urllib.parse import quote
 
-ENDPOINT = os.environ.get("MLOPS_STORAGE_ENDPOINT", "http://rustfs:9000")
+ENDPOINT = os.environ.get("CAIRNML_STORAGE_ENDPOINT", "http://rustfs:9000")
 REGION = "us-east-1"
 ROOT_USER = os.environ["RUSTFS_ROOT_USER"]
 ROOT_PASSWORD = os.environ["RUSTFS_ROOT_PASSWORD"]
-SERVICE_USER = os.environ.get("MLOPS_S3_ACCESS_KEY", "mlops-server")
-with open(os.environ["MLOPS_S3_SECRET_KEY_FILE"], encoding="utf-8") as handle:
+SERVICE_USER = os.environ.get("CAIRNML_S3_ACCESS_KEY", "cairnml-server")
+with open(os.environ["CAIRNML_S3_SECRET_KEY_FILE"], encoding="utf-8") as handle:
     SERVICE_SECRET = handle.read().strip()
 BUCKETS = ("artifact", "dataset", "model", "debug")
-POLICY_NAME = "mlops-server"
+POLICY_NAME = "cairnml-server"
 POLICY = {
     "Version": "2012-10-17",
     "Statement": [
